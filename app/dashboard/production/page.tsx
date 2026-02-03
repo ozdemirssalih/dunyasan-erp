@@ -22,11 +22,18 @@ export default function ProductionPage() {
   const [editingOrder, setEditingOrder] = useState<ProductionOrder | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    order_number: string
+    project_name: string
+    quantity: number
+    status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+    start_date: string
+    end_date: string
+  }>({
     order_number: '',
     project_name: '',
     quantity: 0,
-    status: 'pending' as const,
+    status: 'pending',
     start_date: '',
     end_date: '',
   })

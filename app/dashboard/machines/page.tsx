@@ -23,12 +23,21 @@ export default function MachinesPage() {
   const [editingMachine, setEditingMachine] = useState<Machine | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    machine_code: string
+    machine_name: string
+    machine_type: string
+    model: string
+    status: 'active' | 'maintenance' | 'offline'
+    daily_capacity: number
+    efficiency_rate: number
+    working_hours: number
+  }>({
     machine_code: '',
     machine_name: '',
     machine_type: '',
     model: '',
-    status: 'active' as const,
+    status: 'active',
     daily_capacity: 0,
     efficiency_rate: 0,
     working_hours: 0,

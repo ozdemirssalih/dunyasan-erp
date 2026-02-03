@@ -179,7 +179,7 @@ export default function InventoryPage() {
     setFormData({
       product_code: item.product_code,
       product_name: item.product_name,
-      category: item.category,
+      category: item.category as 'hammadde' | 'yarimamul' | 'mamul' | 'takim' | 'sarf',
       quantity: item.quantity,
       unit: item.unit,
       min_stock_level: item.min_stock_level,

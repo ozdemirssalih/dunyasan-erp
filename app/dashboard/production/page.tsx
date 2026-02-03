@@ -146,7 +146,7 @@ export default function ProductionPage() {
       order_number: order.order_number,
       project_name: order.project_name,
       quantity: order.quantity,
-      status: order.status,
+      status: order.status as 'pending' | 'in_progress' | 'completed' | 'cancelled',
       start_date: order.start_date || '',
       end_date: order.end_date || '',
     })

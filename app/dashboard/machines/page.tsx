@@ -155,7 +155,7 @@ export default function MachinesPage() {
       machine_name: machine.machine_name,
       machine_type: machine.machine_type || '',
       model: machine.model || '',
-      status: machine.status,
+      status: machine.status as 'active' | 'maintenance' | 'offline',
       daily_capacity: machine.daily_capacity || 0,
       efficiency_rate: machine.efficiency_rate,
       working_hours: machine.working_hours,

@@ -19,6 +19,13 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
+    // Validate email domain
+    if (!email.endsWith('@dunyasan.com')) {
+      setError('İzniniz bulunmamaktadır. Sadece @dunyasan.com uzantılı e-posta adresleri kabul edilmektedir.')
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,

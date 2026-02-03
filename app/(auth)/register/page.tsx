@@ -23,6 +23,13 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
 
+    // Validate email domain
+    if (!formData.email.endsWith('@dunyasan.com')) {
+      setError('İzniniz bulunmamaktadır. Sadece @dunyasan.com uzantılı e-posta adresleri kabul edilmektedir.')
+      setLoading(false)
+      return
+    }
+
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError('Şifreler eşleşmiyor')

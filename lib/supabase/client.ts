@@ -3,11 +3,17 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL ve Anon Key tanımlanmamış! .env.local dosyasını kontrol edin.')
+if (!supabaseUrl || supabaseUrl === 'undefined' || supabaseUrl.trim() === '') {
+  console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl)
+  throw new Error('❌ NEXT_PUBLIC_SUPABASE_URL tanımlanmamış! Vercel Environment Variables kontrol edin.')
+}
+
+if (!supabaseAnonKey || supabaseAnonKey === 'undefined' || supabaseAnonKey.trim() === '') {
+  console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey)
+  throw new Error('❌ NEXT_PUBLIC_SUPABASE_ANON_KEY tanımlanmamış! Vercel Environment Variables kontrol edin.')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)

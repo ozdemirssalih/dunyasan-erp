@@ -26,10 +26,19 @@ export default function InventoryPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    product_code: string
+    product_name: string
+    category: 'hammadde' | 'yarimamul' | 'mamul' | 'takim' | 'sarf'
+    quantity: number
+    unit: string
+    min_stock_level: number
+    unit_cost: number
+    location: string
+  }>({
     product_code: '',
     product_name: '',
-    category: 'hammadde' as const,
+    category: 'hammadde',
     quantity: 0,
     unit: 'adet',
     min_stock_level: 0,

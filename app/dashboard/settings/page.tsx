@@ -11,6 +11,8 @@ interface User {
   email: string
   role_id: string
   role_name: string
+  company_id: string
+  company_name?: string
   is_active: boolean
   created_at: string
   last_login: string | null
@@ -151,12 +153,18 @@ export default function SettingsPage() {
         .single()
 
       setCurrentUserRole(roleData?.name || '')
+      const isSuperAdmin = roleData?.name === 'Super Admin'
 
-      // Load users
-      const { data: usersData } = await supabase
+      // Load users (Super Admin sees all users, others see only their company)
+      let usersQuery = supabase
         .from('profiles')
-        .select('id, full_name, email, is_active, created_at, role_id, last_login')
-        .eq('company_id', profile.company_id)
+        .select('id, full_name, email, is_active, created_at, role_id, last_login, company_id')
+
+      if (!isSuperAdmin) {
+        usersQuery = usersQuery.eq('company_id', profile.company_id)
+      }
+
+      const { data: usersData } = await usersQuery
 
       if (usersData) {
         const usersWithRoles = await Promise.all(
@@ -167,12 +175,20 @@ export default function SettingsPage() {
               .eq('id', u.role_id)
               .single()
 
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('name')
+              .eq('id', u.company_id)
+              .single()
+
             return {
               id: u.id,
               full_name: u.full_name,
               email: u.email || '',
               role_id: u.role_id,
               role_name: roleData?.name || 'Bilinmiyor',
+              company_id: u.company_id,
+              company_name: companyData?.name || 'Bilinmiyor',
               is_active: u.is_active,
               created_at: u.created_at,
               last_login: u.last_login,
@@ -191,11 +207,16 @@ export default function SettingsPage() {
       if (rolesData) {
         const rolesWithCounts = await Promise.all(
           rolesData.map(async (role: any) => {
-            const { count } = await supabase
+            let countQuery = supabase
               .from('profiles')
               .select('id', { count: 'exact', head: true })
               .eq('role_id', role.id)
-              .eq('company_id', profile.company_id)
+
+            if (!isSuperAdmin) {
+              countQuery = countQuery.eq('company_id', profile.company_id)
+            }
+
+            const { count } = await countQuery
 
             return { ...role, user_count: count || 0 }
           })
@@ -203,12 +224,17 @@ export default function SettingsPage() {
         setRoles(rolesWithCounts)
       }
 
-      // Load invitations
-      const { data: invitationsData } = await supabase
+      // Load invitations (Super Admin sees all invitations, others see only their company)
+      let invitationsQuery = supabase
         .from('user_invitations')
         .select('*')
-        .eq('company_id', profile.company_id)
         .eq('status', 'pending')
+
+      if (!isSuperAdmin) {
+        invitationsQuery = invitationsQuery.eq('company_id', profile.company_id)
+      }
+
+      const { data: invitationsData } = await invitationsQuery
 
       if (invitationsData) {
         const invitationsWithDetails = await Promise.all(
@@ -803,6 +829,9 @@ export default function SettingsPage() {
                         </th>
                       )}
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kullanıcı</th>
+                      {isSuperAdmin && (
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Şirket</th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Rol</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Durum</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Son Giriş</th>
@@ -815,7 +844,7 @@ export default function SettingsPage() {
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                        <td colSpan={isSuperAdmin ? 8 : 6} className="px-6 py-12 text-center text-gray-500">
                           <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                           </svg>
@@ -856,6 +885,16 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           </td>
+                          {isSuperAdmin && (
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                                </svg>
+                                {user.company_name}
+                              </span>
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             {isSuperAdmin ? (
                               <select

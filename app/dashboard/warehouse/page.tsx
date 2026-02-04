@@ -1138,40 +1138,6 @@ export default function WarehousePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Minimum Stok</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={itemForm.min_stock}
-                      onChange={(e) => setItemForm({ ...itemForm, min_stock: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Maksimum Stok</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={itemForm.max_stock}
-                      onChange={(e) => setItemForm({ ...itemForm, max_stock: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Birim Fiyat</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={itemForm.unit_price}
-                      onChange={(e) => setItemForm({ ...itemForm, unit_price: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                      placeholder="₺"
-                    />
-                  </div>
-
-                  <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Konum / Raf</label>
                     <input
                       type="text"

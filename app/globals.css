@@ -50,3 +50,32 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Force dark text in all form inputs */
+input,
+textarea,
+select {
+  color: #1f2937 !important; /* gray-800 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important; /* gray-400 */
+}
+
+/* Ensure text is visible in all form fields */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
+  color: #1f2937 !important;
+  -webkit-text-fill-color: #1f2937 !important;
+}

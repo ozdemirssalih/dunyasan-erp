@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests'
+type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests'
 
 interface Category {
   id: string
@@ -65,6 +65,21 @@ interface PurchaseRequest {
   requested_at: string
 }
 
+interface ProductionRequest {
+  id: string
+  item_id: string
+  item_name: string
+  item_code: string
+  category_name: string
+  quantity: number
+  unit: string
+  urgency: 'low' | 'medium' | 'high' | 'urgent'
+  reason: string
+  status: string
+  requested_by_name: string
+  requested_at: string
+}
+
 export default function WarehousePage() {
   const { canCreate, canEdit, canDelete } = usePermissions()
 
@@ -79,6 +94,7 @@ export default function WarehousePage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
+  const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -184,6 +200,9 @@ export default function WarehousePage() {
       // Load purchase requests
       await loadRequests(profile.company_id)
 
+      // Load production requests
+      await loadProductionRequests(profile.company_id)
+
     } catch (error) {
       console.error('Error loading data:', error)
       alert('Veri yüklenirken hata oluştu!')
@@ -269,6 +288,83 @@ export default function WarehousePage() {
     })) || []
 
     setRequests(requestsData)
+  }
+
+  const loadProductionRequests = async (companyId: string) => {
+    const { data } = await supabase
+      .from('production_material_requests')
+      .select(`
+        *,
+        item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
+        requester:profiles(full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('requested_at', { ascending: false })
+
+    const productionRequestsData = data?.map((r: any) => ({
+      id: r.id,
+      item_id: r.item_id,
+      item_name: r.item?.name || '',
+      item_code: r.item?.code || '',
+      category_name: r.item?.category?.name || 'Diğer',
+      quantity: r.quantity,
+      unit: r.item?.unit || '',
+      urgency: r.urgency,
+      reason: r.reason || '',
+      status: r.status,
+      requested_by_name: r.requester?.full_name || 'Bilinmiyor',
+      requested_at: r.requested_at
+    })) || []
+
+    setProductionRequests(productionRequestsData)
+  }
+
+  const handleApproveProductionRequest = async (requestId: string) => {
+    if (!confirm('Bu talebi onaylamak istediğinizden emin misiniz? Depo stoğu azalacak, üretim stoğu artacak.')) return
+
+    try {
+      const { error } = await supabase
+        .from('production_material_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', requestId)
+
+      if (error) throw error
+
+      alert('✅ Talep onaylandı! Stoklar otomatik güncellendi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error approving request:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleRejectProductionRequest = async (requestId: string) => {
+    const notes = prompt('Ret sebebini yazın:')
+    if (notes === null) return
+
+    try {
+      const { error } = await supabase
+        .from('production_material_requests')
+        .update({
+          status: 'rejected',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString(),
+          review_notes: notes,
+        })
+        .eq('id', requestId)
+
+      if (error) throw error
+
+      alert('✅ Talep reddedildi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error rejecting request:', error)
+      alert('❌ Hata: ' + error.message)
+    }
   }
 
   const handleSaveItem = async (e: React.FormEvent) => {
@@ -495,6 +591,7 @@ export default function WarehousePage() {
               { id: 'exit', label: 'Çıkış İşlemleri', icon: '↑' },
               { id: 'history', label: 'Geçmiş', count: transactions.length },
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
+              { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1115,6 +1212,99 @@ export default function WarehousePage() {
             {requests.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz satın alma talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PRODUCTION REQUESTS TAB */}
+        {activeTab === 'production-requests' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-blue-900 mb-2">🏭 Üretimden Gelen Talepler</h3>
+              <p className="text-sm text-blue-700">
+                Üretim bölümünden gelen hammadde taleplerini onaylayın. Onayladığınızda depo stoğu otomatik azalacak, üretim stoğu artacak.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {productionRequests.map(req => {
+                const urgencyColors: Record<string, string> = {
+                  low: 'bg-gray-100 text-gray-700',
+                  medium: 'bg-blue-100 text-blue-700',
+                  high: 'bg-orange-100 text-orange-700',
+                  urgent: 'bg-red-100 text-red-700'
+                }
+
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700',
+                  cancelled: 'bg-gray-100 text-gray-700'
+                }
+
+                return (
+                  <div key={req.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800">{req.item_name}</h4>
+                        <p className="text-sm text-gray-500">{req.item_code} - {req.category_name}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${urgencyColors[req.urgency] || 'bg-gray-100 text-gray-700'}`}>
+                          {req.urgency.toUpperCase()}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[req.status] || 'bg-gray-100 text-gray-700'}`}>
+                          {req.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                      <div>
+                        <span className="text-gray-600">Miktar:</span>
+                        <span className="font-semibold ml-2">{req.quantity} {req.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Talep Eden:</span>
+                        <span className="ml-2">{req.requested_by_name}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Tarih:</span>
+                        <span className="ml-2">{new Date(req.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      {req.reason && (
+                        <div className="col-span-2">
+                          <span className="text-gray-600">Sebep:</span>
+                          <p className="mt-1 text-gray-700">{req.reason}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {req.status === 'pending' && (
+                      <div className="flex gap-2 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleApproveProductionRequest(req.id)}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ✅ Onayla
+                        </button>
+                        <button
+                          onClick={() => handleRejectProductionRequest(req.id)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ❌ Reddet
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {productionRequests.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz üretim talebi yok</p>
               </div>
             )}
           </div>

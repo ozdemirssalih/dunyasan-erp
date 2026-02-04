@@ -352,7 +352,7 @@ export default function SettingsPage() {
       permissions: {
         ...roleForm.permissions,
         [module]: {
-          ...roleForm.permissions[module],
+          ...(roleForm.permissions as any)[module],
           [permission]: value,
         },
       },

@@ -851,7 +851,7 @@ export default function SettingsPage() {
                         <label className="flex items-center space-x-2">
                           <input
                             type="checkbox"
-                            checked={roleForm.permissions[module]?.view || false}
+                            checked={(roleForm.permissions as any)[module]?.view || false}
                             onChange={(e) => handlePermissionChange(module, 'view', e.target.checked)}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                           />
@@ -862,7 +862,7 @@ export default function SettingsPage() {
                             <label className="flex items-center space-x-2">
                               <input
                                 type="checkbox"
-                                checked={roleForm.permissions[module]?.create || false}
+                                checked={(roleForm.permissions as any)[module]?.create || false}
                                 onChange={(e) => handlePermissionChange(module, 'create', e.target.checked)}
                                 className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                               />
@@ -871,7 +871,7 @@ export default function SettingsPage() {
                             <label className="flex items-center space-x-2">
                               <input
                                 type="checkbox"
-                                checked={roleForm.permissions[module]?.edit || false}
+                                checked={(roleForm.permissions as any)[module]?.edit || false}
                                 onChange={(e) => handlePermissionChange(module, 'edit', e.target.checked)}
                                 className="w-4 h-4 text-yellow-600 rounded focus:ring-2 focus:ring-yellow-500"
                               />
@@ -880,7 +880,7 @@ export default function SettingsPage() {
                             <label className="flex items-center space-x-2">
                               <input
                                 type="checkbox"
-                                checked={roleForm.permissions[module]?.delete || false}
+                                checked={(roleForm.permissions as any)[module]?.delete || false}
                                 onChange={(e) => handlePermissionChange(module, 'delete', e.target.checked)}
                                 className="w-4 h-4 text-red-600 rounded focus:ring-2 focus:ring-red-500"
                               />

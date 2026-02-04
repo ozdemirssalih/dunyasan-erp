@@ -566,6 +566,78 @@ export default function WarehousePage() {
               )}
             </div>
 
+            {/* Mevcut Stoklar Tablosu */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <h3 className="text-lg font-bold text-gray-800">📦 Mevcut Stoklar</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Konum</th>
+                      {canEdit('warehouse') && (
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredItems.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.code}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{item.name}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                            {item.category_name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-lg font-bold text-gray-900">
+                            {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{item.location || '-'}</td>
+                        {canEdit('warehouse') && (
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => {
+                                setEditingItem(item)
+                                setItemForm({
+                                  code: item.code,
+                                  name: item.name,
+                                  description: item.description,
+                                  category_id: item.category_id,
+                                  unit: item.unit,
+                                  min_stock: item.min_stock,
+                                  max_stock: item.max_stock,
+                                  unit_price: item.unit_price,
+                                  location: item.location,
+                                })
+                                setShowItemModal(true)
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              Düzenle
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {filteredItems.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Stok kalemi bulunamadı</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Items Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredItems.map(item => {

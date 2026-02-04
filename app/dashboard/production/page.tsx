@@ -175,15 +175,19 @@ export default function ProductionPage() {
   }
 
   const loadMaterialRequests = async (companyId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('production_material_requests')
       .select(`
         *,
         item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
-        requester:profiles(full_name)
+        requested_by:profiles(full_name)
       `)
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading material requests:', error)
+    }
 
     const requestsData = data?.map((req: any) => ({
       id: req.id,
@@ -195,7 +199,7 @@ export default function ProductionPage() {
       urgency: req.urgency,
       reason: req.reason || '',
       status: req.status,
-      requested_by_name: req.requester?.full_name || '',
+      requested_by_name: req.requested_by?.full_name || '',
       requested_at: req.requested_at
     })) || []
 
@@ -242,17 +246,21 @@ export default function ProductionPage() {
   }
 
   const loadOutputs = async (companyId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('production_outputs')
       .select(`
         *,
         machine:machines(name, code),
         output_item:warehouse_items(name, unit),
-        operator:profiles(full_name)
+        operator_id:profiles(full_name)
       `)
       .eq('company_id', companyId)
       .order('production_date', { ascending: false })
       .limit(100)
+
+    if (error) {
+      console.error('Error loading outputs:', error)
+    }
 
     const outputsData = data?.map((o: any) => ({
       id: o.id,
@@ -264,7 +272,7 @@ export default function ProductionPage() {
       production_date: o.production_date,
       shift: o.shift || '',
       quality_status: o.quality_status,
-      operator_name: o.operator?.full_name || ''
+      operator_name: o.operator_id?.full_name || ''
     })) || []
 
     setOutputs(outputsData)

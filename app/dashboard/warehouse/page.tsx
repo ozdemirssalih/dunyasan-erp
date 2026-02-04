@@ -291,15 +291,19 @@ export default function WarehousePage() {
   }
 
   const loadProductionRequests = async (companyId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('production_material_requests')
       .select(`
         *,
         item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
-        requester:profiles(full_name)
+        requested_by:profiles(full_name)
       `)
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading production requests:', error)
+    }
 
     const productionRequestsData = data?.map((r: any) => ({
       id: r.id,
@@ -312,7 +316,7 @@ export default function WarehousePage() {
       urgency: r.urgency,
       reason: r.reason || '',
       status: r.status,
-      requested_by_name: r.requester?.full_name || 'Bilinmiyor',
+      requested_by_name: r.requested_by?.full_name || 'Bilinmiyor',
       requested_at: r.requested_at
     })) || []
 

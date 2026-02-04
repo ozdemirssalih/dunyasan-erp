@@ -124,6 +124,10 @@ CREATE POLICY "update_production_requests" ON production_material_requests
     FOR UPDATE TO authenticated
     USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
+CREATE POLICY "update_production_requests" ON production_material_requests
+    FOR UPDATE TO authenticated
+    USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
+
 CREATE POLICY "view_material_assignments" ON production_material_assignments
     FOR SELECT TO authenticated
     USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));

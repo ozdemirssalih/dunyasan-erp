@@ -157,14 +157,14 @@ export default function SettingsPage() {
         .single()
 
       setCurrentUserRole(roleData?.name || '')
-      const isSuperAdmin = roleData?.name === 'Super Admin'
 
       // Load users (Super Admin sees all users, others see only their company)
+      const userIsSuperAdmin = roleData?.name === 'Super Admin'
       let usersQuery = supabase
         .from('profiles')
         .select('id, full_name, email, is_active, created_at, role_id, last_login, company_id')
 
-      if (!isSuperAdmin) {
+      if (!userIsSuperAdmin) {
         usersQuery = usersQuery.eq('company_id', profile.company_id)
       }
 
@@ -216,7 +216,7 @@ export default function SettingsPage() {
               .select('id', { count: 'exact', head: true })
               .eq('role_id', role.id)
 
-            if (!isSuperAdmin) {
+            if (!userIsSuperAdmin) {
               countQuery = countQuery.eq('company_id', profile.company_id)
             }
 
@@ -234,7 +234,7 @@ export default function SettingsPage() {
         .select('*')
         .eq('status', 'pending')
 
-      if (!isSuperAdmin) {
+      if (!userIsSuperAdmin) {
         invitationsQuery = invitationsQuery.eq('company_id', profile.company_id)
       }
 
@@ -616,7 +616,6 @@ export default function SettingsPage() {
     )
   }
 
-  const isSuperAdmin = currentUserRole === 'Super Admin'
   const activeUsers = users.filter((u) => u.is_active).length
   const inactiveUsers = users.filter((u) => !u.is_active).length
 

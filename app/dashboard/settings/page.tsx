@@ -47,63 +47,92 @@ export default function SettingsPage() {
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        return
+      }
       setCurrentUserId(user.id)
 
       // Get current user's company
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('company_id')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
+      if (profileError) {
+        console.error('Profile error:', profileError)
+        alert('Profil yüklenirken hata: ' + profileError.message)
+        return
+      }
 
-      // Load users
-      const { data: usersData } = await supabase
+      if (!profile?.company_id) {
+        console.error('No company_id found')
+        return
+      }
+
+      // Load users - simplified query
+      const { data: usersData, error: usersError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          email,
-          is_active,
-          created_at,
-          role_id,
-          roles!inner(name)
-        `)
+        .select('id, full_name, email, is_active, created_at, role_id')
         .eq('company_id', profile.company_id)
 
-      if (usersData) {
-        const formattedUsers = usersData.map((u: any) => ({
-          id: u.id,
-          full_name: u.full_name,
-          email: u.email || '',
-          role_id: u.role_id,
-          role_name: u.roles.name,
-          is_active: u.is_active,
-          created_at: u.created_at,
-        }))
-        setUsers(formattedUsers)
+      if (usersError) {
+        console.error('Users error:', usersError)
+        alert('Kullanıcılar yüklenirken hata: ' + usersError.message)
+      } else if (usersData) {
+        // Get role names separately
+        const usersWithRoles = await Promise.all(
+          usersData.map(async (u: any) => {
+            const { data: roleData } = await supabase
+              .from('roles')
+              .select('name')
+              .eq('id', u.role_id)
+              .single()
+
+            return {
+              id: u.id,
+              full_name: u.full_name,
+              email: u.email || '',
+              role_id: u.role_id,
+              role_name: roleData?.name || 'Bilinmiyor',
+              is_active: u.is_active,
+              created_at: u.created_at,
+            }
+          })
+        )
+        setUsers(usersWithRoles)
       }
 
       // Load roles
-      const { data: rolesData } = await supabase
+      const { data: rolesData, error: rolesError } = await supabase
         .from('roles')
         .select('*')
         .order('name')
 
-      if (rolesData) setRoles(rolesData)
+      if (rolesError) {
+        console.error('Roles error:', rolesError)
+        alert('Roller yüklenirken hata: ' + rolesError.message)
+      } else if (rolesData) {
+        setRoles(rolesData)
+      }
 
       // Load company
-      const { data: companyData } = await supabase
+      const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('*')
         .eq('id', profile.company_id)
         .single()
 
-      if (companyData) setCompany(companyData)
+      if (companyError) {
+        console.error('Company error:', companyError)
+        alert('Şirket bilgileri yüklenirken hata: ' + companyError.message)
+      } else if (companyData) {
+        setCompany(companyData)
+      }
     } catch (error) {
       console.error('Error loading data:', error)
+      alert('Veri yüklenirken genel hata: ' + (error as any).message)
     } finally {
       setLoading(false)
     }

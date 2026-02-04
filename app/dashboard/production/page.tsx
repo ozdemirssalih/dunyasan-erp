@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface ProductionOrder {
   id: string
@@ -198,7 +199,8 @@ export default function ProductionPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PermissionGuard module="production" permission="view">
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -401,6 +403,7 @@ export default function ProductionPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

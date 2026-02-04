@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Machine {
   id: string
@@ -215,6 +216,7 @@ export default function MachinesPage() {
     : 0
 
   return (
+    <PermissionGuard module="machines" permission="view">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -460,5 +462,6 @@ export default function MachinesPage() {
         </div>
       )}
     </div>
+    </PermissionGuard>
   )
 }

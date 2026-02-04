@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface InventoryItem {
   id: string
@@ -250,6 +251,7 @@ export default function InventoryPage() {
   const totalValue = items.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0)
 
   return (
+    <PermissionGuard module="inventory" permission="view">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -526,4 +528,5 @@ export default function InventoryPage() {
       )}
     </div>
   )
+    </PermissionGuard>
 }

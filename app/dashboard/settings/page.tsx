@@ -519,21 +519,30 @@ export default function SettingsPage() {
     if (!company) return
 
     try {
-      const { error } = await supabase
+      console.log('Updating company:', company)
+
+      const { data, error } = await supabase
         .from('companies')
         .update({
-          name: company.name,
+          company_name: company.name,
           tax_number: company.tax_number,
           address: company.address,
           phone: company.phone,
           email: company.email,
         })
         .eq('id', company.id)
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('Company update error:', error)
+        throw error
+      }
 
+      console.log('Company updated successfully:', data)
       alert('✅ Şirket bilgileri güncellendi!')
+      loadData() // Reload to reflect changes
     } catch (error: any) {
+      console.error('Error updating company:', error)
       alert('❌ Hata: ' + error.message)
     }
   }

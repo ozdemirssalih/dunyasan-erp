@@ -214,7 +214,7 @@ export default function ProjectsPage() {
         const { data: company } = await supabase
           .from('companies')
           .select('id')
-          .ilike('company_name', '%dünyasan%')
+          .ilike('name', '%dünyasan%')
           .limit(1)
           .single()
 

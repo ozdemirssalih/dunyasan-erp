@@ -429,23 +429,42 @@ export default function ProjectsPage() {
       return
     }
 
+    if (!companyId || companyId.trim() === '') {
+      alert('Şirket ID bulunamadı. Lütfen sayfayı yenileyin.')
+      return
+    }
+
     try {
-      const { error } = await supabase
+      const customerData = {
+        company_id: companyId,
+        customer_name: customerForm.customer_name.trim(),
+        contact_person: customerForm.contact_person.trim() || null,
+        phone: customerForm.phone.trim() || null,
+        email: customerForm.email.trim() || null,
+        address: customerForm.address.trim() || null,
+        notes: customerForm.notes.trim() || null
+      }
+
+      console.log('Saving customer with data:', customerData)
+
+      const { data, error } = await supabase
         .from('customer_companies')
-        .insert({
-          company_id: companyId,
-          ...customerForm
-        })
+        .insert(customerData)
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error details:', error)
+        throw error
+      }
 
+      console.log('Customer saved successfully:', data)
       alert('✅ Müşteri firma eklendi!')
       setShowCustomerModal(false)
       resetCustomerForm()
       loadCustomers(companyId)
     } catch (error: any) {
       console.error('Error saving customer:', error)
-      alert('❌ Hata: ' + error.message)
+      alert('❌ Hata: ' + (error.message || JSON.stringify(error)))
     }
   }
 

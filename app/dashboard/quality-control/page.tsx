@@ -40,7 +40,11 @@ export default function QualityControlPage() {
       setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        setLoading(false)
+        return
+      }
 
       setCurrentUserId(user.id)
 
@@ -50,15 +54,52 @@ export default function QualityControlPage() {
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
+      let finalCompanyId = profile?.company_id
 
-      setCompanyId(profile.company_id)
+      if (!finalCompanyId) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+        } else {
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
+      }
+
+      if (!finalCompanyId) {
+        console.error('No company found')
+        setLoading(false)
+        return
+      }
+
+      setCompanyId(finalCompanyId)
 
       await Promise.all([
-        loadQCInventory(profile.company_id),
-        loadIncomingTransfers(profile.company_id),
-        loadOutgoingTransfers(profile.company_id),
-        loadWarehouseItems(profile.company_id),
+        loadQCInventory(finalCompanyId),
+        loadIncomingTransfers(finalCompanyId),
+        loadOutgoingTransfers(finalCompanyId),
+        loadWarehouseItems(finalCompanyId),
       ])
 
     } catch (error) {

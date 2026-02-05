@@ -67,7 +67,11 @@ export default function MachinesPage() {
   const loadMachines = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        setLoading(false)
+        return
+      }
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -75,13 +79,51 @@ export default function MachinesPage() {
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
-      setCompanyId(profile.company_id)
+      let finalCompanyId = profile?.company_id
+
+      if (!finalCompanyId) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+        } else {
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
+      }
+
+      if (!finalCompanyId) {
+        console.error('No company found')
+        setLoading(false)
+        return
+      }
+
+      setCompanyId(finalCompanyId)
 
       const { data, error } = await supabase
         .from('machines')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', finalCompanyId)
         .order('machine_code', { ascending: true })
 
       if (error) throw error

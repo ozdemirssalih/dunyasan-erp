@@ -61,6 +61,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
+  const [companyId, setCompanyId] = useState<string>('')
 
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -139,7 +140,10 @@ export default function SettingsPage() {
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        return
+      }
       setCurrentUserId(user.id)
 
       const { data: profile } = await supabase
@@ -148,12 +152,50 @@ export default function SettingsPage() {
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
+      let finalCompanyId = profile?.company_id
+
+      if (!finalCompanyId) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+        } else {
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
+      }
+
+      if (!finalCompanyId) {
+        console.error('No company found')
+        return
+      }
+
+      setCompanyId(finalCompanyId)
 
       const { data: roleData } = await supabase
         .from('roles')
         .select('name')
-        .eq('id', profile.role_id)
+        .eq('id', profile?.role_id)
         .single()
 
       setCurrentUserRole(roleData?.name || '')
@@ -165,7 +207,7 @@ export default function SettingsPage() {
         .select('id, full_name, email, is_active, created_at, role_id, last_login, company_id')
 
       if (!userIsSuperAdmin) {
-        usersQuery = usersQuery.eq('company_id', profile.company_id)
+        usersQuery = usersQuery.eq('company_id', finalCompanyId)
       }
 
       const { data: usersData } = await usersQuery
@@ -217,7 +259,7 @@ export default function SettingsPage() {
               .eq('role_id', role.id)
 
             if (!userIsSuperAdmin) {
-              countQuery = countQuery.eq('company_id', profile.company_id)
+              countQuery = countQuery.eq('company_id', finalCompanyId)
             }
 
             const { count } = await countQuery
@@ -235,7 +277,7 @@ export default function SettingsPage() {
         .eq('status', 'pending')
 
       if (!userIsSuperAdmin) {
-        invitationsQuery = invitationsQuery.eq('company_id', profile.company_id)
+        invitationsQuery = invitationsQuery.eq('company_id', finalCompanyId)
       }
 
       const { data: invitationsData } = await invitationsQuery
@@ -274,7 +316,7 @@ export default function SettingsPage() {
       const { data: companyData } = await supabase
         .from('companies')
         .select('*')
-        .eq('id', profile.company_id)
+        .eq('id', finalCompanyId)
         .single()
 
       if (companyData) setCompany(companyData)
@@ -381,7 +423,7 @@ export default function SettingsPage() {
       expiresAt.setDate(expiresAt.getDate() + 7)
 
       const { error } = await supabase.from('user_invitations').insert({
-        company_id: profile.company_id,
+        company_id: companyId,
         email: inviteEmail,
         role_id: inviteRoleId,
         invited_by: user.id,

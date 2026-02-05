@@ -161,7 +161,11 @@ export default function WarehousePage() {
       setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        setLoading(false)
+        return
+      }
 
       setCurrentUserId(user.id)
 
@@ -171,9 +175,47 @@ export default function WarehousePage() {
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
+      let finalCompanyId = profile?.company_id
 
-      setCompanyId(profile.company_id)
+      // Eğer profilde company_id yoksa, Dünyasan şirketini kullan
+      if (!finalCompanyId) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+        } else {
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
+      }
+
+      if (!finalCompanyId) {
+        console.error('No company found')
+        setLoading(false)
+        return
+      }
+
+      setCompanyId(finalCompanyId)
 
       // Load categories
       const { data: categoriesData } = await supabase
@@ -187,23 +229,23 @@ export default function WarehousePage() {
       const { data: departmentsData } = await supabase
         .from('departments')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', finalCompanyId)
         .order('name')
 
       setDepartments(departmentsData || [])
 
       // Load warehouse items
-      await loadItems(profile.company_id)
+      await loadItems(finalCompanyId)
 
       // Load transactions
-      await loadTransactions(profile.company_id)
+      await loadTransactions(finalCompanyId)
 
       // Load purchase requests
-      await loadRequests(profile.company_id)
+      await loadRequests(finalCompanyId)
 
       // Load production requests
-      await loadProductionRequests(profile.company_id)
-      await loadProductionTransfers(profile.company_id)
+      await loadProductionRequests(finalCompanyId)
+      await loadProductionTransfers(finalCompanyId)
 
     } catch (error) {
       console.error('Error loading data:', error)

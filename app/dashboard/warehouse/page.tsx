@@ -269,7 +269,7 @@ export default function WarehousePage() {
       .select(`
         *,
         category:warehouse_categories(name),
-        requested_by:profiles(full_name)
+        requested_by:profiles!purchase_requests_requested_by_fkey(full_name)
       `)
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })

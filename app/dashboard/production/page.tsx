@@ -117,6 +117,15 @@ export default function ProductionPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [projectParts, setProjectParts] = useState<any[]>([])
 
+  // Stats states
+  const [stats, setStats] = useState({
+    rawMaterialsReady: 0,
+    finishedProducts: 0,
+    pendingQC: 0,
+    todayProduction: 0,
+    recentProjects: [] as string[]
+  })
+
   // Modal states
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [showAssignmentModal, setShowAssignmentModal] = useState(false)
@@ -266,6 +275,7 @@ export default function ProductionPage() {
         loadWarehouseTransfers(finalCompanyId),
         loadQCTransfers(finalCompanyId),
         loadProjects(finalCompanyId),
+        loadStats(finalCompanyId),
       ])
 
     } catch (error) {
@@ -462,6 +472,72 @@ export default function ProductionPage() {
       .order('part_name')
 
     setProjectParts(data || [])
+  }
+
+  const loadStats = async (companyId: string) => {
+    console.log('📊 [PRODUCTION] loadStats çağrıldı')
+
+    // İşlenmeye hazır hammadde sayısı
+    const { data: rawMaterials } = await supabase
+      .from('production_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+      .eq('item_type', 'raw_material')
+      .gt('current_stock', 0)
+
+    const rawMaterialsReady = rawMaterials?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
+    // Toplam işlenen mamul (finished products)
+    const { data: finishedProductsData } = await supabase
+      .from('production_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+      .eq('item_type', 'finished_product')
+      .gt('current_stock', 0)
+
+    const finishedProducts = finishedProductsData?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
+    // Kalite kontrolde bekleyen
+    const { count: pendingQC } = await supabase
+      .from('production_outputs')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('quality_status', 'pending')
+
+    // Bugünkü üretim
+    const today = new Date().toISOString().split('T')[0]
+    const { data: todayOutputs } = await supabase
+      .from('production_outputs')
+      .select('quantity')
+      .eq('company_id', companyId)
+      .gte('production_date', today)
+
+    const todayProduction = todayOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // En son atanan projeleri al
+    const { data: recentAssignments } = await supabase
+      .from('production_material_assignments')
+      .select(`
+        project_id,
+        project:projects(project_name)
+      `)
+      .eq('company_id', companyId)
+      .not('project_id', 'is', null)
+      .order('assigned_date', { ascending: false })
+      .limit(5)
+
+    const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
+    const recentProjects = Array.from(new Set(projectNames || []))
+
+    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, recentProjects })
+
+    setStats({
+      rawMaterialsReady,
+      finishedProducts,
+      pendingQC: pendingQC || 0,
+      todayProduction,
+      recentProjects
+    })
   }
 
   const loadWarehouseTransfers = async (companyId: string) => {
@@ -946,6 +1022,69 @@ export default function ProductionPage() {
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Üretim Yönetimi</h2>
             <p className="text-gray-600">Tezgah hammadde takibi ve üretim kayıtları</p>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* İşlenmeye Hazır Hammadde */}
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Package className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.rawMaterialsReady}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">İşlenmeye Hazır Hammadde</h3>
+            <p className="text-xs opacity-75 mt-1">Üretim deposundaki toplam miktar</p>
+            {stats.recentProjects.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/20">
+                <p className="text-xs opacity-75 mb-1">Son projeler:</p>
+                <div className="flex flex-wrap gap-1">
+                  {stats.recentProjects.slice(0, 2).map((project, idx) => (
+                    <span key={idx} className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                      {project}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* İşlenen Mamul */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Factory className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.finishedProducts}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">İşlenen Mamul</h3>
+            <p className="text-xs opacity-75 mt-1">Üretimde hazır ürünler</p>
+          </div>
+
+          {/* Kalite Kontrolde Bekleyen */}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <TestTube2 className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.pendingQC}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">Kalite Kontrolde Bekleyen</h3>
+            <p className="text-xs opacity-75 mt-1">Onay bekleyen mamüller</p>
+          </div>
+
+          {/* Bugünkü Üretim */}
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <ClipboardList className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.todayProduction}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">Bugünkü Üretim</h3>
+            <p className="text-xs opacity-75 mt-1">Bugün üretilen toplam miktar</p>
           </div>
         </div>
 

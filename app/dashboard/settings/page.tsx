@@ -524,7 +524,7 @@ export default function SettingsPage() {
       const { data, error } = await supabase
         .from('companies')
         .update({
-          company_name: company.name,
+          name: company.name,
           tax_number: company.tax_number,
           address: company.address,
           phone: company.phone,

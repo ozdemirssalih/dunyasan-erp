@@ -63,8 +63,8 @@ interface MaterialRequest {
 
 interface Machine {
   id: string
-  name: string
-  code: string
+  machine_name: string
+  machine_code: string
   status: string
 }
 
@@ -188,31 +188,84 @@ export default function ProductionPage() {
       setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        setLoading(false)
+        return
+      }
 
       setCurrentUserId(user.id)
 
+      // Profil bilgisini çek
       const { data: profile } = await supabase
         .from('profiles')
         .select('company_id')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) return
+      let finalCompanyId = profile?.company_id
 
-      setCompanyId(profile.company_id)
+      // Eğer profilde company_id yoksa, Dünyasan şirketini kullan
+      if (!finalCompanyId) {
+        console.log('No company_id in profile, fetching Dünyasan company...')
+
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          console.log('Using Dünyasan company ID:', finalCompanyId)
+
+          // Profili güncelle
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+
+          console.log('Profile updated with company_id')
+        } else {
+          // Hiç şirket yoksa, ilk şirketi kullan
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            console.log('Using first company ID:', finalCompanyId)
+
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
+      }
+
+      if (!finalCompanyId) {
+        console.error('No company found')
+        setLoading(false)
+        return
+      }
+
+      setCompanyId(finalCompanyId)
 
       // Load all data in parallel
       await Promise.all([
-        loadProductionInventory(profile.company_id),
-        loadMaterialRequests(profile.company_id),
-        loadMachines(profile.company_id),
-        loadAssignments(profile.company_id),
-        loadOutputs(profile.company_id),
-        loadWarehouseItems(profile.company_id),
-        loadWarehouseTransfers(profile.company_id),
-        loadQCTransfers(profile.company_id),
-        loadProjects(profile.company_id),
+        loadProductionInventory(finalCompanyId),
+        loadMaterialRequests(finalCompanyId),
+        loadMachines(finalCompanyId),
+        loadAssignments(finalCompanyId),
+        loadOutputs(finalCompanyId),
+        loadWarehouseItems(finalCompanyId),
+        loadWarehouseTransfers(finalCompanyId),
+        loadQCTransfers(finalCompanyId),
+        loadProjects(finalCompanyId),
       ])
 
     } catch (error) {
@@ -285,7 +338,7 @@ export default function ProductionPage() {
       .from('machines')
       .select('*')
       .eq('company_id', companyId)
-      .order('code')
+      .order('machine_code')
 
     setMachines(data || [])
   }
@@ -295,7 +348,7 @@ export default function ProductionPage() {
       .from('production_material_assignments')
       .select(`
         *,
-        machine:machines(name, code),
+        machine:machines(machine_name, machine_code),
         item:warehouse_items(code, name, unit),
         assigned_by:profiles(full_name)
       `)
@@ -305,8 +358,8 @@ export default function ProductionPage() {
 
     const assignmentsData = data?.map((a: any) => ({
       id: a.id,
-      machine_name: a.machine?.name || '',
-      machine_code: a.machine?.code || '',
+      machine_name: a.machine?.machine_name || '',
+      machine_code: a.machine?.machine_code || '',
       item_name: a.item?.name || '',
       item_code: a.item?.code || '',
       quantity: a.quantity,
@@ -324,7 +377,7 @@ export default function ProductionPage() {
       .from('production_outputs')
       .select(`
         *,
-        machine:machines(name, code),
+        machine:machines(machine_name, machine_code),
         output_item:warehouse_items(id, code, name, unit),
         operator_id:profiles(full_name)
       `)
@@ -338,8 +391,8 @@ export default function ProductionPage() {
 
     const outputsData = data?.map((o: any) => ({
       id: o.id,
-      machine_name: o.machine?.name || '',
-      machine_code: o.machine?.code || '',
+      machine_name: o.machine?.machine_name || '',
+      machine_code: o.machine?.machine_code || '',
       output_item_name: o.output_item?.name || '',
       output_item_id: o.output_item?.id || o.output_item_id,
       output_item_code: o.output_item?.code || '',
@@ -1642,7 +1695,7 @@ export default function ProductionPage() {
                       <option value="">Seçin...</option>
                       {machines.map(machine => (
                         <option key={machine.id} value={machine.id}>
-                          {machine.code} - {machine.name}
+                          {machine.machine_code} - {machine.machine_name}
                         </option>
                       ))}
                     </select>
@@ -1796,7 +1849,7 @@ export default function ProductionPage() {
                       <option value="">Seçin...</option>
                       {machines.map(machine => (
                         <option key={machine.id} value={machine.id}>
-                          {machine.code} - {machine.name}
+                          {machine.machine_code} - {machine.machine_name}
                         </option>
                       ))}
                     </select>

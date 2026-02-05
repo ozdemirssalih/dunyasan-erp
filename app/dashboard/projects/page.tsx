@@ -324,7 +324,7 @@ export default function ProjectsPage() {
           id,
           item_id,
           current_stock,
-          item:warehouse_items(item_name, unit)
+          item:warehouse_items(name, unit)
         `)
         .eq('company_id', cid)
         .eq('item_type', 'raw_material')
@@ -333,7 +333,7 @@ export default function ProjectsPage() {
 
       const materials = (data || []).map((item: any) => ({
         id: item.item_id,
-        item_name: item.item?.item_name || 'Bilinmeyen',
+        item_name: item.item?.name || 'Bilinmeyen',
         unit: item.item?.unit || 'adet',
         current_stock: item.current_stock
       }))
@@ -398,14 +398,14 @@ export default function ProjectsPage() {
         .from('project_materials')
         .select(`
           *,
-          material:warehouse_items(item_name, unit)
+          material:warehouse_items(name, unit)
         `)
         .eq('part_id', partId)
 
       if (matsError) throw matsError
       setPartMaterials((mats || []).map(mat => ({
         ...mat,
-        material_name: mat.material?.item_name,
+        material_name: mat.material?.name,
         unit: mat.unit || mat.material?.unit || 'adet'
       })))
 

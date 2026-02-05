@@ -277,7 +277,9 @@ export default function ProductionPage() {
   }
 
   const loadProductionInventory = async (companyId: string) => {
-    const { data } = await supabase
+    console.log('🔍 [PRODUCTION] loadProductionInventory çağrıldı, companyId:', companyId)
+
+    const { data, error } = await supabase
       .from('production_inventory')
       .select(`
         *,
@@ -286,6 +288,8 @@ export default function ProductionPage() {
       .eq('company_id', companyId)
       .gt('current_stock', 0)
       .order('item_type', { ascending: true })
+
+    console.log('🏭 [PRODUCTION] production_inventory sorgu sonucu:', { data, error, count: data?.length })
 
     const inventoryData = data?.map((inv: any) => ({
       id: inv.id,
@@ -298,6 +302,7 @@ export default function ProductionPage() {
       item_type: inv.item_type || 'raw_material'
     })) || []
 
+    console.log('✅ [PRODUCTION] ProductionInventory state güncelleniyor:', inventoryData.length, 'kayıt')
     setProductionInventory(inventoryData)
   }
 
@@ -409,12 +414,17 @@ export default function ProductionPage() {
   }
 
   const loadWarehouseItems = async (companyId: string) => {
-    const { data } = await supabase
+    console.log('🔍 [PRODUCTION] loadWarehouseItems çağrıldı, companyId:', companyId)
+
+    const { data, error } = await supabase
       .from('warehouse_items')
       .select('*')
       .eq('company_id', companyId)
       .eq('is_active', true)
       .order('name')
+
+    console.log('📦 [PRODUCTION] warehouse_items sorgu sonucu:', { data, error, count: data?.length })
+    console.log('✅ [PRODUCTION] WarehouseItems state güncelleniyor:', data?.length || 0, 'kayıt')
 
     setWarehouseItems(data || [])
   }

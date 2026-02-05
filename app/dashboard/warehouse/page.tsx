@@ -256,7 +256,9 @@ export default function WarehousePage() {
   }
 
   const loadItems = async (companyId: string) => {
-    const { data } = await supabase
+    console.log('🔍 [WAREHOUSE] loadItems çağrıldı, companyId:', companyId)
+
+    const { data, error } = await supabase
       .from('warehouse_items')
       .select(`
         *,
@@ -266,11 +268,14 @@ export default function WarehousePage() {
       .eq('is_active', true)
       .order('code')
 
+    console.log('📦 [WAREHOUSE] warehouse_items sorgu sonucu:', { data, error, count: data?.length })
+
     const itemsData = data?.map((item: any) => ({
       ...item,
       category_name: item.category?.name || 'Bilinmiyor'
     })) || []
 
+    console.log('✅ [WAREHOUSE] Items state güncelleniyor:', itemsData.length, 'kayıt')
     setItems(itemsData)
   }
 

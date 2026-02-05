@@ -264,15 +264,19 @@ export default function WarehousePage() {
   }
 
   const loadRequests = async (companyId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('purchase_requests')
       .select(`
         *,
         category:warehouse_categories(name),
-        requester:profiles(full_name)
+        requested_by:profiles(full_name)
       `)
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading purchase requests:', error)
+    }
 
     const requestsData = data?.map((r: any) => ({
       id: r.id,
@@ -283,7 +287,7 @@ export default function WarehousePage() {
       urgency: r.urgency,
       reason: r.reason || '',
       status: r.status,
-      requested_by_name: r.requester?.full_name || 'Bilinmiyor',
+      requested_by_name: r.requested_by?.full_name || 'Bilinmiyor',
       requested_at: r.requested_at
     })) || []
 

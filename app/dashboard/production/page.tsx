@@ -86,12 +86,15 @@ interface ProductionOutput {
   machine_name: string
   machine_code: string
   output_item_name: string
+  output_item_id: string
+  output_item_code: string
   quantity: number
   unit: string
   production_date: string
   shift: string
   quality_status: string
   operator_name: string
+  transfer_status: string
 }
 
 export default function ProductionPage() {
@@ -315,7 +318,7 @@ export default function ProductionPage() {
       .select(`
         *,
         machine:machines(name, code),
-        output_item:warehouse_items(name, unit),
+        output_item:warehouse_items(id, code, name, unit),
         operator_id:profiles(full_name)
       `)
       .eq('company_id', companyId)
@@ -331,12 +334,15 @@ export default function ProductionPage() {
       machine_name: o.machine?.name || '',
       machine_code: o.machine?.code || '',
       output_item_name: o.output_item?.name || '',
+      output_item_id: o.output_item?.id || o.output_item_id,
+      output_item_code: o.output_item?.code || '',
       quantity: o.quantity,
       unit: o.output_item?.unit || '',
       production_date: o.production_date,
       shift: o.shift || '',
       quality_status: o.quality_status,
-      operator_name: o.operator_id?.full_name || ''
+      operator_name: o.operator_id?.full_name || '',
+      transfer_status: o.transfer_status || 'pending'
     })) || []
 
     setOutputs(outputsData)
@@ -728,6 +734,84 @@ export default function ProductionPage() {
     })
   }
 
+  const handleSendOutputToQC = async (output: ProductionOutput) => {
+    if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) kalite kontrole göndermek istediğinizden emin misiniz?`)) return
+
+    try {
+      // Kalite kontrole transfer kaydı oluştur
+      const { data: transferData, error: transferError } = await supabase
+        .from('production_to_qc_transfers')
+        .insert({
+          company_id: companyId,
+          item_id: output.output_item_id,
+          quantity: output.quantity,
+          notes: `Üretim kaydı #${output.id} - ${output.machine_name} - ${new Date(output.production_date).toLocaleDateString('tr-TR')}`,
+          requested_by: currentUserId,
+          status: 'approved' // Direkt onaylı olarak gönder
+        })
+        .select()
+        .single()
+
+      if (transferError) throw transferError
+
+      // Üretim kaydının durumunu güncelle
+      const { error: updateError } = await supabase
+        .from('production_outputs')
+        .update({
+          transfer_status: 'sent_to_qc',
+          qc_transfer_id: transferData.id
+        })
+        .eq('id', output.id)
+
+      if (updateError) throw updateError
+
+      alert('✅ Ürün kalite kontrole gönderildi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error sending to QC:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleSendOutputToWarehouse = async (output: ProductionOutput) => {
+    if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) ana depoya göndermek istediğinizden emin misiniz?`)) return
+
+    try {
+      // Ana depoya transfer kaydı oluştur
+      const { data: transferData, error: transferError } = await supabase
+        .from('production_to_warehouse_transfers')
+        .insert({
+          company_id: companyId,
+          item_id: output.output_item_id,
+          quantity: output.quantity,
+          notes: `Üretim kaydı #${output.id} - ${output.machine_name} - ${new Date(output.production_date).toLocaleDateString('tr-TR')}`,
+          requested_by: currentUserId,
+          status: 'approved' // Direkt onaylı olarak gönder
+        })
+        .select()
+        .single()
+
+      if (transferError) throw transferError
+
+      // Üretim kaydının durumunu güncelle
+      const { error: updateError } = await supabase
+        .from('production_outputs')
+        .update({
+          transfer_status: 'sent_to_warehouse',
+          warehouse_transfer_id: transferData.id
+        })
+        .eq('id', output.id)
+
+      if (updateError) throw updateError
+
+      alert('✅ Ürün ana depoya gönderildi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error sending to warehouse:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -907,13 +991,16 @@ export default function ProductionPage() {
               </div>
             </div>
 
-            {/* Bitmiş Ürünler */}
+            {/* Bitmiş Ürünler - Günlük Üretim Kayıtları */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-purple-50 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-purple-800 flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  Bitmiş Ürünler (Üretimden Gelen)
-                </h3>
+                <div>
+                  <h3 className="text-lg font-bold text-purple-800 flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    Bitmiş Ürünler (Tezgahtan Gelen Kayıtlar)
+                  </h3>
+                  <p className="text-sm text-purple-600 mt-1">Günlük üretim kayıtları - KK veya Depoya gönderilebilir</p>
+                </div>
                 {canCreate('production') && (
                   <button
                     onClick={() => setShowManualStockModal(true)}
@@ -927,35 +1014,85 @@ export default function ProductionPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tezgah</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Vardiya</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Durum</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {productionInventory.filter(item => item.item_type === 'finished_product').map(item => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_code}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{item.item_name}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
-                            {item.category_name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-lg font-bold text-gray-900">
-                            {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {outputs.map(output => {
+                      const transferStatusColors: Record<string, string> = {
+                        pending: 'bg-yellow-100 text-yellow-700',
+                        sent_to_qc: 'bg-blue-100 text-blue-700',
+                        sent_to_warehouse: 'bg-green-100 text-green-700'
+                      }
+
+                      const transferStatusLabels: Record<string, string> = {
+                        pending: 'Bekliyor',
+                        sent_to_qc: 'KK\'da',
+                        sent_to_warehouse: 'Depoda'
+                      }
+
+                      return (
+                        <tr key={output.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {new Date(output.production_date).toLocaleDateString('tr-TR')}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-medium text-gray-900">{output.machine_name}</div>
+                            <div className="text-xs text-gray-500">{output.machine_code}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-medium text-gray-900">{output.output_item_name}</div>
+                            <div className="text-xs text-gray-500">{output.output_item_code}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                            {output.quantity} {output.unit}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                              {output.shift}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs rounded font-semibold ${transferStatusColors[output.transfer_status] || 'bg-gray-100 text-gray-700'}`}>
+                              {transferStatusLabels[output.transfer_status] || output.transfer_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {output.transfer_status === 'pending' && canCreate('production') && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleSendOutputToQC(output)}
+                                  className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs font-semibold"
+                                >
+                                  KK'ya Gönder
+                                </button>
+                                <button
+                                  onClick={() => handleSendOutputToWarehouse(output)}
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold"
+                                >
+                                  Depoya Gönder
+                                </button>
+                              </div>
+                            )}
+                            {output.transfer_status !== 'pending' && (
+                              <span className="text-xs text-gray-500">Gönderildi</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
 
-                {productionInventory.filter(item => item.item_type === 'finished_product').length === 0 && (
+                {outputs.length === 0 && (
                   <div className="text-center py-12">
-                    <p className="text-gray-500">Henüz bitmiş ürün yok. Üretim kaydı ekleyin.</p>
+                    <p className="text-gray-500">Henüz üretim kaydı yok. Üretim Kayıtları sekmesinden ekleyin.</p>
                   </div>
                 )}
               </div>

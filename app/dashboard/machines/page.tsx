@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
+import { Factory, TrendingUp, Clock, Package, Activity, Settings, Wrench, AlertCircle } from 'lucide-react'
 
 interface Machine {
   id: string
@@ -15,6 +16,9 @@ interface Machine {
   efficiency_rate: number
   working_hours: number
   created_at: string
+  production_count?: number
+  material_assignments_count?: number
+  last_production_date?: string
 }
 
 export default function MachinesPage() {
@@ -81,7 +85,41 @@ export default function MachinesPage() {
         .order('machine_code', { ascending: true })
 
       if (error) throw error
-      setMachines(data || [])
+
+      // Her tezgah için üretim istatistiklerini çek
+      const machinesWithStats = await Promise.all(
+        (data || []).map(async (machine) => {
+          // Üretim sayısı
+          const { count: productionCount } = await supabase
+            .from('production_outputs')
+            .select('*', { count: 'exact', head: true })
+            .eq('machine_id', machine.id)
+
+          // Hammadde atama sayısı
+          const { count: assignmentsCount } = await supabase
+            .from('production_material_assignments')
+            .select('*', { count: 'exact', head: true })
+            .eq('machine_id', machine.id)
+
+          // Son üretim tarihi
+          const { data: lastProduction } = await supabase
+            .from('production_outputs')
+            .select('production_date')
+            .eq('machine_id', machine.id)
+            .order('production_date', { ascending: false })
+            .limit(1)
+            .single()
+
+          return {
+            ...machine,
+            production_count: productionCount || 0,
+            material_assignments_count: assignmentsCount || 0,
+            last_production_date: lastProduction?.production_date || null
+          }
+        })
+      )
+
+      setMachines(machinesWithStats)
     } catch (error) {
       console.error('Error loading machines:', error)
     } finally {
@@ -191,8 +229,14 @@ export default function MachinesPage() {
       maintenance: 'Bakımda',
       offline: 'Çalışmıyor',
     }
+    const icons = {
+      active: <Activity className="w-4 h-4" />,
+      maintenance: <Wrench className="w-4 h-4" />,
+      offline: <AlertCircle className="w-4 h-4" />,
+    }
     return (
-      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${styles[status as keyof typeof styles]}`}>
+      <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${styles[status as keyof typeof styles]}`}>
+        {icons[status as keyof typeof icons]}
         {labels[status as keyof typeof labels]}
       </span>
     )
@@ -239,11 +283,9 @@ export default function MachinesPage() {
             })
             setShowModal(true)
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center transition-colors"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
+          <Factory className="w-5 h-5" />
           Yeni Tezgah
         </button>
       </div>
@@ -251,16 +293,31 @@ export default function MachinesPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
-          <p className="text-gray-600 text-sm font-medium">Aktif Tezgahlar</p>
-          <p className="text-3xl font-bold text-gray-800 mt-2">{activeMachines} / {machines.length}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Aktif Tezgahlar</p>
+              <p className="text-3xl font-bold text-gray-800 mt-2">{activeMachines} / {machines.length}</p>
+            </div>
+            <Activity className="w-10 h-10 text-green-500" />
+          </div>
         </div>
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-          <p className="text-gray-600 text-sm font-medium">Toplam Günlük Kapasite</p>
-          <p className="text-3xl font-bold text-gray-800 mt-2">{totalCapacity} adet</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Toplam Günlük Kapasite</p>
+              <p className="text-3xl font-bold text-gray-800 mt-2">{totalCapacity} adet</p>
+            </div>
+            <Package className="w-10 h-10 text-blue-500" />
+          </div>
         </div>
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
-          <p className="text-gray-600 text-sm font-medium">Ortalama Verimlilik</p>
-          <p className="text-3xl font-bold text-gray-800 mt-2">%{avgEfficiency}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Ortalama Verimlilik</p>
+              <p className="text-3xl font-bold text-gray-800 mt-2">%{avgEfficiency}</p>
+            </div>
+            <TrendingUp className="w-10 h-10 text-purple-500" />
+          </div>
         </div>
       </div>
 
@@ -281,7 +338,10 @@ export default function MachinesPage() {
               {/* Machine Details */}
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tip:</span>
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Settings className="w-3 h-3" />
+                    Tip:
+                  </span>
                   <span className="font-semibold text-gray-800">{machine.machine_type || '-'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -289,13 +349,40 @@ export default function MachinesPage() {
                   <span className="font-semibold text-gray-800">{machine.model || '-'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Günlük Kapasite:</span>
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Package className="w-3 h-3" />
+                    Günlük Kapasite:
+                  </span>
                   <span className="font-semibold text-gray-800">{machine.daily_capacity || 0} adet</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Çalışma Saati:</span>
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Çalışma Saati:
+                  </span>
                   <span className="font-semibold text-gray-800">{machine.working_hours} saat</span>
                 </div>
+              </div>
+
+              {/* Production Stats */}
+              <div className="bg-blue-50 rounded-lg p-3 mb-4 space-y-2">
+                <p className="text-xs font-semibold text-blue-900 mb-2">Üretim İstatistikleri</p>
+                <div className="flex justify-between text-xs">
+                  <span className="text-blue-700">Toplam Üretim:</span>
+                  <span className="font-bold text-blue-900">{machine.production_count || 0} kayıt</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-blue-700">Hammadde Atamaları:</span>
+                  <span className="font-bold text-blue-900">{machine.material_assignments_count || 0} atama</span>
+                </div>
+                {machine.last_production_date && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-blue-700">Son Üretim:</span>
+                    <span className="font-bold text-blue-900">
+                      {new Date(machine.last_production_date).toLocaleDateString('tr-TR')}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Efficiency Bar */}

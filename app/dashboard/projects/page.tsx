@@ -483,16 +483,43 @@ export default function ProjectsPage() {
       return
     }
 
-    // Company kontrolü
-    if (!companyId || companyId.trim() === '') {
-      alert('❌ Şirket bilgisi yüklenmedi. Sayfa yeniden yükleniyor...')
-      window.location.reload()
-      return
-    }
-
     try {
+      // Önce kullanıcıyı ve şirket bilgisini çek
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('❌ Kullanıcı bilgisi bulunamadı')
+        return
+      }
+
+      // Profildeki company_id'yi al
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      let finalCompanyId = profile?.company_id || companyId
+
+      // Hala company_id yoksa, ilk şirketi kullan
+      if (!finalCompanyId) {
+        const { data: firstCompany } = await supabase
+          .from('companies')
+          .select('id')
+          .limit(1)
+          .single()
+
+        if (firstCompany?.id) {
+          finalCompanyId = firstCompany.id
+        }
+      }
+
+      if (!finalCompanyId) {
+        alert('❌ Şirket bilgisi bulunamadı. Lütfen önce bir şirket oluşturun.')
+        return
+      }
+
       const customerData = {
-        company_id: companyId,
+        company_id: finalCompanyId,
         customer_name: customerForm.customer_name.trim(),
         contact_person: customerForm.contact_person.trim() || null,
         phone: customerForm.phone.trim() || null,
@@ -501,26 +528,26 @@ export default function ProjectsPage() {
         notes: customerForm.notes.trim() || null
       }
 
-      console.log('Saving customer with data:', customerData)
-
       const { data, error } = await supabase
         .from('customer_companies')
         .insert(customerData)
         .select()
 
-      if (error) {
-        console.error('Supabase error details:', error)
-        throw error
-      }
+      if (error) throw error
 
-      console.log('Customer saved successfully:', data)
       alert('✅ Müşteri firma eklendi!')
       setShowCustomerModal(false)
       resetCustomerForm()
-      loadCustomers(companyId)
+
+      // Company ID'yi güncelle
+      if (!companyId) {
+        setCompanyId(finalCompanyId)
+      }
+
+      loadCustomers(finalCompanyId)
     } catch (error: any) {
       console.error('Error saving customer:', error)
-      alert('❌ Hata: ' + (error.message || JSON.stringify(error)))
+      alert('❌ Hata: ' + (error.message || 'Müşteri eklenirken bir hata oluştu'))
     }
   }
 

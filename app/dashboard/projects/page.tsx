@@ -190,27 +190,80 @@ export default function ProjectsPage() {
   const loadInitialData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        console.error('No user found')
+        return
+      }
 
       setCurrentUserId(user.id)
 
+      // Profil bilgisini çek
       const { data: profile } = await supabase
         .from('profiles')
         .select('company_id')
         .eq('id', user.id)
         .single()
 
-      if (profile?.company_id) {
-        setCompanyId(profile.company_id)
-        await Promise.all([
-          loadProjects(profile.company_id),
-          loadCustomers(profile.company_id),
-          loadProductionMaterials(profile.company_id),
-          loadMachines(profile.company_id)
-        ])
+      let finalCompanyId = profile?.company_id
+
+      // Eğer profilde company_id yoksa, Dünyasan şirketini kullan
+      if (!finalCompanyId) {
+        console.log('No company_id in profile, fetching Dünyasan company...')
+
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .ilike('company_name', '%dünyasan%')
+          .limit(1)
+          .single()
+
+        if (company?.id) {
+          finalCompanyId = company.id
+          console.log('Using Dünyasan company ID:', finalCompanyId)
+
+          // Profili güncelle
+          await supabase
+            .from('profiles')
+            .update({ company_id: finalCompanyId })
+            .eq('id', user.id)
+
+          console.log('Profile updated with company_id')
+        } else {
+          // Hiç şirket yoksa, ilk şirketi kullan
+          const { data: firstCompany } = await supabase
+            .from('companies')
+            .select('id')
+            .limit(1)
+            .single()
+
+          if (firstCompany?.id) {
+            finalCompanyId = firstCompany.id
+            console.log('Using first company ID:', finalCompanyId)
+
+            await supabase
+              .from('profiles')
+              .update({ company_id: finalCompanyId })
+              .eq('id', user.id)
+          }
+        }
       }
+
+      if (!finalCompanyId) {
+        alert('⚠️ Şirket bilgisi bulunamadı. Lütfen önce bir şirket oluşturun.')
+        return
+      }
+
+      setCompanyId(finalCompanyId)
+
+      await Promise.all([
+        loadProjects(finalCompanyId),
+        loadCustomers(finalCompanyId),
+        loadProductionMaterials(finalCompanyId),
+        loadMachines(finalCompanyId)
+      ])
     } catch (error) {
       console.error('Error loading initial data:', error)
+      alert('❌ Veri yüklenirken hata oluştu: ' + (error as any).message)
     } finally {
       setLoading(false)
     }

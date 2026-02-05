@@ -484,23 +484,9 @@ export default function ProjectsPage() {
     }
 
     try {
-      // Önce kullanıcıyı ve şirket bilgisini çek
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        alert('❌ Kullanıcı bilgisi bulunamadı')
-        return
-      }
+      // State'teki companyId'yi kullan, yoksa ilk şirketi al
+      let finalCompanyId = companyId
 
-      // Profildeki company_id'yi al
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('id', user.id)
-        .single()
-
-      let finalCompanyId = profile?.company_id || companyId
-
-      // Hala company_id yoksa, ilk şirketi kullan
       if (!finalCompanyId) {
         const { data: firstCompany } = await supabase
           .from('companies')
@@ -508,14 +494,13 @@ export default function ProjectsPage() {
           .limit(1)
           .single()
 
-        if (firstCompany?.id) {
-          finalCompanyId = firstCompany.id
+        if (!firstCompany?.id) {
+          alert('❌ Sistemde şirket bulunamadı. Lütfen önce ayarlardan şirket oluşturun.')
+          return
         }
-      }
 
-      if (!finalCompanyId) {
-        alert('❌ Şirket bilgisi bulunamadı. Lütfen önce bir şirket oluşturun.')
-        return
+        finalCompanyId = firstCompany.id
+        setCompanyId(finalCompanyId)
       }
 
       const customerData = {
@@ -528,7 +513,7 @@ export default function ProjectsPage() {
         notes: customerForm.notes.trim() || null
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('customer_companies')
         .insert(customerData)
         .select()
@@ -538,12 +523,6 @@ export default function ProjectsPage() {
       alert('✅ Müşteri firma eklendi!')
       setShowCustomerModal(false)
       resetCustomerForm()
-
-      // Company ID'yi güncelle
-      if (!companyId) {
-        setCompanyId(finalCompanyId)
-      }
-
       loadCustomers(finalCompanyId)
     } catch (error: any) {
       console.error('Error saving customer:', error)

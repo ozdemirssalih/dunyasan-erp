@@ -107,13 +107,15 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   // Detail tabs and data
-  const [detailTab, setDetailTab] = useState<'parts' | 'info'>('parts')
+  const [detailTab, setDetailTab] = useState<'parts' | 'info' | 'production'>('parts')
   const [projectParts, setProjectParts] = useState<ProjectPart[]>([])
   const [selectedPart, setSelectedPart] = useState<ProjectPart | null>(null)
   const [partOperations, setPartOperations] = useState<ProjectOperation[]>([])
   const [partMaterials, setPartMaterials] = useState<ProjectMaterial[]>([])
   const [partTools, setPartTools] = useState<ProjectTool[]>([])
   const [partCutters, setPartCutters] = useState<ProjectCutter[]>([])
+  const [projectProductionMaterials, setProjectProductionMaterials] = useState<any[]>([])
+  const [projectProductionOutputs, setProjectProductionOutputs] = useState<any[]>([])
 
   // Forms
   const [projectForm, setProjectForm] = useState({
@@ -372,6 +374,44 @@ export default function ProjectsPage() {
       setProjectParts(data || [])
     } catch (error) {
       console.error('Error loading project parts:', error)
+    }
+  }
+
+  const loadProjectProduction = async (projectId: string) => {
+    try {
+      // Projedeki hammadde kullanımları
+      const { data: materials, error: matError } = await supabase
+        .from('production_material_assignments')
+        .select(`
+          *,
+          machine:machines(machine_name, machine_code),
+          item:warehouse_items(name, code, unit),
+          part:project_parts(part_name, part_code),
+          assigned_by_user:profiles!production_material_assignments_assigned_by_fkey(full_name)
+        `)
+        .eq('project_id', projectId)
+        .order('assigned_date', { ascending: false })
+
+      if (matError) throw matError
+      setProjectProductionMaterials(materials || [])
+
+      // Projedeki üretim çıktıları
+      const { data: outputs, error: outError } = await supabase
+        .from('production_outputs')
+        .select(`
+          *,
+          machine:machines(machine_name, machine_code),
+          output_item:warehouse_items!production_outputs_output_item_id_fkey(name, code, unit),
+          part:project_parts(part_name, part_code),
+          operator:profiles!production_outputs_operator_id_fkey(full_name)
+        `)
+        .eq('project_id', projectId)
+        .order('production_date', { ascending: false })
+
+      if (outError) throw outError
+      setProjectProductionOutputs(outputs || [])
+    } catch (error) {
+      console.error('Error loading project production:', error)
     }
   }
 
@@ -798,7 +838,10 @@ export default function ProjectsPage() {
   const openDetailsModal = async (project: Project) => {
     setSelectedProject(project)
     setDetailTab('parts')
-    await loadProjectParts(project.id)
+    await Promise.all([
+      loadProjectParts(project.id),
+      loadProjectProduction(project.id)
+    ])
     setShowDetailsModal(true)
   }
 
@@ -1312,7 +1355,7 @@ export default function ProjectsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full my-8">
             <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold text-gray-900">{selectedProject.project_name}</h2>
                 <button
                   onClick={() => {
@@ -1324,11 +1367,53 @@ export default function ProjectsPage() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* Tabs */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDetailTab('parts')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    detailTab === 'parts'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Parçalar
+                  </div>
+                </button>
+                <button
+                  onClick={() => setDetailTab('production')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    detailTab === 'production'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Factory className="w-4 h-4" />
+                    Üretim Kayıtları
+                  </div>
+                </button>
+                <button
+                  onClick={() => setDetailTab('info')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    detailTab === 'info'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Proje Bilgileri
+                </button>
+              </div>
             </div>
 
-            <div className="flex" style={{ maxHeight: 'calc(90vh - 120px)' }}>
-              {/* Parts List - Left Side */}
-              <div className="w-1/3 border-r border-gray-200 overflow-y-auto">
+            {/* Tab Content */}
+            {detailTab === 'parts' && (
+              <div className="flex" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                {/* Parts List - Left Side */}
+                <div className="w-1/3 border-r border-gray-200 overflow-y-auto">
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                   <button
                     onClick={() => setShowPartModal(true)}
@@ -1566,6 +1651,224 @@ export default function ProjectsPage() {
                 )}
               </div>
             </div>
+            )}
+
+            {/* Production Tab */}
+            {detailTab === 'production' && (
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                <div className="space-y-6">
+                  {/* Hammadde Kullanımları */}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Package className="w-5 h-5 text-orange-600" />
+                      Hammadde Kullanımları
+                    </h3>
+
+                    {projectProductionMaterials.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                        <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">Bu projede henüz hammadde kullanımı kaydedilmemiş</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tarih</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Parça</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hammadde</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Miktar</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tezgah</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vardiya</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Atayan</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {projectProductionMaterials.map((mat: any) => (
+                              <tr key={mat.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {new Date(mat.assigned_date).toLocaleDateString('tr-TR')}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {mat.part?.part_code} - {mat.part?.part_name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {mat.item?.code} - {mat.item?.name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {mat.quantity} {mat.item?.unit}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {mat.machine?.machine_code} - {mat.machine?.machine_name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  <span className="capitalize">{mat.shift}</span>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {mat.assigned_by_user?.full_name}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Üretim Çıktıları */}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Factory className="w-5 h-5 text-green-600" />
+                      Üretim Çıktıları
+                    </h3>
+
+                    {projectProductionOutputs.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                        <Factory className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">Bu projede henüz üretim kaydedilmemiş</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tarih</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Parça</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ürün</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Miktar</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tezgah</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vardiya</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kalite</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Operatör</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {projectProductionOutputs.map((out: any) => (
+                              <tr key={out.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {new Date(out.production_date).toLocaleDateString('tr-TR')}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {out.part?.part_code} - {out.part?.part_name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {out.output_item?.code} - {out.output_item?.name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {out.quantity} {out.output_item?.unit}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {out.machine?.machine_code} - {out.machine?.machine_name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  <span className="capitalize">{out.shift}</span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    out.quality_status === 'approved' ? 'bg-green-100 text-green-800' :
+                                    out.quality_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {out.quality_status === 'approved' ? 'Onaylı' :
+                                     out.quality_status === 'rejected' ? 'Reddedildi' : 'Bekliyor'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {out.operator?.full_name || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* İstatistikler */}
+                  <div className="grid grid-cols-3 gap-4 mt-6">
+                    <div className="bg-orange-50 p-4 rounded-lg">
+                      <div className="text-sm text-orange-600 font-medium">Toplam Hammadde</div>
+                      <div className="text-2xl font-bold text-orange-900">{projectProductionMaterials.length}</div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <div className="text-sm text-green-600 font-medium">Toplam Üretim</div>
+                      <div className="text-2xl font-bold text-green-900">{projectProductionOutputs.length}</div>
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <div className="text-sm text-blue-600 font-medium">Onaylı Üretim</div>
+                      <div className="text-2xl font-bold text-blue-900">
+                        {projectProductionOutputs.filter((o: any) => o.quality_status === 'approved').length}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Info Tab */}
+            {detailTab === 'info' && (
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Proje Detayları</h3>
+                    <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm text-gray-600">Proje Adı</div>
+                          <div className="text-base font-semibold text-gray-900">{selectedProject.project_name}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Müşteri</div>
+                          <div className="text-base font-semibold text-gray-900">
+                            {selectedProject.customer_company?.customer_name || '-'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Başlangıç Tarihi</div>
+                          <div className="text-base font-semibold text-gray-900">
+                            {new Date(selectedProject.start_date).toLocaleDateString('tr-TR')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Süre</div>
+                          <div className="text-base font-semibold text-gray-900">
+                            {selectedProject.scope_duration ? `${selectedProject.scope_duration} gün` : '-'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Durum</div>
+                          <div>
+                            <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                              selectedProject.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              selectedProject.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                              selectedProject.status === 'on_hold' ? 'bg-yellow-100 text-yellow-800' :
+                              selectedProject.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {selectedProject.status === 'planning' ? 'Planlama' :
+                               selectedProject.status === 'in_progress' ? 'Devam Ediyor' :
+                               selectedProject.status === 'completed' ? 'Tamamlandı' :
+                               selectedProject.status === 'on_hold' ? 'Beklemede' :
+                               selectedProject.status === 'cancelled' ? 'İptal' : selectedProject.status}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Toplam Parça</div>
+                          <div className="text-base font-semibold text-gray-900">{projectParts.length}</div>
+                        </div>
+                      </div>
+                      {selectedProject.notes && (
+                        <div>
+                          <div className="text-sm text-gray-600 mb-1">Notlar</div>
+                          <div className="text-base text-gray-900">{selectedProject.notes}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

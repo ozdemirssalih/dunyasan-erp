@@ -114,6 +114,8 @@ export default function ProductionPage() {
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([])
   const [qcTransfers, setQCTransfers] = useState<QCTransfer[]>([])
+  const [projects, setProjects] = useState<any[]>([])
+  const [projectParts, setProjectParts] = useState<any[]>([])
 
   // Modal states
   const [showRequestModal, setShowRequestModal] = useState(false)
@@ -138,6 +140,8 @@ export default function ProductionPage() {
     quantity: 0,
     shift: 'sabah',
     notes: '',
+    project_id: '',
+    project_part_id: '',
   })
 
   const [outputForm, setOutputForm] = useState({
@@ -147,6 +151,8 @@ export default function ProductionPage() {
     shift: 'sabah',
     operator_id: '',
     notes: '',
+    project_id: '',
+    project_part_id: '',
   })
 
   const [transferForm, setTransferForm] = useState({
@@ -206,6 +212,7 @@ export default function ProductionPage() {
         loadWarehouseItems(profile.company_id),
         loadWarehouseTransfers(profile.company_id),
         loadQCTransfers(profile.company_id),
+        loadProjects(profile.company_id),
       ])
 
     } catch (error) {
@@ -359,6 +366,32 @@ export default function ProductionPage() {
     setWarehouseItems(data || [])
   }
 
+  const loadProjects = async (companyId: string) => {
+    const { data } = await supabase
+      .from('projects')
+      .select('id, project_name, status')
+      .eq('company_id', companyId)
+      .in('status', ['planning', 'in_progress'])
+      .order('project_name')
+
+    setProjects(data || [])
+  }
+
+  const loadProjectParts = async (projectId: string) => {
+    if (!projectId) {
+      setProjectParts([])
+      return
+    }
+
+    const { data } = await supabase
+      .from('project_parts')
+      .select('id, part_name, part_code, quantity, unit')
+      .eq('project_id', projectId)
+      .order('part_name')
+
+    setProjectParts(data || [])
+  }
+
   const loadWarehouseTransfers = async (companyId: string) => {
     const { data, error } = await supabase
       .from('production_to_warehouse_transfers')
@@ -468,6 +501,8 @@ export default function ProductionPage() {
           shift: assignmentForm.shift,
           notes: assignmentForm.notes,
           assigned_by: currentUserId,
+          project_id: assignmentForm.project_id || null,
+          project_part_id: assignmentForm.project_part_id || null,
         })
 
       if (error) throw error
@@ -498,6 +533,8 @@ export default function ProductionPage() {
           operator_id: outputForm.operator_id || null,
           notes: outputForm.notes,
           created_by: currentUserId,
+          project_id: outputForm.project_id || null,
+          project_part_id: outputForm.project_part_id || null,
         })
 
       if (error) throw error
@@ -528,7 +565,10 @@ export default function ProductionPage() {
       quantity: 0,
       shift: 'sabah',
       notes: '',
+      project_id: '',
+      project_part_id: '',
     })
+    setProjectParts([])
   }
 
   const resetOutputForm = () => {
@@ -539,7 +579,10 @@ export default function ProductionPage() {
       shift: 'sabah',
       operator_id: '',
       notes: '',
+      project_id: '',
+      project_part_id: '',
     })
+    setProjectParts([])
   }
 
   const handleCreateTransfer = async (e: React.FormEvent) => {
@@ -1654,6 +1697,50 @@ export default function ProductionPage() {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Proje (Opsiyonel)
+                    </label>
+                    <select
+                      value={assignmentForm.project_id}
+                      onChange={(e) => {
+                        setAssignmentForm({ ...assignmentForm, project_id: e.target.value, project_part_id: '' })
+                        if (e.target.value) {
+                          loadProjectParts(e.target.value)
+                        } else {
+                          setProjectParts([])
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Proje Seçilmedi</option>
+                      {projects.map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.project_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Parça (Opsiyonel)
+                    </label>
+                    <select
+                      value={assignmentForm.project_part_id}
+                      onChange={(e) => setAssignmentForm({ ...assignmentForm, project_part_id: e.target.value })}
+                      disabled={!assignmentForm.project_id}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                    >
+                      <option value="">Parça Seçilmedi</option>
+                      {projectParts.map(part => (
+                        <option key={part.id} value={part.id}>
+                          {part.part_code} - {part.part_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
                     <textarea
@@ -1761,6 +1848,50 @@ export default function ProductionPage() {
                       <option value="sabah">Sabah</option>
                       <option value="oglen">Öğlen</option>
                       <option value="gece">Gece</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Proje (Opsiyonel)
+                    </label>
+                    <select
+                      value={outputForm.project_id}
+                      onChange={(e) => {
+                        setOutputForm({ ...outputForm, project_id: e.target.value, project_part_id: '' })
+                        if (e.target.value) {
+                          loadProjectParts(e.target.value)
+                        } else {
+                          setProjectParts([])
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Proje Seçilmedi</option>
+                      {projects.map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.project_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Parça (Opsiyonel)
+                    </label>
+                    <select
+                      value={outputForm.project_part_id}
+                      onChange={(e) => setOutputForm({ ...outputForm, project_part_id: e.target.value })}
+                      disabled={!outputForm.project_id}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                    >
+                      <option value="">Parça Seçilmedi</option>
+                      {projectParts.map(part => (
+                        <option key={part.id} value={part.id}>
+                          {part.part_code} - {part.part_name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

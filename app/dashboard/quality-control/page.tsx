@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
+import { Package, Factory, ClipboardCheck } from 'lucide-react'
 
 type Tab = 'inventory' | 'incoming' | 'outgoing'
 
@@ -312,7 +313,10 @@ export default function QualityControlPage() {
         {activeTab === 'incoming' && (
           <div className="space-y-4">
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-orange-900 mb-2">🏭 Üretimden Gelen Ürünler</h3>
+              <h3 className="font-bold text-orange-900 mb-2 flex items-center gap-2">
+                <Factory className="w-5 h-5" />
+                Üretimden Gelen Ürünler
+              </h3>
               <p className="text-sm text-orange-700">
                 Üretim bölümünden kalite kontrole gönderilen ürünleri onaylayın.
               </p>
@@ -392,7 +396,10 @@ export default function QualityControlPage() {
         {activeTab === 'outgoing' && (
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-blue-900 mb-2">📋 Test Sonuçları</h3>
+              <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5" />
+                Test Sonuçları
+              </h3>
               <p className="text-sm text-blue-700">
                 Kalite test sonuçları. Geçenler ana depoya, kalanlar üretim deposuna geri gönderilir.
               </p>

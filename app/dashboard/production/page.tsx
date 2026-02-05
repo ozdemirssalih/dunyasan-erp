@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
+import { Package, FlaskConical, Factory, ClipboardList, TestTube2, Send } from 'lucide-react'
 
 type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers' | 'qc-transfers'
 
@@ -117,6 +118,7 @@ export default function ProductionPage() {
   const [showOutputModal, setShowOutputModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showManualStockModal, setShowManualStockModal] = useState(false)
+  const [showManualRawMaterialModal, setShowManualRawMaterialModal] = useState(false)
   const [showQCTransferModal, setShowQCTransferModal] = useState(false)
 
   // Form states
@@ -157,6 +159,12 @@ export default function ProductionPage() {
   })
 
   const [qcTransferForm, setQCTransferForm] = useState({
+    item_id: '',
+    quantity: 0,
+    notes: '',
+  })
+
+  const [manualRawMaterialForm, setManualRawMaterialForm] = useState({
     item_id: '',
     quantity: 0,
     notes: '',
@@ -659,6 +667,67 @@ export default function ProductionPage() {
     })
   }
 
+  const handleManualRawMaterialAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      // Üretim deposuna hammadde ekle
+      const { data: existing } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', manualRawMaterialForm.item_id)
+        .eq('item_type', 'raw_material')
+        .single()
+
+      if (existing) {
+        // Güncelle
+        const { error } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existing.current_stock + manualRawMaterialForm.quantity,
+            notes: manualRawMaterialForm.notes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', manualRawMaterialForm.item_id)
+          .eq('item_type', 'raw_material')
+
+        if (error) throw error
+      } else {
+        // Yeni kayıt
+        const { error } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: manualRawMaterialForm.item_id,
+            current_stock: manualRawMaterialForm.quantity,
+            item_type: 'raw_material',
+            notes: manualRawMaterialForm.notes
+          })
+
+        if (error) throw error
+      }
+
+      alert('✅ Hammadde üretim deposuna eklendi!')
+      setShowManualRawMaterialModal(false)
+      resetManualRawMaterialForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error adding manual raw material:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const resetManualRawMaterialForm = () => {
+    setManualRawMaterialForm({
+      item_id: '',
+      quantity: 0,
+      notes: '',
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -684,32 +753,98 @@ export default function ProductionPage() {
         {/* Tabs */}
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
-            {[
-              { id: 'inventory', label: 'Üretim Stoğu', count: productionInventory.length },
-              { id: 'requests', label: 'Depodan Talepler', count: materialRequests.filter(r => r.status === 'pending').length },
-              { id: 'assignments', label: 'Tezgaha Hammadde Ver', icon: '🏭' },
-              { id: 'outputs', label: 'Üretim Kayıtları', count: outputs.length },
-              { id: 'qc-transfers', label: 'Kalite Kontrole Gönder', count: qcTransfers.filter(t => t.status === 'pending').length },
-              { id: 'transfers', label: 'Ana Depoya Transfer', count: warehouseTransfers.filter(t => t.status === 'pending').length },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as Tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                    {tab.count}
-                  </span>
-                )}
-                {tab.icon && <span>{tab.icon}</span>}
-              </button>
-            ))}
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'inventory'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>Üretim Stoğu</span>
+              <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                {productionInventory.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'requests'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>Depodan Talepler</span>
+              {materialRequests.filter(r => r.status === 'pending').length > 0 && (
+                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                  {materialRequests.filter(r => r.status === 'pending').length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('assignments')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'assignments'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Factory className="w-4 h-4" />
+              <span>Tezgaha Hammadde Ver</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('outputs')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'outputs'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>Üretim Kayıtları</span>
+              <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                {outputs.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('qc-transfers')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'qc-transfers'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <TestTube2 className="w-4 h-4" />
+              <span>Kalite Kontrole Gönder</span>
+              {qcTransfers.filter(t => t.status === 'pending').length > 0 && (
+                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                  {qcTransfers.filter(t => t.status === 'pending').length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('transfers')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'transfers'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Send className="w-4 h-4" />
+              <span>Ana Depoya Transfer</span>
+              {warehouseTransfers.filter(t => t.status === 'pending').length > 0 && (
+                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                  {warehouseTransfers.filter(t => t.status === 'pending').length}
+                </span>
+              )}
+            </button>
           </nav>
         </div>
 
@@ -721,7 +856,18 @@ export default function ProductionPage() {
             {/* Hammaddeler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-green-50 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-green-800">🧪 Hammaddeler (Depodan Gelen)</h3>
+                <h3 className="text-lg font-bold text-green-800 flex items-center gap-2">
+                  <FlaskConical className="w-5 h-5" />
+                  Hammaddeler (Depodan Gelen)
+                </h3>
+                {canCreate('production') && (
+                  <button
+                    onClick={() => setShowManualRawMaterialModal(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
+                  >
+                    + Manuel Hammadde Ekle
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -764,7 +910,10 @@ export default function ProductionPage() {
             {/* Bitmiş Ürünler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 bg-purple-50 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-purple-800">📦 Bitmiş Ürünler (Üretimden Gelen)</h3>
+                <h3 className="text-lg font-bold text-purple-800 flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Bitmiş Ürünler (Üretimden Gelen)
+                </h3>
                 {canCreate('production') && (
                   <button
                     onClick={() => setShowManualStockModal(true)}
@@ -1501,6 +1650,83 @@ export default function ProductionPage() {
                     onClick={() => {
                       setShowOutputModal(false)
                       resetOutputForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Manual Raw Material Modal */}
+        {showManualRawMaterialModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Manuel Hammadde Ekle</h3>
+              <p className="text-sm text-gray-600 mb-6">Üretim deposuna doğrudan hammadde ekleyin</p>
+
+              <form onSubmit={handleManualRawMaterialAdd} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Hammadde <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={manualRawMaterialForm.item_id}
+                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, item_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {warehouseItems.map(item => (
+                        <option key={item.id} value={item.id}>
+                          {item.code} - {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={manualRawMaterialForm.quantity}
+                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={manualRawMaterialForm.notes}
+                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, notes: e.target.value })}
+                      rows={3}
+                      placeholder="Manuel giriş nedeni..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
+                  >
+                    Hammadde Ekle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManualRawMaterialModal(false)
+                      resetManualRawMaterialForm()
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

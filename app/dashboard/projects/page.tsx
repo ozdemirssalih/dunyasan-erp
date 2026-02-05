@@ -389,7 +389,7 @@ export default function ProjectsPage() {
       const projectData = {
         company_id: companyId,
         project_name: projectForm.project_name,
-        customer_company_id: projectForm.customer_company_id || null,
+        customer_company_id: projectForm.customer_company_id && projectForm.customer_company_id.trim() !== '' ? projectForm.customer_company_id : null,
         scope_duration: projectForm.scope_duration ? parseInt(projectForm.scope_duration) : null,
         start_date: projectForm.start_date,
         status: projectForm.status,
@@ -493,7 +493,7 @@ export default function ProjectsPage() {
           part_id: selectedPart.id,
           operation_name: operationForm.operation_name,
           operation_order: parseInt(operationForm.operation_order),
-          machine_id: operationForm.machine_id || null,
+          machine_id: operationForm.machine_id && operationForm.machine_id.trim() !== '' ? operationForm.machine_id : null,
           estimated_time: operationForm.estimated_time ? parseInt(operationForm.estimated_time) : null,
           notes: operationForm.notes
         })
@@ -511,7 +511,7 @@ export default function ProjectsPage() {
   }
 
   const handleSaveMaterial = async () => {
-    if (!materialForm.material_id || !materialForm.quantity || !selectedPart) {
+    if (!materialForm.material_id || materialForm.material_id.trim() === '' || !materialForm.quantity || !selectedPart) {
       alert('Lütfen tüm gerekli alanları doldurun')
       return
     }

@@ -378,8 +378,8 @@ export default function ProductionPage() {
       .select(`
         *,
         machine:machines(machine_name, machine_code),
-        output_item:warehouse_items(id, code, name, unit),
-        operator_id:profiles(full_name)
+        output_item:warehouse_items!production_outputs_output_item_id_fkey(id, code, name, unit),
+        operator:profiles!production_outputs_operator_id_fkey(full_name)
       `)
       .eq('company_id', companyId)
       .order('production_date', { ascending: false })
@@ -401,7 +401,7 @@ export default function ProductionPage() {
       production_date: o.production_date,
       shift: o.shift || '',
       quality_status: o.quality_status,
-      operator_name: o.operator_id?.full_name || '',
+      operator_name: o.operator?.full_name || '',
       transfer_status: o.transfer_status || 'pending'
     })) || []
 

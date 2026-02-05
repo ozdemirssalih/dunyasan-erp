@@ -339,12 +339,21 @@ export default function ProductionPage() {
   }
 
   const loadMachines = async (companyId: string) => {
-    const { data } = await supabase
+    console.log('🔍 [PRODUCTION] loadMachines çağrıldı, companyId:', companyId)
+
+    const { data, error } = await supabase
       .from('machines')
       .select('*')
       .eq('company_id', companyId)
       .order('machine_code')
 
+    console.log('🏭 [PRODUCTION] machines sorgu sonucu:', { data, error, count: data?.length })
+
+    if (error) {
+      console.error('❌ [PRODUCTION] Machines yükleme hatası:', error)
+    }
+
+    console.log('✅ [PRODUCTION] Machines state güncelleniyor:', data?.length || 0, 'tezgah')
     setMachines(data || [])
   }
 

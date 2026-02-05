@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers'
+type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers' | 'qc-transfers'
 
 interface ProductionInventoryItem {
   id: string
@@ -29,6 +29,20 @@ interface WarehouseTransfer {
   requested_at: string
   approved_by_name?: string
   approved_at?: string
+  notes?: string
+}
+
+interface QCTransfer {
+  id: string
+  item_name: string
+  item_code: string
+  quantity: number
+  unit: string
+  status: string
+  requested_by_name: string
+  requested_at: string
+  reviewed_by_name?: string
+  reviewed_at?: string
   notes?: string
 }
 
@@ -95,12 +109,15 @@ export default function ProductionPage() {
   const [outputs, setOutputs] = useState<ProductionOutput[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([])
+  const [qcTransfers, setQCTransfers] = useState<QCTransfer[]>([])
 
   // Modal states
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [showAssignmentModal, setShowAssignmentModal] = useState(false)
   const [showOutputModal, setShowOutputModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
+  const [showManualStockModal, setShowManualStockModal] = useState(false)
+  const [showQCTransferModal, setShowQCTransferModal] = useState(false)
 
   // Form states
   const [requestForm, setRequestForm] = useState({
@@ -128,6 +145,18 @@ export default function ProductionPage() {
   })
 
   const [transferForm, setTransferForm] = useState({
+    item_id: '',
+    quantity: 0,
+    notes: '',
+  })
+
+  const [manualStockForm, setManualStockForm] = useState({
+    item_id: '',
+    quantity: 0,
+    notes: '',
+  })
+
+  const [qcTransferForm, setQCTransferForm] = useState({
     item_id: '',
     quantity: 0,
     notes: '',
@@ -165,6 +194,7 @@ export default function ProductionPage() {
         loadOutputs(profile.company_id),
         loadWarehouseItems(profile.company_id),
         loadWarehouseTransfers(profile.company_id),
+        loadQCTransfers(profile.company_id),
       ])
 
     } catch (error) {
@@ -348,6 +378,39 @@ export default function ProductionPage() {
     setWarehouseTransfers(transfersData)
   }
 
+  const loadQCTransfers = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('production_to_qc_transfers')
+      .select(`
+        *,
+        item:warehouse_items(code, name, unit),
+        requested_by:profiles!production_to_qc_transfers_requested_by_fkey(full_name),
+        reviewed_by:profiles!production_to_qc_transfers_reviewed_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading QC transfers:', error)
+    }
+
+    const qcTransfersData = data?.map((t: any) => ({
+      id: t.id,
+      item_name: t.item?.name || '',
+      item_code: t.item?.code || '',
+      quantity: t.quantity,
+      unit: t.item?.unit || '',
+      status: t.status,
+      requested_by_name: t.requested_by?.full_name || '',
+      requested_at: t.requested_at,
+      reviewed_by_name: t.reviewed_by?.full_name || '',
+      reviewed_at: t.reviewed_at,
+      notes: t.notes || ''
+    })) || []
+
+    setQCTransfers(qcTransfersData)
+  }
+
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
@@ -500,6 +563,102 @@ export default function ProductionPage() {
     })
   }
 
+  const handleManualStockAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      // Üretim deposuna bitmiş ürün ekle
+      const { data: existing } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', manualStockForm.item_id)
+        .eq('item_type', 'finished_product')
+        .single()
+
+      if (existing) {
+        // Güncelle
+        const { error } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existing.current_stock + manualStockForm.quantity,
+            notes: manualStockForm.notes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', manualStockForm.item_id)
+          .eq('item_type', 'finished_product')
+
+        if (error) throw error
+      } else {
+        // Yeni kayıt
+        const { error } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: manualStockForm.item_id,
+            current_stock: manualStockForm.quantity,
+            item_type: 'finished_product',
+            notes: manualStockForm.notes
+          })
+
+        if (error) throw error
+      }
+
+      alert('✅ Bitmiş ürün üretim deposuna eklendi!')
+      setShowManualStockModal(false)
+      resetManualStockForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error adding manual stock:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleCreateQCTransfer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      const { error } = await supabase
+        .from('production_to_qc_transfers')
+        .insert({
+          company_id: companyId,
+          item_id: qcTransferForm.item_id,
+          quantity: qcTransferForm.quantity,
+          notes: qcTransferForm.notes,
+          requested_by: currentUserId,
+        })
+
+      if (error) throw error
+
+      alert('✅ Kalite kontrole transfer talebi gönderildi!')
+      setShowQCTransferModal(false)
+      resetQCTransferForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error creating QC transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const resetManualStockForm = () => {
+    setManualStockForm({
+      item_id: '',
+      quantity: 0,
+      notes: '',
+    })
+  }
+
+  const resetQCTransferForm = () => {
+    setQCTransferForm({
+      item_id: '',
+      quantity: 0,
+      notes: '',
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -530,6 +689,7 @@ export default function ProductionPage() {
               { id: 'requests', label: 'Depodan Talepler', count: materialRequests.filter(r => r.status === 'pending').length },
               { id: 'assignments', label: 'Tezgaha Hammadde Ver', icon: '🏭' },
               { id: 'outputs', label: 'Üretim Kayıtları', count: outputs.length },
+              { id: 'qc-transfers', label: 'Kalite Kontrole Gönder', count: qcTransfers.filter(t => t.status === 'pending').length },
               { id: 'transfers', label: 'Ana Depoya Transfer', count: warehouseTransfers.filter(t => t.status === 'pending').length },
             ].map((tab) => (
               <button
@@ -560,7 +720,7 @@ export default function ProductionPage() {
           <div className="space-y-6">
             {/* Hammaddeler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-green-50 border-b border-gray-200">
+              <div className="px-6 py-4 bg-green-50 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-green-800">🧪 Hammaddeler (Depodan Gelen)</h3>
               </div>
               <div className="overflow-x-auto">
@@ -603,8 +763,16 @@ export default function ProductionPage() {
 
             {/* Bitmiş Ürünler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-purple-50 border-b border-gray-200">
+              <div className="px-6 py-4 bg-purple-50 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-purple-800">📦 Bitmiş Ürünler (Üretimden Gelen)</h3>
+                {canCreate('production') && (
+                  <button
+                    onClick={() => setShowManualStockModal(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
+                  >
+                    + Manuel Stok Ekle
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -867,6 +1035,88 @@ export default function ProductionPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* QC TRANSFERS TAB */}
+        {activeTab === 'qc-transfers' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-gray-600">Bitmiş ürünleri kalite kontrole gönder</p>
+              </div>
+              {canCreate('production') && (
+                <button
+                  onClick={() => setShowQCTransferModal(true)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-semibold"
+                >
+                  + Kalite Kontrole Gönder
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {qcTransfers.map(transfer => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700'
+                }
+
+                return (
+                  <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800">{transfer.item_name}</h4>
+                        <p className="text-sm text-gray-500">{transfer.item_code}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
+                        {transfer.status.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Miktar:</span>
+                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Talep Eden:</span>
+                        <span className="ml-2">{transfer.requested_by_name}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Tarih:</span>
+                        <span className="ml-2">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      {transfer.status !== 'pending' && transfer.reviewed_by_name && (
+                        <>
+                          <div>
+                            <span className="text-gray-600">İnceleyen:</span>
+                            <span className="ml-2">{transfer.reviewed_by_name}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">İnceleme Tarihi:</span>
+                            <span className="ml-2">{transfer.reviewed_at ? new Date(transfer.reviewed_at).toLocaleString('tr-TR') : '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {transfer.notes && (
+                        <div className="col-span-2">
+                          <span className="text-gray-600">Not:</span>
+                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {qcTransfers.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz kalite kontrol transfer talebi yok</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1251,6 +1501,162 @@ export default function ProductionPage() {
                     onClick={() => {
                       setShowOutputModal(false)
                       resetOutputForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Manual Stock Modal */}
+        {showManualStockModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Manuel Bitmiş Ürün Ekle</h3>
+              <p className="text-sm text-gray-600 mb-6">Üretim deposuna doğrudan bitmiş ürün ekleyin</p>
+
+              <form onSubmit={handleManualStockAdd} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Bitmiş Ürün <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={manualStockForm.item_id}
+                      onChange={(e) => setManualStockForm({ ...manualStockForm, item_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {warehouseItems.map(item => (
+                        <option key={item.id} value={item.id}>
+                          {item.code} - {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={manualStockForm.quantity}
+                      onChange={(e) => setManualStockForm({ ...manualStockForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={manualStockForm.notes}
+                      onChange={(e) => setManualStockForm({ ...manualStockForm, notes: e.target.value })}
+                      rows={3}
+                      placeholder="Manuel giriş nedeni..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold"
+                  >
+                    Stok Ekle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManualStockModal(false)
+                      resetManualStockForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* QC Transfer Modal */}
+        {showQCTransferModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Kalite Kontrole Gönder</h3>
+              <p className="text-sm text-gray-600 mb-6">Bitmiş ürünleri kalite kontrol bölümüne gönderin</p>
+
+              <form onSubmit={handleCreateQCTransfer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Bitmiş Ürün <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={qcTransferForm.item_id}
+                      onChange={(e) => setQCTransferForm({ ...qcTransferForm, item_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {productionInventory
+                        .filter(item => item.item_type === 'finished_product')
+                        .map(item => (
+                          <option key={item.id} value={item.item_id}>
+                            {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={qcTransferForm.quantity}
+                      onChange={(e) => setQCTransferForm({ ...qcTransferForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={qcTransferForm.notes}
+                      onChange={(e) => setQCTransferForm({ ...qcTransferForm, notes: e.target.value })}
+                      rows={3}
+                      placeholder="Kalite kontrol notları..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-lg font-semibold"
+                  >
+                    Kalite Kontrole Gönder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQCTransferModal(false)
+                      resetQCTransferForm()
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

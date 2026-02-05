@@ -484,27 +484,18 @@ export default function ProjectsPage() {
     }
 
     try {
-      // State'teki companyId'yi kullan, yoksa ilk şirketi al
-      let finalCompanyId = companyId
+      // Kullanıcının profilinden company_id al
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Kullanıcı bulunamadı')
 
-      if (!finalCompanyId) {
-        const { data: firstCompany } = await supabase
-          .from('companies')
-          .select('id')
-          .limit(1)
-          .single()
-
-        if (!firstCompany?.id) {
-          alert('❌ Sistemde şirket bulunamadı. Lütfen önce ayarlardan şirket oluşturun.')
-          return
-        }
-
-        finalCompanyId = firstCompany.id
-        setCompanyId(finalCompanyId)
-      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
 
       const customerData = {
-        company_id: finalCompanyId,
+        company_id: profile?.company_id,
         customer_name: customerForm.customer_name.trim(),
         contact_person: customerForm.contact_person.trim() || null,
         phone: customerForm.phone.trim() || null,
@@ -523,7 +514,9 @@ export default function ProjectsPage() {
       alert('✅ Müşteri firma eklendi!')
       setShowCustomerModal(false)
       resetCustomerForm()
-      loadCustomers(finalCompanyId)
+      if (profile?.company_id) {
+        loadCustomers(profile.company_id)
+      }
     } catch (error: any) {
       console.error('Error saving customer:', error)
       alert('❌ Hata: ' + (error.message || 'Müşteri eklenirken bir hata oluştu'))

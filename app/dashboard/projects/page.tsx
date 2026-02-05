@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase/client'
 import { FolderKanban, Plus, Calendar, Building2, Clock, AlertCircle, CheckCircle2, Pause, X, Edit, Trash2, Eye, Package, Wrench, Scissors, Factory } from 'lucide-react'
 
 interface CustomerCompany {
@@ -180,8 +180,6 @@ export default function ProjectsPage() {
     quantity: '1',
     notes: ''
   })
-
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     loadInitialData()

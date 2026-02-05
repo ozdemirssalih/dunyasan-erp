@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs'
+type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers'
 
 interface ProductionInventoryItem {
   id: string
@@ -15,6 +15,21 @@ interface ProductionInventoryItem {
   category_name: string
   unit: string
   current_stock: number
+  item_type: 'raw_material' | 'finished_product'
+}
+
+interface WarehouseTransfer {
+  id: string
+  item_name: string
+  item_code: string
+  quantity: number
+  unit: string
+  status: string
+  requested_by_name: string
+  requested_at: string
+  approved_by_name?: string
+  approved_at?: string
+  notes?: string
 }
 
 interface MaterialRequest {
@@ -79,11 +94,13 @@ export default function ProductionPage() {
   const [assignments, setAssignments] = useState<MaterialAssignment[]>([])
   const [outputs, setOutputs] = useState<ProductionOutput[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
+  const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([])
 
   // Modal states
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [showAssignmentModal, setShowAssignmentModal] = useState(false)
   const [showOutputModal, setShowOutputModal] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
 
   // Form states
   const [requestForm, setRequestForm] = useState({
@@ -107,6 +124,12 @@ export default function ProductionPage() {
     quantity: 0,
     shift: 'sabah',
     operator_id: '',
+    notes: '',
+  })
+
+  const [transferForm, setTransferForm] = useState({
+    item_id: '',
+    quantity: 0,
     notes: '',
   })
 
@@ -141,6 +164,7 @@ export default function ProductionPage() {
         loadAssignments(profile.company_id),
         loadOutputs(profile.company_id),
         loadWarehouseItems(profile.company_id),
+        loadWarehouseTransfers(profile.company_id),
       ])
 
     } catch (error) {
@@ -160,6 +184,7 @@ export default function ProductionPage() {
       `)
       .eq('company_id', companyId)
       .gt('current_stock', 0)
+      .order('item_type', { ascending: true })
 
     const inventoryData = data?.map((inv: any) => ({
       id: inv.id,
@@ -168,7 +193,8 @@ export default function ProductionPage() {
       item_name: inv.item?.name || '',
       category_name: inv.item?.category?.name || '',
       unit: inv.item?.unit || '',
-      current_stock: inv.current_stock
+      current_stock: inv.current_stock,
+      item_type: inv.item_type || 'raw_material'
     })) || []
 
     setProductionInventory(inventoryData)
@@ -289,6 +315,39 @@ export default function ProductionPage() {
     setWarehouseItems(data || [])
   }
 
+  const loadWarehouseTransfers = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('production_to_warehouse_transfers')
+      .select(`
+        *,
+        item:warehouse_items(code, name, unit),
+        requested_by:profiles!production_to_warehouse_transfers_requested_by_fkey(full_name),
+        approved_by:profiles!production_to_warehouse_transfers_approved_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading warehouse transfers:', error)
+    }
+
+    const transfersData = data?.map((t: any) => ({
+      id: t.id,
+      item_name: t.item?.name || '',
+      item_code: t.item?.code || '',
+      quantity: t.quantity,
+      unit: t.item?.unit || '',
+      status: t.status,
+      requested_by_name: t.requested_by?.full_name || '',
+      requested_at: t.requested_at,
+      approved_by_name: t.approved_by?.full_name || '',
+      approved_at: t.approved_at,
+      notes: t.notes || ''
+    })) || []
+
+    setWarehouseTransfers(transfersData)
+  }
+
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
@@ -406,6 +465,41 @@ export default function ProductionPage() {
     })
   }
 
+  const handleCreateTransfer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      const { error } = await supabase
+        .from('production_to_warehouse_transfers')
+        .insert({
+          company_id: companyId,
+          item_id: transferForm.item_id,
+          quantity: transferForm.quantity,
+          notes: transferForm.notes,
+          requested_by: currentUserId,
+        })
+
+      if (error) throw error
+
+      alert('✅ Ana depoya transfer talebi gönderildi!')
+      setShowTransferModal(false)
+      resetTransferForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error creating transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const resetTransferForm = () => {
+    setTransferForm({
+      item_id: '',
+      quantity: 0,
+      notes: '',
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -436,6 +530,7 @@ export default function ProductionPage() {
               { id: 'requests', label: 'Depodan Talepler', count: materialRequests.filter(r => r.status === 'pending').length },
               { id: 'assignments', label: 'Tezgaha Hammadde Ver', icon: '🏭' },
               { id: 'outputs', label: 'Üretim Kayıtları', count: outputs.length },
+              { id: 'transfers', label: 'Ana Depoya Transfer', count: warehouseTransfers.filter(t => t.status === 'pending').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -462,45 +557,91 @@ export default function ProductionPage() {
 
         {/* INVENTORY TAB */}
         {activeTab === 'inventory' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">📦 Üretim Stoğu (Depodan Onaylanmış)</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Hammadde</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {productionInventory.map(item => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_code}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{item.item_name}</td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                          {item.category_name}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-lg font-bold text-gray-900">
-                          {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
-                        </span>
-                      </td>
+          <div className="space-y-6">
+            {/* Hammaddeler */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-green-50 border-b border-gray-200">
+                <h3 className="text-lg font-bold text-green-800">🧪 Hammaddeler (Depodan Gelen)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Hammadde</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productionInventory.filter(item => item.item_type === 'raw_material').map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_code}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{item.item_name}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                            {item.category_name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-lg font-bold text-gray-900">
+                            {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
 
-              {productionInventory.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">Üretim stoğunda hammadde yok. Depodan talep oluşturun.</p>
-                </div>
-              )}
+                {productionInventory.filter(item => item.item_type === 'raw_material').length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Üretim stoğunda hammadde yok. Depodan talep oluşturun.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bitmiş Ürünler */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-purple-50 border-b border-gray-200">
+                <h3 className="text-lg font-bold text-purple-800">📦 Bitmiş Ürünler (Üretimden Gelen)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productionInventory.filter(item => item.item_type === 'finished_product').map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_code}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{item.item_name}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
+                            {item.category_name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-lg font-bold text-gray-900">
+                            {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {productionInventory.filter(item => item.item_type === 'finished_product').length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Henüz bitmiş ürün yok. Üretim kaydı ekleyin.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -726,6 +867,85 @@ export default function ProductionPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* TRANSFERS TAB */}
+        {activeTab === 'transfers' && (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              {canCreate('production') && (
+                <button
+                  onClick={() => setShowTransferModal(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold"
+                >
+                  + Ana Depoya Transfer Talebi
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {warehouseTransfers.map(transfer => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700'
+                }
+
+                return (
+                  <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800">{transfer.item_name}</h4>
+                        <p className="text-sm text-gray-500">{transfer.item_code}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
+                        {transfer.status.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Miktar:</span>
+                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Talep Eden:</span>
+                        <span className="ml-2">{transfer.requested_by_name}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Tarih:</span>
+                        <span className="ml-2">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      {transfer.status === 'approved' && transfer.approved_by_name && (
+                        <>
+                          <div>
+                            <span className="text-gray-600">Onaylayan:</span>
+                            <span className="ml-2">{transfer.approved_by_name}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Onay Tarihi:</span>
+                            <span className="ml-2">{transfer.approved_at ? new Date(transfer.approved_at).toLocaleString('tr-TR') : '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {transfer.notes && (
+                        <div className="col-span-2">
+                          <span className="text-gray-600">Not:</span>
+                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {warehouseTransfers.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz transfer talebi yok</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1031,6 +1251,85 @@ export default function ProductionPage() {
                     onClick={() => {
                       setShowOutputModal(false)
                       resetOutputForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Transfer Modal */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Ana Depoya Transfer Talebi</h3>
+              <p className="text-sm text-gray-600 mb-6">Üretimde bitmiş ürünleri ana depoya transfer edin</p>
+
+              <form onSubmit={handleCreateTransfer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Bitmiş Ürün <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={transferForm.item_id}
+                      onChange={(e) => setTransferForm({ ...transferForm, item_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {productionInventory
+                        .filter(item => item.item_type === 'finished_product')
+                        .map(item => (
+                          <option key={item.id} value={item.item_id}>
+                            {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={transferForm.quantity}
+                      onChange={(e) => setTransferForm({ ...transferForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={transferForm.notes}
+                      onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
+                      rows={3}
+                      placeholder="Transfer ile ilgili notlarınız..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-semibold"
+                  >
+                    Transfer Talebi Gönder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTransferModal(false)
+                      resetTransferForm()
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

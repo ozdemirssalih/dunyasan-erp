@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests'
+type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests' | 'production-transfers'
 
 interface Category {
   id: string
@@ -95,6 +95,7 @@ export default function WarehousePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
   const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
+  const [productionTransfers, setProductionTransfers] = useState<any[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -202,6 +203,7 @@ export default function WarehousePage() {
 
       // Load production requests
       await loadProductionRequests(profile.company_id)
+      await loadProductionTransfers(profile.company_id)
 
     } catch (error) {
       console.error('Error loading data:', error)
@@ -325,6 +327,70 @@ export default function WarehousePage() {
     })) || []
 
     setProductionRequests(productionRequestsData)
+  }
+
+  const loadProductionTransfers = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('production_to_warehouse_transfers')
+      .select(`
+        *,
+        item:warehouse_items(code, name, unit),
+        requested_by:profiles!production_to_warehouse_transfers_requested_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading production transfers:', error)
+    }
+
+    setProductionTransfers(data || [])
+  }
+
+  const handleApproveProductionTransfer = async (transferId: string) => {
+    if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Üretim deposu azalacak, ana depo stoğu artacak.')) return
+
+    try {
+      const { error } = await supabase
+        .from('production_to_warehouse_transfers')
+        .update({
+          status: 'approved',
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+
+      if (error) throw error
+
+      alert('✅ Transfer onaylandı! Stok hareketleri otomatik yapıldı.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error approving transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleRejectProductionTransfer = async (transferId: string) => {
+    if (!confirm('Bu transferi reddetmek istediğinizden emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('production_to_warehouse_transfers')
+        .update({
+          status: 'rejected',
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+
+      if (error) throw error
+
+      alert('Transfer reddedildi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error rejecting transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
   }
 
   const handleApproveProductionRequest = async (requestId: string) => {
@@ -600,6 +666,7 @@ export default function WarehousePage() {
               { id: 'history', label: 'Geçmiş', count: transactions.length },
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
+              { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1313,6 +1380,98 @@ export default function WarehousePage() {
             {productionRequests.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz üretim talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PRODUCTION TRANSFERS TAB */}
+        {activeTab === 'production-transfers' && (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-purple-900 mb-2">📦 Üretimden Ana Depoya Transfer</h3>
+              <p className="text-sm text-purple-700">
+                Üretim bölümünden ana depoya bitmiş ürün transfer taleplerini onaylayın. Onayladığınızda üretim deposu azalacak, ana depo stoğu artacak.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {productionTransfers.map((transfer: any) => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700'
+                }
+
+                return (
+                  <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800">{transfer.item?.name || 'Bilinmiyor'}</h4>
+                        <p className="text-sm text-gray-500">{transfer.item?.code || '-'}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
+                        {transfer.status.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                      <div>
+                        <span className="text-gray-600">Miktar:</span>
+                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Talep Eden:</span>
+                        <span className="ml-2">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Tarih:</span>
+                        <span className="ml-2">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      {transfer.status === 'approved' && transfer.approved_by && (
+                        <>
+                          <div>
+                            <span className="text-gray-600">Onaylayan:</span>
+                            <span className="ml-2">{transfer.approved_by.full_name || 'Bilinmiyor'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Onay Tarihi:</span>
+                            <span className="ml-2">{transfer.approved_at ? new Date(transfer.approved_at).toLocaleString('tr-TR') : '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {transfer.notes && (
+                        <div className="col-span-2">
+                          <span className="text-gray-600">Not:</span>
+                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {transfer.status === 'pending' && (
+                      <div className="flex gap-2 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleApproveProductionTransfer(transfer.id)}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ✅ Onayla & Depoya Ekle
+                        </button>
+                        <button
+                          onClick={() => handleRejectProductionTransfer(transfer.id)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ❌ Reddet
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {productionTransfers.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz transfer talebi yok</p>
               </div>
             )}
           </div>

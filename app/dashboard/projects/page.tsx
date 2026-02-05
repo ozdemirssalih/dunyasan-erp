@@ -189,9 +189,18 @@ export default function ProjectsPage() {
 
   const loadInitialData = async () => {
     try {
+      // Session kontrolü
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        console.error('No session found, redirecting to login...')
+        window.location.href = '/login'
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        console.error('No user found')
+        console.error('No user found, redirecting to login...')
+        window.location.href = '/login'
         return
       }
 
@@ -482,8 +491,16 @@ export default function ProjectsPage() {
       return
     }
 
+    // Auth ve company kontrolü
+    if (!currentUserId) {
+      alert('❌ Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.')
+      window.location.href = '/login'
+      return
+    }
+
     if (!companyId || companyId.trim() === '') {
-      alert('Şirket ID bulunamadı. Lütfen sayfayı yenileyin.')
+      alert('❌ Şirket bilgisi yüklenmedi. Sayfa yeniden yükleniyor...')
+      window.location.reload()
       return
     }
 

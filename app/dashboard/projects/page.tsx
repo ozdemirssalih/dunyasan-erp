@@ -484,39 +484,24 @@ export default function ProjectsPage() {
     }
 
     try {
-      // Kullanıcının profilinden company_id al
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Kullanıcı bulunamadı')
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('id', user.id)
-        .single()
-
-      const customerData = {
-        company_id: profile?.company_id,
-        customer_name: customerForm.customer_name.trim(),
-        contact_person: customerForm.contact_person.trim() || null,
-        phone: customerForm.phone.trim() || null,
-        email: customerForm.email.trim() || null,
-        address: customerForm.address.trim() || null,
-        notes: customerForm.notes.trim() || null
-      }
-
       const { error } = await supabase
         .from('customer_companies')
-        .insert(customerData)
-        .select()
+        .insert({
+          company_id: companyId,
+          customer_name: customerForm.customer_name.trim(),
+          contact_person: customerForm.contact_person.trim() || null,
+          phone: customerForm.phone.trim() || null,
+          email: customerForm.email.trim() || null,
+          address: customerForm.address.trim() || null,
+          notes: customerForm.notes.trim() || null
+        })
 
       if (error) throw error
 
       alert('✅ Müşteri firma eklendi!')
       setShowCustomerModal(false)
       resetCustomerForm()
-      if (profile?.company_id) {
-        loadCustomers(profile.company_id)
-      }
+      loadCustomers(companyId)
     } catch (error: any) {
       console.error('Error saving customer:', error)
       alert('❌ Hata: ' + (error.message || 'Müşteri eklenirken bir hata oluştu'))

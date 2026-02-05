@@ -300,7 +300,7 @@ export default function WarehousePage() {
       .select(`
         *,
         item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
-        requested_by:profiles(full_name)
+        requested_by:profiles!production_material_requests_requested_by_fkey(full_name)
       `)
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })

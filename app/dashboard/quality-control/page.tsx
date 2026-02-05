@@ -22,6 +22,14 @@ export default function QualityControlPage() {
   const [outgoingTransfers, setOutgoingTransfers] = useState<any[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
 
+  // Stats states
+  const [stats, setStats] = useState({
+    pendingTests: 0,
+    passedToday: 0,
+    failedToday: 0,
+    totalInQC: 0
+  })
+
   // Modal states
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [transferForm, setTransferForm] = useState({
@@ -100,6 +108,7 @@ export default function QualityControlPage() {
         loadIncomingTransfers(finalCompanyId),
         loadOutgoingTransfers(finalCompanyId),
         loadWarehouseItems(finalCompanyId),
+        loadStats(finalCompanyId),
       ])
 
     } catch (error) {
@@ -160,6 +169,52 @@ export default function QualityControlPage() {
       .eq('is_active', true)
 
     setWarehouseItems(data || [])
+  }
+
+  const loadStats = async (companyId: string) => {
+    console.log('📊 [QC] loadStats çağrıldı')
+
+    // Bekleyen testler (gelen transferler pending)
+    const { count: pendingTests } = await supabase
+      .from('production_to_qc_transfers')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'pending')
+
+    // Bugün geçen testler
+    const today = new Date().toISOString().split('T')[0]
+    const { count: passedToday } = await supabase
+      .from('qc_to_warehouse_transfers')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('quality_result', 'passed')
+      .gte('requested_at', today)
+
+    // Bugün kalan testler
+    const { count: failedToday } = await supabase
+      .from('qc_to_warehouse_transfers')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('quality_result', 'failed')
+      .gte('requested_at', today)
+
+    // KK deposundaki toplam ürün
+    const { data: qcStock } = await supabase
+      .from('quality_control_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+      .gt('current_stock', 0)
+
+    const totalInQC = qcStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
+    console.log('📊 [QC] İstatistikler:', { pendingTests, passedToday, failedToday, totalInQC })
+
+    setStats({
+      pendingTests: pendingTests || 0,
+      passedToday: passedToday || 0,
+      failedToday: failedToday || 0,
+      totalInQC
+    })
   }
 
   const handleApproveIncoming = async (transferId: string) => {
@@ -265,6 +320,57 @@ export default function QualityControlPage() {
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Kalite Kontrol</h2>
             <p className="text-gray-600">Ürün kalite testi ve onay yönetimi</p>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Bekleyen Testler */}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <ClipboardCheck className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.pendingTests}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">Bekleyen Testler</h3>
+            <p className="text-xs opacity-75 mt-1">Üretimden gelen, test edilecek</p>
+          </div>
+
+          {/* Bugün Geçen */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <ClipboardCheck className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.passedToday}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">Bugün Geçen</h3>
+            <p className="text-xs opacity-75 mt-1">Kalite testini geçti</p>
+          </div>
+
+          {/* Bugün Kalan */}
+          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Package className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.failedToday}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">Bugün Kalan</h3>
+            <p className="text-xs opacity-75 mt-1">Kalite testinden geçemedi</p>
+          </div>
+
+          {/* KK Deposu */}
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Factory className="w-6 h-6" />
+              </div>
+              <span className="text-3xl font-bold">{stats.totalInQC}</span>
+            </div>
+            <h3 className="text-sm font-medium opacity-90">KK Deposu</h3>
+            <p className="text-xs opacity-75 mt-1">Toplam ürün miktarı</p>
           </div>
         </div>
 

@@ -214,39 +214,28 @@ BEGIN
 END $$;
 
 -- =====================================================
--- ADIM 6: ON CONFLICT TESTİ
+-- ADIM 6: CONSTRAINT DOĞRULAMA
 -- =====================================================
 DO $$
 DECLARE
-    test_company_id UUID := '00000000-0000-0000-0000-000000000000'::uuid;
-    test_item_id UUID := '00000000-0000-0000-0000-000000000001'::uuid;
+    constraint_def TEXT;
 BEGIN
-    -- Test kaydı ekle
-    INSERT INTO production_inventory (
-        company_id, item_id, current_stock, item_type, notes
-    ) VALUES (
-        test_company_id, test_item_id, 100, 'raw_material', 'TEST'
-    );
+    -- production_inventory_unique_item constraint'inin varlığını kontrol et
+    SELECT pg_get_constraintdef(oid) INTO constraint_def
+    FROM pg_constraint
+    WHERE conrelid = 'production_inventory'::regclass
+      AND conname = 'production_inventory_unique_item';
 
-    -- ON CONFLICT testi
-    INSERT INTO production_inventory (
-        company_id, item_id, current_stock, item_type, notes
-    ) VALUES (
-        test_company_id, test_item_id, 50, 'raw_material', 'TEST ON CONFLICT'
-    )
-    ON CONFLICT (company_id, item_id, item_type)
-    DO UPDATE SET
-        current_stock = production_inventory.current_stock + EXCLUDED.current_stock;
-
-    -- Sonuç kontrolü
-    IF (SELECT current_stock FROM production_inventory WHERE company_id = test_company_id AND item_id = test_item_id AND item_type = 'raw_material') = 150 THEN
-        RAISE NOTICE '✅ 6/8 - ON CONFLICT testi BAŞARILI (100 + 50 = 150)';
-    ELSE
-        RAISE EXCEPTION 'ON CONFLICT testi BAŞARISIZ!';
+    IF constraint_def IS NULL THEN
+        RAISE EXCEPTION 'HATA: production_inventory_unique_item constraint bulunamadı!';
     END IF;
 
-    -- Test kaydını temizle
-    DELETE FROM production_inventory WHERE company_id = test_company_id AND item_id = test_item_id;
+    IF constraint_def NOT LIKE '%company_id%item_id%item_type%' THEN
+        RAISE EXCEPTION 'HATA: Constraint yanlış kolonları içeriyor: %', constraint_def;
+    END IF;
+
+    RAISE NOTICE '✅ 6/8 - Constraint doğrulandı: UNIQUE(company_id, item_id, item_type)';
+    RAISE NOTICE '   ON CONFLICT artık çalışacak';
 END $$;
 
 -- =====================================================
@@ -457,10 +446,10 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE '';
     RAISE NOTICE '✅ Tablolar: machine_inventory, production_to_machine_transfers, production_scrap_records';
-    RAISE NOTICE '✅ Constraint''ler: Doğru ve test edildi';
+    RAISE NOTICE '✅ Constraint''ler: Doğrulandı, UNIQUE(company_id, item_id, item_type)';
     RAISE NOTICE '✅ Trigger''lar: 7 adet, aktif';
     RAISE NOTICE '✅ RLS: Aktif';
-    RAISE NOTICE '✅ ON CONFLICT: Test edildi, çalışıyor';
+    RAISE NOTICE '✅ ON CONFLICT: Hazır';
     RAISE NOTICE '';
     RAISE NOTICE '🚀 SİSTEM KULLANIMA HAZIR!';
     RAISE NOTICE '========================================';

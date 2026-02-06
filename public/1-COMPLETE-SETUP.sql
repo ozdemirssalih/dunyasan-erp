@@ -348,10 +348,13 @@ END;
 $$;
 CREATE TRIGGER trg_transfer_prod_to_machine AFTER INSERT ON production_to_machine_transfers FOR EACH ROW EXECUTE FUNCTION transfer_production_to_machine();
 
--- 6. Fire Kayıt
+-- 6. Fire Kayıt → Fire Ürününe Ekle
 CREATE OR REPLACE FUNCTION record_production_scrap()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    fire_item_id UUID;
 BEGIN
+    -- Kaynak envanterden fire çıkar
     IF NEW.source_type = 'machine' THEN
         UPDATE machine_inventory SET current_stock = current_stock - NEW.quantity, updated_at = NOW()
         WHERE company_id = NEW.company_id AND machine_id = NEW.machine_id AND item_id = NEW.item_id;
@@ -362,10 +365,14 @@ BEGIN
         UPDATE warehouse_items SET current_stock = current_stock - NEW.quantity, updated_at = NOW() WHERE id = NEW.item_id;
     END IF;
 
-    INSERT INTO production_inventory (company_id, item_id, current_stock, item_type, notes)
-    VALUES (NEW.company_id, NEW.item_id, NEW.quantity, 'scrap', 'Fire - ' || NEW.scrap_reason)
-    ON CONFLICT (company_id, item_id, item_type)
-    DO UPDATE SET current_stock = production_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
+    -- Fire ürününü bul (FIRE-001)
+    SELECT id INTO fire_item_id FROM warehouse_items WHERE code = 'FIRE-001' AND company_id = NEW.company_id LIMIT 1;
+
+    -- Fire ürünü varsa depoya ekle
+    IF fire_item_id IS NOT NULL THEN
+        INSERT INTO warehouse_transactions (company_id, item_id, type, quantity, notes, reference_number, created_by)
+        VALUES (NEW.company_id, fire_item_id, 'entry', NEW.quantity, 'Fire - ' || NEW.scrap_reason || ' - Kaynak: ' || NEW.source_type, 'FIRE-' || NEW.id, NEW.recorded_by);
+    END IF;
 
     RETURN NEW;
 END;

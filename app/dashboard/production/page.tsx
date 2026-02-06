@@ -159,6 +159,8 @@ export default function ProductionPage() {
     machine_id: '',
     output_item_id: '',
     quantity: 0,
+    fire_quantity: 0,
+    fire_reason: 'process_error',
     shift: 'sabah',
     operator_id: '',
     notes: '',
@@ -568,8 +570,16 @@ export default function ProductionPage() {
       totalUsedInProduction += assignedPerUnit * output.quantity
     }
 
-    // Fire = Verilen - Kullanılan
-    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction)
+    // 3. Kayıtlı fire miktarı
+    const { data: fireRecords } = await supabase
+      .from('production_scrap_records')
+      .select('quantity')
+      .eq('company_id', companyId)
+
+    const totalRecordedFire = fireRecords?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // Fire = Verilen - (Kullanılan + Kayıtlı Fire)
+    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction - totalRecordedFire)
 
     console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, calculatedScrap, recentProjects })
 
@@ -783,7 +793,8 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      const { error } = await supabase
+      // 1. Üretim kaydını oluştur
+      const { error: outputError } = await supabase
         .from('production_outputs')
         .insert({
           company_id: companyId,
@@ -798,9 +809,30 @@ export default function ProductionPage() {
           project_part_id: outputForm.project_part_id || null,
         })
 
-      if (error) throw error
+      if (outputError) throw outputError
 
-      alert('✅ Üretim kaydı oluşturuldu!')
+      // 2. Eğer fire varsa fire kaydını oluştur
+      if (outputForm.fire_quantity > 0) {
+        const { error: fireError } = await supabase
+          .from('production_scrap_records')
+          .insert({
+            company_id: companyId,
+            source_type: 'machine',
+            machine_id: outputForm.machine_id,
+            item_id: outputForm.output_item_id,
+            quantity: outputForm.fire_quantity,
+            scrap_reason: outputForm.fire_reason,
+            notes: `Üretim sırasında fire - ${outputForm.notes || ''}`,
+            recorded_by: currentUserId,
+          })
+
+        if (fireError) throw fireError
+
+        alert(`✅ Üretim kaydı oluşturuldu!\n🔥 ${outputForm.fire_quantity} birim fire kaydedildi.`)
+      } else {
+        alert('✅ Üretim kaydı oluşturuldu!')
+      }
+
       setShowOutputModal(false)
       resetOutputForm()
       loadData()
@@ -837,6 +869,8 @@ export default function ProductionPage() {
       machine_id: '',
       output_item_id: '',
       quantity: 0,
+      fire_quantity: 0,
+      fire_reason: 'process_error',
       shift: 'sabah',
       operator_id: '',
       notes: '',
@@ -2371,6 +2405,41 @@ export default function ProductionPage() {
                           {part.part_code} - {part.part_name}
                         </option>
                       ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      🔥 Fire Miktarı (Opsiyonel)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={outputForm.fire_quantity}
+                      onChange={(e) => setOutputForm({ ...outputForm, fire_quantity: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Fire Sebebi
+                    </label>
+                    <select
+                      value={outputForm.fire_reason}
+                      onChange={(e) => setOutputForm({ ...outputForm, fire_reason: e.target.value })}
+                      disabled={outputForm.fire_quantity === 0}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                    >
+                      <option value="damaged">Hasarlı</option>
+                      <option value="defective">Kusurlu</option>
+                      <option value="expired">Süresi Dolmuş</option>
+                      <option value="process_error">İşlem Hatası</option>
+                      <option value="quality_fail">Kalite Uygunsuz</option>
+                      <option value="measurement_error">Ölçü Hatası</option>
+                      <option value="material_fault">Malzeme Hatası</option>
+                      <option value="other">Diğer</option>
                     </select>
                   </div>
 

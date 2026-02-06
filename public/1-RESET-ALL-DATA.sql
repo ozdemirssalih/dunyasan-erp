@@ -5,8 +5,6 @@
 -- ⚠️  Sadece TEST için kullanın!
 -- =====================================================
 
-\timing on
-
 DO $$
 BEGIN
     RAISE NOTICE '';
@@ -137,5 +135,3 @@ BEGIN
     RAISE NOTICE '🎯 Temiz sistemde test yapabilirsiniz!';
     RAISE NOTICE '========================================';
 END $$;
-
-\timing off

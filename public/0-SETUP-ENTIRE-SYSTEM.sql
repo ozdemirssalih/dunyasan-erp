@@ -5,8 +5,6 @@
 -- Bu dosyayı sadece 1 KERE çalıştırın
 -- =====================================================
 
-\timing on
-
 DO $$
 BEGIN
     RAISE NOTICE '';
@@ -497,5 +495,3 @@ BEGIN
     RAISE NOTICE '🚀 SİSTEM KULLANIMA HAZIR!';
     RAISE NOTICE '========================================';
 END $$;
-
-\timing off

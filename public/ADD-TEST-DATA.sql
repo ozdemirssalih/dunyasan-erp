@@ -31,14 +31,22 @@ BEGIN
     RAISE NOTICE 'User ID: %', v_user_id;
     RAISE NOTICE '';
 
-    -- Kategori var mı kontrol et
-    SELECT id INTO v_category_id FROM warehouse_categories WHERE company_id = v_company_id LIMIT 1;
+    -- Kategori var mı kontrol et (company_id olmadan)
+    SELECT id INTO v_category_id FROM warehouse_categories LIMIT 1;
 
     IF v_category_id IS NULL THEN
-        -- Kategori oluştur
-        INSERT INTO warehouse_categories (company_id, name, description, created_by)
-        VALUES (v_company_id, 'Hammaddeler', 'Test kategorisi', v_user_id)
-        RETURNING id INTO v_category_id;
+        -- Kategori oluştur (company_id olmadan dene)
+        BEGIN
+            INSERT INTO warehouse_categories (name, description)
+            VALUES ('Hammaddeler', 'Test kategorisi')
+            RETURNING id INTO v_category_id;
+        EXCEPTION
+            WHEN OTHERS THEN
+                -- Eğer company_id gerekiyorsa
+                INSERT INTO warehouse_categories (company_id, name, description, created_by)
+                VALUES (v_company_id, 'Hammaddeler', 'Test kategorisi', v_user_id)
+                RETURNING id INTO v_category_id;
+        END;
 
         RAISE NOTICE 'Kategori oluşturuldu: %', v_category_id;
     END IF;

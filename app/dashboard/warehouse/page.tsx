@@ -35,6 +35,12 @@ interface Department {
   description: string
 }
 
+interface Machine {
+  id: string
+  name: string
+  code: string
+}
+
 interface Transaction {
   id: string
   item_name: string
@@ -92,6 +98,7 @@ export default function WarehousePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [items, setItems] = useState<WarehouseItem[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [machines, setMachines] = useState<Machine[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
   const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
@@ -138,6 +145,7 @@ export default function WarehousePage() {
     quantity: 0,
     destination_type: 'department',
     department_id: '',
+    destination_id: '',
     shipment_destination: '',
     reference_number: '',
     notes: '',
@@ -234,6 +242,16 @@ export default function WarehousePage() {
         .order('name')
 
       setDepartments(departmentsData || [])
+
+      // Load machines
+      const { data: machinesData } = await supabase
+        .from('machines')
+        .select('id, name, code')
+        .eq('company_id', finalCompanyId)
+        .eq('is_active', true)
+        .order('name')
+
+      setMachines(machinesData || [])
 
       // Load warehouse items
       await loadItems(finalCompanyId)
@@ -642,6 +660,7 @@ export default function WarehousePage() {
           type: 'exit',
           quantity: exitForm.quantity,
           destination_type: exitForm.destination_type,
+          destination_id: exitForm.destination_type === 'machine' ? exitForm.destination_id : null,
           department_id: exitForm.destination_type === 'department' ? exitForm.department_id : null,
           shipment_destination: exitForm.destination_type === 'shipment' ? exitForm.shipment_destination : null,
           reference_number: exitForm.reference_number,
@@ -724,6 +743,7 @@ export default function WarehousePage() {
       quantity: 0,
       destination_type: 'department',
       department_id: '',
+      destination_id: '',
       shipment_destination: '',
       reference_number: '',
       notes: '',
@@ -1184,6 +1204,9 @@ export default function WarehousePage() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                   >
                     <option value="department">Dahili Birim</option>
+                    <option value="production">Üretime Gönder</option>
+                    <option value="quality_control">Kalite Kontrole Gönder</option>
+                    <option value="machine">Tezgaha Gönder</option>
                     <option value="shipment">Sevkiyat</option>
                     <option value="waste">Fire/Hurda</option>
                     <option value="return">İade</option>
@@ -1204,6 +1227,27 @@ export default function WarehousePage() {
                       <option value="">Seçin...</option>
                       {departments.map(dept => (
                         <option key={dept.id} value={dept.id}>{dept.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {exitForm.destination_type === 'machine' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Tezgah <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={exitForm.destination_id}
+                      onChange={(e) => setExitForm({ ...exitForm, destination_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {machines.map(machine => (
+                        <option key={machine.id} value={machine.id}>
+                          {machine.code} - {machine.name}
+                        </option>
                       ))}
                     </select>
                   </div>

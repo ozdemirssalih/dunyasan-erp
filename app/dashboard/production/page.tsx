@@ -125,6 +125,7 @@ export default function ProductionPage() {
     pendingQC: 0,
     todayProduction: 0,
     calculatedScrap: 0,
+    recordedFire: 0,
     recentProjects: [] as string[]
   })
 
@@ -570,18 +571,18 @@ export default function ProductionPage() {
       totalUsedInProduction += assignedPerUnit * output.quantity
     }
 
-    // 3. Kayıtlı fire miktarı
+    // Hesaplanan Fire (Verimlilik) = Verilen - Kullanılan
+    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction)
+
+    // 3. Kayıtlı fire miktarı (Sadece girilen fire)
     const { data: fireRecords } = await supabase
       .from('production_scrap_records')
       .select('quantity')
       .eq('company_id', companyId)
 
-    const totalRecordedFire = fireRecords?.reduce((sum, item) => sum + item.quantity, 0) || 0
+    const recordedFire = fireRecords?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // Fire = Verilen - (Kullanılan + Kayıtlı Fire)
-    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction - totalRecordedFire)
-
-    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, calculatedScrap, recentProjects })
+    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, calculatedScrap, recordedFire, recentProjects })
 
     setStats({
       rawMaterialsReady,
@@ -589,6 +590,7 @@ export default function ProductionPage() {
       pendingQC: pendingQC || 0,
       todayProduction,
       calculatedScrap,
+      recordedFire,
       recentProjects
     })
   }
@@ -1173,7 +1175,7 @@ export default function ProductionPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {/* İşlenmeye Hazır Hammadde */}
           <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between mb-2">
@@ -1246,6 +1248,21 @@ export default function ProductionPage() {
             </div>
             <h3 className="text-sm font-medium text-gray-900">Hesaplanan Fire</h3>
             <p className="text-xs text-gray-600 mt-1">Verilen - Kullanılan fark</p>
+          </div>
+
+          {/* Kayıtlı Fire */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-yellow-100 rounded-lg">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                </svg>
+              </div>
+              <span className="text-3xl font-bold text-gray-900">{stats.recordedFire.toFixed(2)}</span>
+            </div>
+            <h3 className="text-sm font-medium text-gray-900">Kayıtlı Fire</h3>
+            <p className="text-xs text-gray-600 mt-1">Girilen fire kayıtları</p>
           </div>
         </div>
 

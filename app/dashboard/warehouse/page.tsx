@@ -29,12 +29,6 @@ interface WarehouseItem {
   is_active: boolean
 }
 
-interface Department {
-  id: string
-  name: string
-  description: string
-}
-
 interface Transaction {
   id: string
   item_name: string
@@ -91,7 +85,6 @@ export default function WarehousePage() {
   // Data states
   const [categories, setCategories] = useState<Category[]>([])
   const [items, setItems] = useState<WarehouseItem[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
   const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
@@ -136,8 +129,6 @@ export default function WarehousePage() {
   const [exitForm, setExitForm] = useState({
     item_id: '',
     quantity: 0,
-    destination_type: 'department',
-    department_id: '',
     shipment_destination: '',
     reference_number: '',
     notes: '',
@@ -225,15 +216,6 @@ export default function WarehousePage() {
         .order('name')
 
       setCategories(categoriesData || [])
-
-      // Load departments
-      const { data: departmentsData } = await supabase
-        .from('departments')
-        .select('*')
-        .eq('company_id', finalCompanyId)
-        .order('name')
-
-      setDepartments(departmentsData || [])
 
       // Load warehouse items
       await loadItems(finalCompanyId)
@@ -641,9 +623,7 @@ export default function WarehousePage() {
           item_id: exitForm.item_id,
           type: 'exit',
           quantity: exitForm.quantity,
-          destination_type: exitForm.destination_type,
-          department_id: exitForm.destination_type === 'department' ? exitForm.department_id : null,
-          shipment_destination: exitForm.destination_type === 'shipment' ? exitForm.shipment_destination : null,
+          shipment_destination: exitForm.shipment_destination,
           reference_number: exitForm.reference_number,
           notes: exitForm.notes,
           created_by: currentUserId,
@@ -722,8 +702,6 @@ export default function WarehousePage() {
     setExitForm({
       item_id: '',
       quantity: 0,
-      destination_type: 'department',
-      department_id: '',
       shipment_destination: '',
       reference_number: '',
       notes: '',
@@ -1175,54 +1153,16 @@ export default function WarehousePage() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Çıkış Tipi <span className="text-red-500">*</span>
+                    Sevkiyat Adresi / Müşteri
                   </label>
-                  <select
-                    value={exitForm.destination_type}
-                    onChange={(e) => setExitForm({ ...exitForm, destination_type: e.target.value })}
-                    required
+                  <input
+                    type="text"
+                    value={exitForm.shipment_destination}
+                    onChange={(e) => setExitForm({ ...exitForm, shipment_destination: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  >
-                    <option value="department">Dahili Birim</option>
-                    <option value="shipment">Sevkiyat</option>
-                    <option value="waste">Fire/Hurda</option>
-                    <option value="return">İade</option>
-                  </select>
+                    placeholder="Örn: ABC Şirketi, İstanbul"
+                  />
                 </div>
-
-                {exitForm.destination_type === 'department' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Birim <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={exitForm.department_id}
-                      onChange={(e) => setExitForm({ ...exitForm, department_id: e.target.value })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Seçin...</option>
-                      {departments.map(dept => (
-                        <option key={dept.id} value={dept.id}>{dept.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {exitForm.destination_type === 'shipment' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Sevkiyat Adresi <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={exitForm.shipment_destination}
-                      onChange={(e) => setExitForm({ ...exitForm, shipment_destination: e.target.value })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">İrsaliye No</label>

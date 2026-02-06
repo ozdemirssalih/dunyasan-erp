@@ -239,63 +239,18 @@ BEGIN
 END $$;
 
 -- =====================================================
--- ADIM 6.5: WAREHOUSE_TRANSACTIONS DESTINATION DESTEĞİ
--- =====================================================
--- Çıkış hedef kolonları ekle
-ALTER TABLE warehouse_transactions
-ADD COLUMN IF NOT EXISTS destination_type TEXT CHECK (destination_type IN ('production', 'quality_control', 'machine', 'department', 'shipment', 'waste', 'return', NULL)),
-ADD COLUMN IF NOT EXISTS destination_id UUID;
-
-COMMENT ON COLUMN warehouse_transactions.destination_type IS 'Çıkış hedefi: production, quality_control, machine, department, shipment, waste, return veya NULL';
-COMMENT ON COLUMN warehouse_transactions.destination_id IS 'Hedef ID (machine_id gibi), opsiyonel';
-
-DO $$
-BEGIN
-    RAISE NOTICE '✅ 6.5/8 - Warehouse destination kolonları eklendi';
-END $$;
-
--- =====================================================
 -- ADIM 7: TÜM TRIGGER'LARI OLUŞTUR
 -- =====================================================
 
--- 0. Warehouse Transaction → Stok Güncelleme + Hedef Routing (EN ÖNEMLİ!)
+-- 0. Warehouse Transaction → Stok Güncelleme (EN ÖNEMLİ!)
 CREATE OR REPLACE FUNCTION update_warehouse_stock()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF NEW.type = 'entry' THEN
-        -- GİRİŞ: Stoku artır
         UPDATE warehouse_items SET current_stock = current_stock + NEW.quantity, updated_at = NOW() WHERE id = NEW.item_id;
-
     ELSIF NEW.type = 'exit' THEN
-        -- ÇIKIŞ: Stoku azalt
         UPDATE warehouse_items SET current_stock = current_stock - NEW.quantity, updated_at = NOW() WHERE id = NEW.item_id;
-
-        -- HEDEF VARSA İLGİLİ ENVANTERE EKLE
-        IF NEW.destination_type = 'production' THEN
-            -- Üretime gönder (hammadde olarak)
-            INSERT INTO production_inventory (company_id, item_id, current_stock, item_type, notes)
-            VALUES (NEW.company_id, NEW.item_id, NEW.quantity, 'raw_material', 'Depodan direkt - Ref: ' || COALESCE(NEW.reference_number, 'N/A'))
-            ON CONFLICT (company_id, item_id, item_type)
-            DO UPDATE SET current_stock = production_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
-
-        ELSIF NEW.destination_type = 'quality_control' THEN
-            -- Kalite kontrole gönder
-            INSERT INTO quality_control_inventory (company_id, item_id, current_stock, notes)
-            VALUES (NEW.company_id, NEW.item_id, NEW.quantity, 'Depodan direkt - Ref: ' || COALESCE(NEW.reference_number, 'N/A'))
-            ON CONFLICT (company_id, item_id)
-            DO UPDATE SET current_stock = quality_control_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
-
-        ELSIF NEW.destination_type = 'machine' THEN
-            -- Tezgaha gönder (destination_id zorunlu)
-            IF NEW.destination_id IS NOT NULL THEN
-                INSERT INTO machine_inventory (company_id, machine_id, item_id, current_stock, notes)
-                VALUES (NEW.company_id, NEW.destination_id, NEW.item_id, NEW.quantity, 'Depodan direkt - Ref: ' || COALESCE(NEW.reference_number, 'N/A'))
-                ON CONFLICT (company_id, machine_id, item_id)
-                DO UPDATE SET current_stock = machine_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
-            END IF;
-        END IF;
     END IF;
-
     RETURN NEW;
 END;
 $$;

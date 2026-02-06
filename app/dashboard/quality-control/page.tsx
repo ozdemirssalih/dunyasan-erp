@@ -326,51 +326,51 @@ export default function QualityControlPage() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Bekleyen Testler */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <ClipboardCheck className="w-6 h-6" />
+              <div className="p-3 bg-orange-100 rounded-lg">
+                <ClipboardCheck className="w-6 h-6 text-orange-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.pendingTests}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.pendingTests}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">Bekleyen Testler</h3>
-            <p className="text-xs opacity-75 mt-1">Üretimden gelen, test edilecek</p>
+            <h3 className="text-sm font-medium text-gray-900">Bekleyen Testler</h3>
+            <p className="text-xs text-gray-600 mt-1">Üretimden gelen, test edilecek</p>
           </div>
 
           {/* Bugün Geçen */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <ClipboardCheck className="w-6 h-6" />
+              <div className="p-3 bg-green-100 rounded-lg">
+                <ClipboardCheck className="w-6 h-6 text-green-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.passedToday}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.passedToday}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">Bugün Geçen</h3>
-            <p className="text-xs opacity-75 mt-1">Kalite testini geçti</p>
+            <h3 className="text-sm font-medium text-gray-900">Bugün Geçen</h3>
+            <p className="text-xs text-gray-600 mt-1">Kalite testini geçti</p>
           </div>
 
           {/* Bugün Kalan */}
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <Package className="w-6 h-6" />
+              <div className="p-3 bg-red-100 rounded-lg">
+                <Package className="w-6 h-6 text-red-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.failedToday}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.failedToday}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">Bugün Kalan</h3>
-            <p className="text-xs opacity-75 mt-1">Kalite testinden geçemedi</p>
+            <h3 className="text-sm font-medium text-gray-900">Bugün Kalan</h3>
+            <p className="text-xs text-gray-600 mt-1">Kalite testinden geçemedi</p>
           </div>
 
           {/* KK Deposu */}
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <Factory className="w-6 h-6" />
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Factory className="w-6 h-6 text-blue-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.totalInQC}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.totalInQC}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">KK Deposu</h3>
-            <p className="text-xs opacity-75 mt-1">Toplam ürün miktarı</p>
+            <h3 className="text-sm font-medium text-gray-900">KK Deposu</h3>
+            <p className="text-xs text-gray-600 mt-1">Toplam ürün miktarı</p>
           </div>
         </div>
 

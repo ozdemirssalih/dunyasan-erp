@@ -1028,21 +1028,21 @@ export default function ProductionPage() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* İşlenmeye Hazır Hammadde */}
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <Package className="w-6 h-6" />
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Package className="w-6 h-6 text-blue-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.rawMaterialsReady}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.rawMaterialsReady}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">İşlenmeye Hazır Hammadde</h3>
-            <p className="text-xs opacity-75 mt-1">Üretim deposundaki toplam miktar</p>
+            <h3 className="text-sm font-medium text-gray-900">İşlenmeye Hazır Hammadde</h3>
+            <p className="text-xs text-gray-600 mt-1">Üretim deposundaki toplam miktar</p>
             {stats.recentProjects.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-white/20">
-                <p className="text-xs opacity-75 mb-1">Son projeler:</p>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-600 mb-1">Son projeler:</p>
                 <div className="flex flex-wrap gap-1">
                   {stats.recentProjects.slice(0, 2).map((project, idx) => (
-                    <span key={idx} className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                    <span key={idx} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                       {project}
                     </span>
                   ))}
@@ -1052,39 +1052,39 @@ export default function ProductionPage() {
           </div>
 
           {/* İşlenen Mamul */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <Factory className="w-6 h-6" />
+              <div className="p-3 bg-green-100 rounded-lg">
+                <Factory className="w-6 h-6 text-green-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.finishedProducts}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.finishedProducts}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">İşlenen Mamul</h3>
-            <p className="text-xs opacity-75 mt-1">Üretimde hazır ürünler</p>
+            <h3 className="text-sm font-medium text-gray-900">İşlenen Mamul</h3>
+            <p className="text-xs text-gray-600 mt-1">Üretimde hazır ürünler</p>
           </div>
 
           {/* Kalite Kontrolde Bekleyen */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <TestTube2 className="w-6 h-6" />
+              <div className="p-3 bg-orange-100 rounded-lg">
+                <TestTube2 className="w-6 h-6 text-orange-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.pendingQC}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.pendingQC}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">Kalite Kontrolde Bekleyen</h3>
-            <p className="text-xs opacity-75 mt-1">Onay bekleyen mamüller</p>
+            <h3 className="text-sm font-medium text-gray-900">Kalite Kontrolde Bekleyen</h3>
+            <p className="text-xs text-gray-600 mt-1">Onay bekleyen mamüller</p>
           </div>
 
           {/* Bugünkü Üretim */}
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-white/20 rounded-lg">
-                <ClipboardList className="w-6 h-6" />
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <ClipboardList className="w-6 h-6 text-purple-600" />
               </div>
-              <span className="text-3xl font-bold">{stats.todayProduction}</span>
+              <span className="text-3xl font-bold text-gray-900">{stats.todayProduction}</span>
             </div>
-            <h3 className="text-sm font-medium opacity-90">Bugünkü Üretim</h3>
-            <p className="text-xs opacity-75 mt-1">Bugün üretilen toplam miktar</p>
+            <h3 className="text-sm font-medium text-gray-900">Bugünkü Üretim</h3>
+            <p className="text-xs text-gray-600 mt-1">Bugün üretilen toplam miktar</p>
           </div>
         </div>
 

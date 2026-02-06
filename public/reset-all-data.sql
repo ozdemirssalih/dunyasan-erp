@@ -44,49 +44,52 @@ ORDER BY tablo;
 -- TEMİZLEME İŞLEMLERİ
 -- =====================================================
 
--- 1. Kalite Kontrol Transferleri
-DELETE FROM qc_to_warehouse_transfers;
-RAISE NOTICE '✅ qc_to_warehouse_transfers temizlendi';
+DO $$
+BEGIN
+    -- 1. Kalite Kontrol Transferleri
+    DELETE FROM qc_to_warehouse_transfers;
+    RAISE NOTICE '✅ qc_to_warehouse_transfers temizlendi';
 
--- 2. Üretimden Kalite Kontrole Transferler
-DELETE FROM production_to_qc_transfers;
-RAISE NOTICE '✅ production_to_qc_transfers temizlendi';
+    -- 2. Üretimden Kalite Kontrole Transferler
+    DELETE FROM production_to_qc_transfers;
+    RAISE NOTICE '✅ production_to_qc_transfers temizlendi';
 
--- 3. Kalite Kontrol Envanteri
-DELETE FROM quality_control_inventory;
-RAISE NOTICE '✅ quality_control_inventory temizlendi';
+    -- 3. Kalite Kontrol Envanteri
+    DELETE FROM quality_control_inventory;
+    RAISE NOTICE '✅ quality_control_inventory temizlendi';
 
--- 4. Üretimden Depoya Transferler
-DELETE FROM production_to_warehouse_transfers;
-RAISE NOTICE '✅ production_to_warehouse_transfers temizlendi';
+    -- 4. Üretimden Depoya Transferler
+    DELETE FROM production_to_warehouse_transfers;
+    RAISE NOTICE '✅ production_to_warehouse_transfers temizlendi';
 
--- 5. Üretim Malzeme Talepleri
-DELETE FROM production_material_requests;
-RAISE NOTICE '✅ production_material_requests temizlendi';
+    -- 5. Üretim Malzeme Talepleri
+    DELETE FROM production_material_requests;
+    RAISE NOTICE '✅ production_material_requests temizlendi';
 
--- 6. Üretim Çıktıları
-DELETE FROM production_outputs;
-RAISE NOTICE '✅ production_outputs temizlendi';
+    -- 6. Üretim Çıktıları
+    DELETE FROM production_outputs;
+    RAISE NOTICE '✅ production_outputs temizlendi';
 
--- 7. Üretim Malzeme Atamaları
-DELETE FROM production_material_assignments;
-RAISE NOTICE '✅ production_material_assignments temizlendi';
+    -- 7. Üretim Malzeme Atamaları
+    DELETE FROM production_material_assignments;
+    RAISE NOTICE '✅ production_material_assignments temizlendi';
 
--- 8. Üretim Envanteri
-DELETE FROM production_inventory;
-RAISE NOTICE '✅ production_inventory temizlendi';
+    -- 8. Üretim Envanteri
+    DELETE FROM production_inventory;
+    RAISE NOTICE '✅ production_inventory temizlendi';
 
--- 9. Satın Alma Talepleri
-DELETE FROM purchase_requests;
-RAISE NOTICE '✅ purchase_requests temizlendi';
+    -- 9. Satın Alma Talepleri
+    DELETE FROM purchase_requests;
+    RAISE NOTICE '✅ purchase_requests temizlendi';
 
--- 10. Depo İşlemleri
-DELETE FROM warehouse_transactions;
-RAISE NOTICE '✅ warehouse_transactions temizlendi';
+    -- 10. Depo İşlemleri
+    DELETE FROM warehouse_transactions;
+    RAISE NOTICE '✅ warehouse_transactions temizlendi';
 
--- 11. Depo Kalemleri
-DELETE FROM warehouse_items;
-RAISE NOTICE '✅ warehouse_items temizlendi';
+    -- 11. Depo Kalemleri
+    DELETE FROM warehouse_items;
+    RAISE NOTICE '✅ warehouse_items temizlendi';
+END $$;
 
 -- =====================================================
 -- SONUÇ

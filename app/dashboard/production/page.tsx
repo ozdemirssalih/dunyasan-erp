@@ -499,12 +499,14 @@ export default function ProductionPage() {
 
     const finishedProducts = finishedProductsData?.reduce((sum, item) => sum + item.current_stock, 0) || 0
 
-    // Kalite kontrolde bekleyen
-    const { count: pendingQC } = await supabase
+    // Kalite kontrolde bekleyen (ÜRÜN SAYISI, test sayısı değil)
+    const { data: pendingQCData } = await supabase
       .from('production_outputs')
-      .select('*', { count: 'exact', head: true })
+      .select('quantity')
       .eq('company_id', companyId)
       .eq('quality_status', 'pending')
+
+    const pendingQC = pendingQCData?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
     // Bugünkü üretim
     const today = new Date().toISOString().split('T')[0]
@@ -1144,7 +1146,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.pendingQC}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">Kalite Kontrolde Bekleyen</h3>
-            <p className="text-xs text-gray-600 mt-1">Onay bekleyen mamüller</p>
+            <p className="text-xs text-gray-600 mt-1">Bekleyen ürün sayısı</p>
           </div>
 
           {/* Bugünkü Üretim */}

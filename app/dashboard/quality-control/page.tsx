@@ -176,29 +176,35 @@ export default function QualityControlPage() {
   const loadStats = async (companyId: string) => {
     console.log('📊 [QC] loadStats çağrıldı')
 
-    // Bekleyen testler (gelen transferler pending)
-    const { count: pendingTests } = await supabase
+    // Bekleyen testler (ÜRÜN SAYISI, test sayısı değil)
+    const { data: pendingTestsData } = await supabase
       .from('production_to_qc_transfers')
-      .select('*', { count: 'exact', head: true })
+      .select('quantity')
       .eq('company_id', companyId)
       .eq('status', 'pending')
 
-    // Bugün geçen testler
+    const pendingTests = pendingTestsData?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // Bugün geçen testler (ÜRÜN SAYISI)
     const today = new Date().toISOString().split('T')[0]
-    const { count: passedToday } = await supabase
+    const { data: passedTodayData } = await supabase
       .from('qc_to_warehouse_transfers')
-      .select('*', { count: 'exact', head: true })
+      .select('quantity')
       .eq('company_id', companyId)
       .eq('quality_result', 'passed')
       .gte('requested_at', today)
 
-    // Bugün kalan testler
-    const { count: failedToday } = await supabase
+    const passedToday = passedTodayData?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // Bugün kalan testler (ÜRÜN SAYISI)
+    const { data: failedTodayData } = await supabase
       .from('qc_to_warehouse_transfers')
-      .select('*', { count: 'exact', head: true })
+      .select('quantity')
       .eq('company_id', companyId)
       .eq('quality_result', 'failed')
       .gte('requested_at', today)
+
+    const failedToday = failedTodayData?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
     // KK deposundaki toplam ürün
     const { data: qcStock } = await supabase
@@ -373,8 +379,8 @@ export default function QualityControlPage() {
               </div>
               <span className="text-3xl font-bold text-gray-900">{stats.pendingTests}</span>
             </div>
-            <h3 className="text-sm font-medium text-gray-900">Bekleyen Testler</h3>
-            <p className="text-xs text-gray-600 mt-1">Üretimden gelen, test edilecek</p>
+            <h3 className="text-sm font-medium text-gray-900">Bekleyen Ürünler</h3>
+            <p className="text-xs text-gray-600 mt-1">Test edilecek ürün sayısı</p>
           </div>
 
           {/* Bugün Geçen */}

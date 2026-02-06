@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests' | 'production-transfers'
+type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers'
 
 interface Category {
   id: string
@@ -96,6 +96,7 @@ export default function WarehousePage() {
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
   const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
   const [productionTransfers, setProductionTransfers] = useState<any[]>([])
+  const [qcTransfers, setQCTransfers] = useState<any[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -246,6 +247,7 @@ export default function WarehousePage() {
       // Load production requests
       await loadProductionRequests(finalCompanyId)
       await loadProductionTransfers(finalCompanyId)
+      await loadQCTransfers(finalCompanyId)
 
     } catch (error) {
       console.error('Error loading data:', error)
@@ -392,6 +394,26 @@ export default function WarehousePage() {
     }
 
     setProductionTransfers(data || [])
+  }
+
+  const loadQCTransfers = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('qc_to_warehouse_transfers')
+      .select(`
+        *,
+        item:warehouse_items(code, name, unit),
+        requested_by:profiles!qc_to_warehouse_transfers_requested_by_fkey(full_name),
+        approved_by_user:profiles!qc_to_warehouse_transfers_approved_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .eq('quality_result', 'passed')
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading QC transfers:', error)
+    }
+
+    setQCTransfers(data || [])
   }
 
   const handleApproveProductionTransfer = async (transferId: string) => {
@@ -714,6 +736,7 @@ export default function WarehousePage() {
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
               { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
+              { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'approved').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1519,6 +1542,85 @@ export default function WarehousePage() {
             {productionTransfers.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz transfer talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* QC TRANSFERS TAB */}
+        {activeTab === 'qc-transfers' && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-green-900 mb-2">✅ Kalite Kontrolden Ana Depoya</h3>
+              <p className="text-sm text-green-700">
+                Kalite kontrolü geçen ürünler ana depoya otomatik olarak eklenmiştir. Bu liste bilgi amaçlıdır.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {qcTransfers.map((transfer: any) => {
+                const statusColors: Record<string, string> = {
+                  approved: 'bg-green-100 text-green-700',
+                  pending: 'bg-yellow-100 text-yellow-700',
+                }
+
+                return (
+                  <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800">{transfer.item?.name || 'Bilinmiyor'}</h4>
+                        <p className="text-sm text-gray-500">{transfer.item?.code || '-'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
+                          {transfer.status === 'approved' ? 'DEPOYA EKLENDİ' : transfer.status.toUpperCase()}
+                        </span>
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                          ✅ KALİTE GEÇTĠ
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Test Eden</span>
+                        <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      </div>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      {transfer.approved_by_user && (
+                        <>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Onaylayan</span>
+                            <span className="text-gray-900">{transfer.approved_by_user.full_name || 'Bilinmiyor'}</span>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Onay Tarihi</span>
+                            <span className="text-gray-900">{transfer.approved_at ? new Date(transfer.approved_at).toLocaleString('tr-TR') : '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {transfer.notes && (
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{transfer.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {qcTransfers.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz kalite kontrolden onaylanan ürün yok</p>
               </div>
             )}
           </div>

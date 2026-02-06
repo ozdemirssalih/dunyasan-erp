@@ -1306,23 +1306,23 @@ export default function WarehousePage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Miktar:</span>
-                        <span className="font-semibold ml-2">{req.quantity} {req.unit}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{req.quantity} {req.unit}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Talep Eden:</span>
-                        <span className="ml-2">{req.requested_by_name}</span>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Talep Eden</span>
+                        <span className="text-gray-900">{req.requested_by_name}</span>
                       </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Tarih:</span>
-                        <span className="ml-2">{new Date(req.requested_at).toLocaleString('tr-TR')}</span>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(req.requested_at).toLocaleString('tr-TR')}</span>
                       </div>
                       {req.reason && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Sebep:</span>
-                          <p className="mt-1 text-gray-700">{req.reason}</p>
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Sebep</span>
+                          <p className="text-gray-900">{req.reason}</p>
                         </div>
                       )}
                     </div>
@@ -1382,23 +1382,23 @@ export default function WarehousePage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <span className="text-gray-600">Miktar:</span>
-                        <span className="font-semibold ml-2">{req.quantity} {req.unit}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{req.quantity} {req.unit}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Talep Eden:</span>
-                        <span className="ml-2">{req.requested_by_name}</span>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Talep Eden</span>
+                        <span className="text-gray-900">{req.requested_by_name}</span>
                       </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Tarih:</span>
-                        <span className="ml-2">{new Date(req.requested_at).toLocaleString('tr-TR')}</span>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(req.requested_at).toLocaleString('tr-TR')}</span>
                       </div>
                       {req.reason && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Sebep:</span>
-                          <p className="mt-1 text-gray-700">{req.reason}</p>
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Sebep</span>
+                          <p className="text-gray-900">{req.reason}</p>
                         </div>
                       )}
                     </div>
@@ -1462,35 +1462,35 @@ export default function WarehousePage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <span className="text-gray-600">Miktar:</span>
-                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Talep Eden:</span>
-                        <span className="ml-2">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Talep Eden</span>
+                        <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
                       </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Tarih:</span>
-                        <span className="ml-2">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
                       </div>
                       {transfer.status === 'approved' && transfer.approved_by && (
                         <>
-                          <div>
-                            <span className="text-gray-600">Onaylayan:</span>
-                            <span className="ml-2">{transfer.approved_by.full_name || 'Bilinmiyor'}</span>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Onaylayan</span>
+                            <span className="text-gray-900">{transfer.approved_by.full_name || 'Bilinmiyor'}</span>
                           </div>
-                          <div>
-                            <span className="text-gray-600">Onay Tarihi:</span>
-                            <span className="ml-2">{transfer.approved_at ? new Date(transfer.approved_at).toLocaleString('tr-TR') : '-'}</span>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Onay Tarihi</span>
+                            <span className="text-gray-900">{transfer.approved_at ? new Date(transfer.approved_at).toLocaleString('tr-TR') : '-'}</span>
                           </div>
                         </>
                       )}
                       {transfer.notes && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Not:</span>
-                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{transfer.notes}</p>
                         </div>
                       )}
                     </div>

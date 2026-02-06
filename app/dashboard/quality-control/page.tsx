@@ -489,23 +489,23 @@ export default function QualityControlPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <span className="text-gray-600">Miktar:</span>
-                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Gönderen:</span>
-                        <span className="ml-2">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Gönderen</span>
+                        <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
                       </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Tarih:</span>
-                        <span className="ml-2">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
                       </div>
                       {transfer.notes && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Not:</span>
-                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{transfer.notes}</p>
                         </div>
                       )}
                     </div>
@@ -582,25 +582,25 @@ export default function QualityControlPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Miktar:</span>
-                        <span className="font-semibold ml-2">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Test Eden:</span>
-                        <span className="ml-2">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Test Eden</span>
+                        <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
                       </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-600">Hedef:</span>
-                        <span className="ml-2 font-semibold">
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Hedef</span>
+                        <span className="font-semibold text-gray-900">
                           {transfer.quality_result === 'passed' ? '→ Ana Depo' : '→ Üretim (Geri Dönüş)'}
                         </span>
                       </div>
                       {transfer.notes && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Not:</span>
-                          <p className="mt-1 text-gray-700">{transfer.notes}</p>
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{transfer.notes}</p>
                         </div>
                       )}
                     </div>

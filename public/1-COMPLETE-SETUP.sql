@@ -242,6 +242,20 @@ END $$;
 -- ADIM 7: TÜM TRIGGER'LARI OLUŞTUR
 -- =====================================================
 
+-- 0. Warehouse Transaction → Stok Güncelleme (EN ÖNEMLİ!)
+CREATE OR REPLACE FUNCTION update_warehouse_stock()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.type = 'entry' THEN
+        UPDATE warehouse_items SET current_stock = current_stock + NEW.quantity, updated_at = NOW() WHERE id = NEW.item_id;
+    ELSIF NEW.type = 'exit' THEN
+        UPDATE warehouse_items SET current_stock = current_stock - NEW.quantity, updated_at = NOW() WHERE id = NEW.item_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_update_warehouse_stock AFTER INSERT ON warehouse_transactions FOR EACH ROW EXECUTE FUNCTION update_warehouse_stock();
+
 -- 1. Depo → Üretim
 CREATE OR REPLACE FUNCTION approve_material_request_to_production()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -383,7 +397,7 @@ CREATE TRIGGER trg_add_production_output AFTER INSERT ON production_outputs FOR 
 
 DO $$
 BEGIN
-    RAISE NOTICE '✅ 7/8 - Tüm trigger''lar oluşturuldu (7 adet)';
+    RAISE NOTICE '✅ 7/8 - Tüm trigger''lar oluşturuldu (8 adet)';
 END $$;
 
 -- =====================================================
@@ -408,6 +422,7 @@ BEGIN
     SELECT COUNT(*) INTO trigger_count
     FROM pg_trigger
     WHERE tgname IN (
+        'trg_update_warehouse_stock',
         'trg_approve_material_request',
         'trg_approve_prod_warehouse_transfer',
         'trg_approve_prod_qc_transfer',
@@ -417,6 +432,7 @@ BEGIN
         'trg_add_production_output'
     )
     AND tgrelid IN (
+        'warehouse_transactions'::regclass,
         'production_material_requests'::regclass,
         'production_to_warehouse_transfers'::regclass,
         'production_to_qc_transfers'::regclass,
@@ -426,13 +442,13 @@ BEGIN
         'production_outputs'::regclass
     );
 
-    IF trigger_count != 7 THEN
-        RAISE EXCEPTION '❌ HATA: Trigger sayısı yanlış! (Beklenen: 7, Bulunan: %)', trigger_count;
+    IF trigger_count != 8 THEN
+        RAISE EXCEPTION '❌ HATA: Trigger sayısı yanlış! (Beklenen: 8, Bulunan: %)', trigger_count;
     END IF;
 
     RAISE NOTICE '✅ 8/8 - Final doğrulama BAŞARILI';
     RAISE NOTICE '   • Constraint: production_inventory_unique_item ✓';
-    RAISE NOTICE '   • Trigger sayısı: 7 ✓';
+    RAISE NOTICE '   • Trigger sayısı: 8 ✓';
 END $$;
 
 -- =====================================================
@@ -447,7 +463,15 @@ BEGIN
     RAISE NOTICE '';
     RAISE NOTICE '✅ Tablolar: machine_inventory, production_to_machine_transfers, production_scrap_records';
     RAISE NOTICE '✅ Constraint''ler: Doğrulandı, UNIQUE(company_id, item_id, item_type)';
-    RAISE NOTICE '✅ Trigger''lar: 7 adet, aktif';
+    RAISE NOTICE '✅ Trigger''lar: 8 adet, aktif';
+    RAISE NOTICE '   0. Warehouse Transaction → Stok Güncelleme';
+    RAISE NOTICE '   1. Depo → Üretim';
+    RAISE NOTICE '   2. Üretim → Depo';
+    RAISE NOTICE '   3. Üretim → Kalite Kontrol';
+    RAISE NOTICE '   4. Kalite Kontrol → Depo/Üretim';
+    RAISE NOTICE '   5. Üretim → Tezgah';
+    RAISE NOTICE '   6. Fire Kayıt';
+    RAISE NOTICE '   7. Üretim Kaydı → Otomatik Azaltma';
     RAISE NOTICE '✅ RLS: Aktif';
     RAISE NOTICE '✅ ON CONFLICT: Hazır';
     RAISE NOTICE '';

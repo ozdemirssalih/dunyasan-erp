@@ -518,8 +518,8 @@ export default function WarehousePage() {
         .from('production_material_requests')
         .update({
           status: 'approved',
-          reviewed_by: currentUserId,
-          reviewed_at: new Date().toISOString(),
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString(),
         })
         .eq('id', requestId)
 
@@ -542,9 +542,9 @@ export default function WarehousePage() {
         .from('production_material_requests')
         .update({
           status: 'rejected',
-          reviewed_by: currentUserId,
-          reviewed_at: new Date().toISOString(),
-          review_notes: notes,
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString(),
+          notes: notes,
         })
         .eq('id', requestId)
 

@@ -348,7 +348,7 @@ END;
 $$;
 CREATE TRIGGER trg_transfer_prod_to_machine AFTER INSERT ON production_to_machine_transfers FOR EACH ROW EXECUTE FUNCTION transfer_production_to_machine();
 
--- 6. Fire Kayıt → Fire Ürününe Ekle
+-- 6. Fire Kayıt → Üretim Stoğuna Ekle
 CREATE OR REPLACE FUNCTION record_production_scrap()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
@@ -368,10 +368,12 @@ BEGIN
     -- Fire ürününü bul (FIRE-001)
     SELECT id INTO fire_item_id FROM warehouse_items WHERE code = 'FIRE-001' AND company_id = NEW.company_id LIMIT 1;
 
-    -- Fire ürünü varsa depoya ekle
+    -- Fire ürünü varsa ÜRETİM STOĞUNA ekle
     IF fire_item_id IS NOT NULL THEN
-        INSERT INTO warehouse_transactions (company_id, item_id, type, quantity, notes, reference_number, created_by)
-        VALUES (NEW.company_id, fire_item_id, 'entry', NEW.quantity, 'Fire - ' || NEW.scrap_reason || ' - Kaynak: ' || NEW.source_type, 'FIRE-' || NEW.id, NEW.recorded_by);
+        INSERT INTO production_inventory (company_id, item_id, current_stock, item_type, notes)
+        VALUES (NEW.company_id, fire_item_id, NEW.quantity, 'scrap', 'Fire - ' || NEW.scrap_reason || ' - Kaynak: ' || NEW.source_type)
+        ON CONFLICT (company_id, item_id, item_type)
+        DO UPDATE SET current_stock = production_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
     END IF;
 
     RETURN NEW;

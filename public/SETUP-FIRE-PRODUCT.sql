@@ -1,8 +1,9 @@
 -- =====================================================
 -- FIRE ÜRÜN SİSTEMİ
 -- =====================================================
--- Fire'ı normal bir ürün gibi ele alıp depoya ekler
--- Fire çıktığında warehouse_items'a otomatik giriş yapılır
+-- Fire'ı normal bir ürün gibi ele alıp üretim stoğuna ekler
+-- Fire çıktığında production_inventory'ye eklenir (scrap)
+-- Oradan depoya manuel transfer yapılır
 -- =====================================================
 
 DO $$
@@ -148,28 +149,28 @@ BEGIN
     AND company_id = NEW.company_id
     LIMIT 1;
 
-    -- Fire ürünü varsa depoya ekle
+    -- Fire ürünü varsa ÜRETİM STOĞUNA ekle
     IF fire_item_id IS NOT NULL THEN
-        -- Warehouse transaction olarak giriş kaydı oluştur
-        INSERT INTO warehouse_transactions (
+        -- Production inventory'ye scrap olarak ekle
+        INSERT INTO production_inventory (
             company_id,
             item_id,
-            type,
-            quantity,
-            notes,
-            reference_number,
-            created_by
+            current_stock,
+            item_type,
+            notes
         ) VALUES (
             NEW.company_id,
             fire_item_id,
-            'entry',
             NEW.quantity,
-            'Fire kaydı - Sebep: ' || NEW.scrap_reason || ' - Kaynak: ' || NEW.source_type,
-            'FIRE-' || NEW.id,
-            NEW.recorded_by
-        );
+            'scrap',
+            'Fire kaydı - Sebep: ' || NEW.scrap_reason || ' - Kaynak: ' || NEW.source_type
+        )
+        ON CONFLICT (company_id, item_id, item_type)
+        DO UPDATE SET
+            current_stock = production_inventory.current_stock + EXCLUDED.current_stock,
+            updated_at = NOW();
 
-        RAISE NOTICE '🔥 Fire depoya eklendi: % kg', NEW.quantity;
+        RAISE NOTICE '🔥 Fire üretim stoğuna eklendi: % kg', NEW.quantity;
     ELSE
         RAISE WARNING '⚠️  Fire ürünü bulunamadı! (FIRE-001)';
     END IF;
@@ -204,15 +205,15 @@ BEGIN
     RAISE NOTICE '   • Kaynak envanterden fire miktarı çıkar';
     RAISE NOTICE '   • (machine/production/warehouse)';
     RAISE NOTICE '';
-    RAISE NOTICE '2️⃣  Fire Otomatik Depoya Girer:';
-    RAISE NOTICE '   • warehouse_transactions''a entry kaydı';
+    RAISE NOTICE '2️⃣  Fire Otomatik Üretim Stoğuna Girer:';
+    RAISE NOTICE '   • production_inventory''ye scrap olarak eklenir';
     RAISE NOTICE '   • "FIRE-001" ürününe eklenir';
     RAISE NOTICE '';
-    RAISE NOTICE '3️⃣  Fire Normal Ürün Gibi:';
-    RAISE NOTICE '   • Depodan çıkış yapılabilir';
-    RAISE NOTICE '   • Sevkiyat edilebilir';
+    RAISE NOTICE '3️⃣  Fire Manuel Depoya Transfer Edilir:';
+    RAISE NOTICE '   • Üretimden depoya transfer butonu ile';
+    RAISE NOTICE '   • Depodan sevkiyat edilebilir';
     RAISE NOTICE '   • Satılabilir';
     RAISE NOTICE '';
-    RAISE NOTICE '🎯 Artık fire normal bir ürün!';
+    RAISE NOTICE '🎯 Fire üretim stoğunda bekleyecek, oradan depoya!';
     RAISE NOTICE '========================================';
 END $$;

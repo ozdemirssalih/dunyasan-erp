@@ -52,7 +52,7 @@ BEGIN
             NEW.quantity,
             'Üretime malzeme transferi - Talep #' || NEW.id,
             'PROD-REQ-' || NEW.id,
-            NEW.approved_by,
+            COALESCE(NEW.approved_by, NEW.requested_by),
             NOW()
         );
 
@@ -135,7 +135,7 @@ BEGIN
             NEW.quantity,
             'Üretimden gelen mamul - Transfer #' || NEW.id,
             'PROD-WH-' || NEW.id,
-            NEW.approved_by,
+            COALESCE(NEW.approved_by, NEW.requested_by),
             NOW()
         );
 
@@ -261,7 +261,7 @@ BEGIN
                 NEW.quantity,
                 'Kalite kontrolden geçti - Transfer #' || NEW.id,
                 'QC-WH-' || NEW.id,
-                NEW.approved_by,
+                COALESCE(NEW.approved_by, NEW.requested_by),
                 NOW()
             );
 

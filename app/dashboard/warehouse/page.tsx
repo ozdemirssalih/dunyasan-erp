@@ -406,7 +406,6 @@ export default function WarehousePage() {
         approved_by_user:profiles!qc_to_warehouse_transfers_approved_by_fkey(full_name)
       `)
       .eq('company_id', companyId)
-      .eq('quality_result', 'passed')
       .order('requested_at', { ascending: false })
 
     if (error) {
@@ -458,6 +457,55 @@ export default function WarehousePage() {
       loadData()
     } catch (error: any) {
       console.error('Error rejecting transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleApproveQCTransfer = async (transferId: string) => {
+    const transfer = qcTransfers.find((t: any) => t.id === transferId)
+    const destination = transfer?.quality_result === 'passed' ? 'ana depoya' : 'üretim deposuna geri'
+
+    if (!confirm(`Bu transferi onaylamak istediğinizden emin misiniz? KK deposu azalacak, ${destination} eklenecek.`)) return
+
+    try {
+      const { error } = await supabase
+        .from('qc_to_warehouse_transfers')
+        .update({
+          status: 'approved',
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+
+      if (error) throw error
+
+      alert(`✅ Transfer onaylandı! Ürün ${destination} eklendi.`)
+      loadData()
+    } catch (error: any) {
+      console.error('Error approving QC transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleRejectQCTransfer = async (transferId: string) => {
+    if (!confirm('Bu transferi reddetmek istediğinizden emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('qc_to_warehouse_transfers')
+        .update({
+          status: 'rejected',
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+
+      if (error) throw error
+
+      alert('Transfer reddedildi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error rejecting QC transfer:', error)
       alert('❌ Hata: ' + error.message)
     }
   }
@@ -736,7 +784,7 @@ export default function WarehousePage() {
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
               { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
-              { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'approved').length },
+              { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'pending').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1551,17 +1599,23 @@ export default function WarehousePage() {
         {activeTab === 'qc-transfers' && (
           <div className="space-y-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-green-900 mb-2">✅ Kalite Kontrolden Ana Depoya</h3>
+              <h3 className="font-bold text-green-900 mb-2">✅ Kalite Kontrolden Gelen Transferler</h3>
               <p className="text-sm text-green-700">
-                Kalite kontrolü geçen ürünler ana depoya otomatik olarak eklenmiştir. Bu liste bilgi amaçlıdır.
+                Kalite kontrolü geçen ürünlerin depoya transfer taleplerini onaylayın. Onayladığınızda KK deposu azalacak, ana depo stoğu artacak.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               {qcTransfers.map((transfer: any) => {
                 const statusColors: Record<string, string> = {
-                  approved: 'bg-green-100 text-green-700',
                   pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700',
+                }
+
+                const qualityColors: Record<string, string> = {
+                  passed: 'bg-green-100 text-green-700',
+                  failed: 'bg-red-100 text-red-700',
                 }
 
                 return (
@@ -1573,15 +1627,15 @@ export default function WarehousePage() {
                       </div>
                       <div className="flex gap-2">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
-                          {transfer.status === 'approved' ? 'DEPOYA EKLENDİ' : transfer.status.toUpperCase()}
+                          {transfer.status.toUpperCase()}
                         </span>
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                          ✅ KALİTE GEÇTĠ
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${qualityColors[transfer.quality_result]}`}>
+                          {transfer.quality_result === 'passed' ? 'GEÇTİ' : 'KALDI'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Miktar</span>
                         <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
@@ -1589,6 +1643,12 @@ export default function WarehousePage() {
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Test Eden</span>
                         <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      </div>
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Hedef</span>
+                        <span className="font-semibold text-gray-900">
+                          {transfer.quality_result === 'passed' ? '→ Ana Depo' : '→ Üretim Deposu (Geri Dönüş)'}
+                        </span>
                       </div>
                       <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Tarih</span>
@@ -1613,6 +1673,23 @@ export default function WarehousePage() {
                         </div>
                       )}
                     </div>
+
+                    {transfer.status === 'pending' && (
+                      <div className="flex gap-2 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleApproveQCTransfer(transfer.id)}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ✅ Onayla & {transfer.quality_result === 'passed' ? 'Depoya Ekle' : 'Üretime Gönder'}
+                        </button>
+                        <button
+                          onClick={() => handleRejectQCTransfer(transfer.id)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
+                        >
+                          ❌ Reddet
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -1620,7 +1697,7 @@ export default function WarehousePage() {
 
             {qcTransfers.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-gray-500">Henüz kalite kontrolden onaylanan ürün yok</p>
+                <p className="text-gray-500">Henüz kalite kontrolden transfer talebi yok</p>
               </div>
             )}
           </div>

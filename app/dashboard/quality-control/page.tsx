@@ -6,7 +6,7 @@ import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import { Package, Factory, ClipboardCheck } from 'lucide-react'
 
-type Tab = 'inventory' | 'incoming' | 'outgoing'
+type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history'
 
 export default function QualityControlPage() {
   const { canCreate } = usePermissions()
@@ -21,6 +21,7 @@ export default function QualityControlPage() {
   const [incomingTransfers, setIncomingTransfers] = useState<any[]>([])
   const [outgoingTransfers, setOutgoingTransfers] = useState<any[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
+  const [history, setHistory] = useState<any[]>([])
 
   // Stats states
   const [stats, setStats] = useState({
@@ -109,6 +110,7 @@ export default function QualityControlPage() {
         loadOutgoingTransfers(finalCompanyId),
         loadWarehouseItems(finalCompanyId),
         loadStats(finalCompanyId),
+        loadHistory(finalCompanyId),
       ])
 
     } catch (error) {
@@ -217,6 +219,43 @@ export default function QualityControlPage() {
     })
   }
 
+  const loadHistory = async (companyId: string) => {
+    // Hem gelen hem giden tüm işlemleri birleştir
+    const [incomingData, outgoingData] = await Promise.all([
+      supabase
+        .from('production_to_qc_transfers')
+        .select(`
+          *,
+          item:warehouse_items(code, name, unit),
+          requested_by:profiles!production_to_qc_transfers_requested_by_fkey(full_name),
+          reviewed_by_user:profiles!production_to_qc_transfers_reviewed_by_fkey(full_name)
+        `)
+        .eq('company_id', companyId)
+        .in('status', ['approved', 'rejected'])
+        .order('requested_at', { ascending: false }),
+
+      supabase
+        .from('qc_to_warehouse_transfers')
+        .select(`
+          *,
+          item:warehouse_items(code, name, unit),
+          requested_by:profiles!qc_to_warehouse_transfers_requested_by_fkey(full_name),
+          approved_by:profiles!qc_to_warehouse_transfers_approved_by_fkey(full_name)
+        `)
+        .eq('company_id', companyId)
+        .in('status', ['approved', 'rejected'])
+        .order('requested_at', { ascending: false })
+    ])
+
+    // İkisini birleştir ve tarihe göre sırala
+    const allHistory = [
+      ...(incomingData.data || []).map(item => ({ ...item, transfer_type: 'incoming' })),
+      ...(outgoingData.data || []).map(item => ({ ...item, transfer_type: 'outgoing' }))
+    ].sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime())
+
+    setHistory(allHistory)
+  }
+
   const handleApproveIncoming = async (transferId: string) => {
     if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Üretim deposu azalacak, kalite kontrol deposu artacak.')) return
 
@@ -277,15 +316,13 @@ export default function QualityControlPage() {
           quality_result: transferForm.quality_result,
           notes: transferForm.notes,
           requested_by: currentUserId,
-          status: 'approved',  // Direkt approved yap, trigger hemen çalışsın
-          approved_by: currentUserId,
-          approved_at: new Date().toISOString()
+          status: 'pending',  // Pending olarak kaydet, depo onaylasın
         })
 
       if (error) throw error
 
-      const resultText = transferForm.quality_result === 'passed' ? 'Ana depoya gönderildi' : 'Üretim deposuna geri gönderildi'
-      alert(`✅ Kalite test sonucu kaydedildi! ${resultText}.`)
+      const resultText = transferForm.quality_result === 'passed' ? 'Ana depoya transfer talebi' : 'Üretim deposuna geri gönderme talebi'
+      alert(`✅ Kalite test sonucu kaydedildi! ${resultText} oluşturuldu. Depo görevlisi onayını bekliyor.`)
       setShowTransferModal(false)
       resetTransferForm()
       loadData()
@@ -384,6 +421,7 @@ export default function QualityControlPage() {
               { id: 'inventory', label: 'KK Deposu', count: qcInventory.length },
               { id: 'incoming', label: 'Gelen Ürünler', count: incomingTransfers.filter((t: any) => t.status === 'pending').length },
               { id: 'outgoing', label: 'Test Sonuçları', count: outgoingTransfers.filter((t: any) => t.status === 'pending').length },
+              { id: 'history', label: 'Geçmiş', count: history.length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -615,6 +653,102 @@ export default function QualityControlPage() {
             {outgoingTransfers.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz test sonucu yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* HISTORY TAB */}
+        {activeTab === 'history' && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-gray-900 mb-2">📋 Tüm Kalite Kontrol İşlemleri</h3>
+              <p className="text-sm text-gray-700">
+                Onaylanan ve reddedilen tüm kalite kontrol transferlerinin geçmişi.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {history.map((item: any) => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700'
+                }
+
+                const qualityColors: Record<string, string> = {
+                  passed: 'bg-green-100 text-green-700',
+                  failed: 'bg-red-100 text-red-700'
+                }
+
+                const isIncoming = item.transfer_type === 'incoming'
+                const isOutgoing = item.transfer_type === 'outgoing'
+
+                return (
+                  <div key={item.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {isIncoming && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">← Üretimden Gelen</span>}
+                          {isOutgoing && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">→ KK'dan Giden</span>}
+                        </div>
+                        <h4 className="font-bold text-gray-800">{item.item?.name || 'Bilinmiyor'}</h4>
+                        <p className="text-sm text-gray-500">{item.item?.code || '-'}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {isOutgoing && item.quality_result && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${qualityColors[item.quality_result]}`}>
+                            {item.quality_result === 'passed' ? 'GEÇTİ' : 'KALDI'}
+                          </span>
+                        )}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[item.status]}`}>
+                          {item.status === 'approved' ? 'ONAYLANDI' : 'REDDEDİLDİ'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">{item.quantity} {item.item?.unit || ''}</span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Talep Eden</span>
+                        <span className="text-gray-900">{item.requested_by?.full_name || 'Bilinmiyor'}</span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">{new Date(item.requested_at).toLocaleString('tr-TR')}</span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">{isIncoming ? 'İnceleyen' : 'Onaylayan'}</span>
+                        <span className="text-gray-900">
+                          {item.reviewed_by_user?.full_name || item.approved_by?.full_name || '-'}
+                        </span>
+                      </div>
+                      {isOutgoing && (
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Hedef</span>
+                          <span className="font-semibold text-gray-900">
+                            {item.quality_result === 'passed' ? '→ Ana Depo' : '→ Üretim (Geri Dönüş)'}
+                          </span>
+                        </div>
+                      )}
+                      {item.notes && (
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{item.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {history.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz geçmiş yok</p>
               </div>
             )}
           </div>

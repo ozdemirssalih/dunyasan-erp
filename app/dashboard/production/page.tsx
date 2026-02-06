@@ -6,7 +6,7 @@ import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import { Package, FlaskConical, Factory, ClipboardList, TestTube2, Send } from 'lucide-react'
 
-type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers' | 'qc-transfers'
+type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers' | 'qc-transfers' | 'history'
 
 interface ProductionInventoryItem {
   id: string
@@ -116,6 +116,7 @@ export default function ProductionPage() {
   const [qcTransfers, setQCTransfers] = useState<QCTransfer[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [projectParts, setProjectParts] = useState<any[]>([])
+  const [history, setHistory] = useState<any[]>([])
 
   // Stats states
   const [stats, setStats] = useState({
@@ -276,6 +277,7 @@ export default function ProductionPage() {
         loadQCTransfers(finalCompanyId),
         loadProjects(finalCompanyId),
         loadStats(finalCompanyId),
+        loadHistory(finalCompanyId),
       ])
 
     } catch (error) {
@@ -538,6 +540,76 @@ export default function ProductionPage() {
       todayProduction,
       recentProjects
     })
+  }
+
+  const loadHistory = async (companyId: string) => {
+    // Tüm işlemleri birleştir: malzeme talepleri, depo transferleri, KK transferleri, üretim çıktıları
+    const [requestsData, warehouseData, qcData, outputsData] = await Promise.all([
+      // Malzeme talepleri (onaylanan/reddedilen)
+      supabase
+        .from('production_material_requests')
+        .select(`
+          *,
+          item:warehouse_items(code, name, unit),
+          requested_by:profiles!production_material_requests_requested_by_fkey(full_name),
+          approved_by:profiles!production_material_requests_approved_by_fkey(full_name)
+        `)
+        .eq('company_id', companyId)
+        .in('status', ['approved', 'rejected'])
+        .order('requested_at', { ascending: false }),
+
+      // Depoya transferler (onaylanan/reddedilen)
+      supabase
+        .from('production_to_warehouse_transfers')
+        .select(`
+          *,
+          item:warehouse_items(code, name, unit),
+          requested_by:profiles!production_to_warehouse_transfers_requested_by_fkey(full_name),
+          approved_by:profiles!production_to_warehouse_transfers_approved_by_fkey(full_name)
+        `)
+        .eq('company_id', companyId)
+        .in('status', ['approved', 'rejected'])
+        .order('requested_at', { ascending: false }),
+
+      // KK transferleri
+      supabase
+        .from('production_to_qc_transfers')
+        .select(`
+          *,
+          item:warehouse_items(code, name, unit),
+          requested_by:profiles!production_to_qc_transfers_requested_by_fkey(full_name),
+          reviewed_by_user:profiles!production_to_qc_transfers_reviewed_by_fkey(full_name)
+        `)
+        .eq('company_id', companyId)
+        .in('status', ['approved', 'rejected'])
+        .order('requested_at', { ascending: false }),
+
+      // Üretim çıktıları
+      supabase
+        .from('production_outputs')
+        .select(`
+          *,
+          machine:machines(code, name),
+          output_item:warehouse_items(code, name, unit),
+          operator:profiles(full_name)
+        `)
+        .eq('company_id', companyId)
+        .order('production_date', { ascending: false })
+    ])
+
+    // Hepsini birleştir ve tarihe göre sırala
+    const allHistory = [
+      ...(requestsData.data || []).map(item => ({ ...item, history_type: 'material_request' })),
+      ...(warehouseData.data || []).map(item => ({ ...item, history_type: 'warehouse_transfer' })),
+      ...(qcData.data || []).map(item => ({ ...item, history_type: 'qc_transfer' })),
+      ...(outputsData.data || []).map(item => ({ ...item, history_type: 'production_output' }))
+    ].sort((a, b) => {
+      const dateA = new Date(a.requested_at || a.production_date).getTime()
+      const dateB = new Date(b.requested_at || b.production_date).getTime()
+      return dateB - dateA
+    })
+
+    setHistory(allHistory)
   }
 
   const loadWarehouseTransfers = async (companyId: string) => {
@@ -1183,6 +1255,21 @@ export default function ProductionPage() {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>Geçmiş</span>
+              <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                {history.length}
+              </span>
+            </button>
           </nav>
         </div>
 
@@ -1734,6 +1821,132 @@ export default function ProductionPage() {
             {warehouseTransfers.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz transfer talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* HISTORY TAB */}
+        {activeTab === 'history' && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-gray-900 mb-2">📋 Tüm Üretim İşlemleri</h3>
+              <p className="text-sm text-gray-700">
+                Malzeme talepleri, transferler, üretim çıktıları - tüm geçmiş kayıtlar.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {history.map((item: any) => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-100 text-yellow-700',
+                  approved: 'bg-green-100 text-green-700',
+                  rejected: 'bg-red-100 text-red-700'
+                }
+
+                const historyTypeLabels: Record<string, { label: string; color: string }> = {
+                  material_request: { label: 'Malzeme Talebi', color: 'bg-purple-100 text-purple-700' },
+                  warehouse_transfer: { label: 'Depoya Transfer', color: 'bg-blue-100 text-blue-700' },
+                  qc_transfer: { label: 'KK\'ya Transfer', color: 'bg-orange-100 text-orange-700' },
+                  production_output: { label: 'Üretim Çıktısı', color: 'bg-green-100 text-green-700' }
+                }
+
+                const typeInfo = historyTypeLabels[item.history_type] || { label: 'Bilinmiyor', color: 'bg-gray-100 text-gray-700' }
+
+                return (
+                  <div key={item.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-2 py-1 rounded ${typeInfo.color}`}>
+                            {typeInfo.label}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-gray-800">
+                          {item.item?.name || item.output_item?.name || 'Bilinmiyor'}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {item.item?.code || item.output_item?.code || '-'}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {item.status && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[item.status]}`}>
+                            {item.status === 'approved' ? 'ONAYLANDI' : item.status === 'rejected' ? 'REDDEDİLDİ' : 'BEKLEMEDE'}
+                          </span>
+                        )}
+                        {item.quality_status && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            item.quality_status === 'passed' ? 'bg-green-100 text-green-700' :
+                            item.quality_status === 'failed' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {item.quality_status === 'passed' ? 'GEÇTİ' : item.quality_status === 'failed' ? 'KALDI' : 'BEKLEMEDE'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                        <span className="font-semibold text-gray-900">
+                          {item.quantity} {item.item?.unit || item.output_item?.unit || ''}
+                        </span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">
+                          {item.history_type === 'production_output' ? 'Operatör' : 'Talep Eden'}
+                        </span>
+                        <span className="text-gray-900">
+                          {item.requested_by?.full_name || item.operator?.full_name || 'Bilinmiyor'}
+                        </span>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                        <span className="text-gray-900">
+                          {new Date(item.requested_at || item.production_date).toLocaleString('tr-TR')}
+                        </span>
+                      </div>
+                      {item.history_type === 'production_output' && (
+                        <>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Tezgah</span>
+                            <span className="text-gray-900">
+                              {item.machine?.name || 'Bilinmiyor'}
+                            </span>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Vardiya</span>
+                            <span className="text-gray-900">{item.shift || '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {(item.approved_by || item.reviewed_by_user) && (
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">
+                            {item.history_type === 'qc_transfer' ? 'İnceleyen' : 'Onaylayan'}
+                          </span>
+                          <span className="text-gray-900">
+                            {item.approved_by?.full_name || item.reviewed_by_user?.full_name || '-'}
+                          </span>
+                        </div>
+                      )}
+                      {item.notes && (
+                        <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                          <span className="text-gray-500 text-xs block mb-1">Not</span>
+                          <p className="text-gray-900">{item.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {history.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz geçmiş yok</p>
               </div>
             )}
           </div>

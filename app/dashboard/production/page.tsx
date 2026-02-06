@@ -124,6 +124,7 @@ export default function ProductionPage() {
     finishedProducts: 0,
     pendingQC: 0,
     todayProduction: 0,
+    calculatedScrap: 0,
     recentProjects: [] as string[]
   })
 
@@ -533,13 +534,51 @@ export default function ProductionPage() {
     const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
     const recentProjects = Array.from(new Set(projectNames || []))
 
-    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, recentProjects })
+    // HESAPLANAN FİRE: Tezgaha verilen - Üretimde kullanılan
+    // 1. Tezgaha verilen toplam hammadde
+    const { data: givenToMachines } = await supabase
+      .from('production_to_machine_transfers')
+      .select('quantity')
+      .eq('company_id', companyId)
+
+    const totalGivenToMachines = givenToMachines?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // 2. Üretimde kullanılan (production_outputs * material_assignments)
+    const { data: productionOutputsAll } = await supabase
+      .from('production_outputs')
+      .select(`
+        id,
+        quantity,
+        machine_id,
+        production_date
+      `)
+      .eq('company_id', companyId)
+
+    let totalUsedInProduction = 0
+    for (const output of (productionOutputsAll || [])) {
+      // Bu üretim için atanan malzemeleri bul
+      const { data: assignments } = await supabase
+        .from('production_material_assignments')
+        .select('quantity')
+        .eq('company_id', companyId)
+        .eq('machine_id', output.machine_id)
+        .eq('assigned_date', output.production_date.split('T')[0])
+
+      const assignedPerUnit = assignments?.reduce((sum, a) => sum + a.quantity, 0) || 0
+      totalUsedInProduction += assignedPerUnit * output.quantity
+    }
+
+    // Fire = Verilen - Kullanılan
+    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction)
+
+    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, calculatedScrap, recentProjects })
 
     setStats({
       rawMaterialsReady,
       finishedProducts,
       pendingQC: pendingQC || 0,
       todayProduction,
+      calculatedScrap,
       recentProjects
     })
   }
@@ -1100,7 +1139,7 @@ export default function ProductionPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* İşlenmeye Hazır Hammadde */}
           <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between mb-2">
@@ -1159,6 +1198,20 @@ export default function ProductionPage() {
             </div>
             <h3 className="text-sm font-medium text-gray-900">Bugünkü Üretim</h3>
             <p className="text-xs text-gray-600 mt-1">Bugün üretilen toplam miktar</p>
+          </div>
+
+          {/* Hesaplanan Fire */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-3 bg-red-100 rounded-lg">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <span className="text-3xl font-bold text-gray-900">{stats.calculatedScrap.toFixed(2)}</span>
+            </div>
+            <h3 className="text-sm font-medium text-gray-900">Hesaplanan Fire</h3>
+            <p className="text-xs text-gray-600 mt-1">Verilen - Kullanılan fark</p>
           </div>
         </div>
 

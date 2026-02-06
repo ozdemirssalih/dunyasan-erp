@@ -277,12 +277,15 @@ export default function QualityControlPage() {
           quality_result: transferForm.quality_result,
           notes: transferForm.notes,
           requested_by: currentUserId,
+          status: 'approved',  // Direkt approved yap, trigger hemen çalışsın
+          approved_by: currentUserId,
+          approved_at: new Date().toISOString()
         })
 
       if (error) throw error
 
-      const resultText = transferForm.quality_result === 'passed' ? 'Ana depoya' : 'Üretim deposuna geri'
-      alert(`✅ Kalite test sonucu kaydedildi! ${resultText} transfer talebi gönderildi.`)
+      const resultText = transferForm.quality_result === 'passed' ? 'Ana depoya gönderildi' : 'Üretim deposuna geri gönderildi'
+      alert(`✅ Kalite test sonucu kaydedildi! ${resultText}.`)
       setShowTransferModal(false)
       resetTransferForm()
       loadData()

@@ -127,13 +127,16 @@ export default function ProjectDetailPage() {
       setProject(projectData)
 
       // Müşteriler
-      const { data: customersData } = await supabase
+      console.log('Loading customers...')
+      const { data: customersData, error: customersError } = await supabase
         .from('project_customers')
         .select(`
           customer:customers(id, customer_name, customer_code, contact_person, phone)
         `)
         .eq('project_id', projectId)
 
+      if (customersError) console.error('Customers error:', customersError)
+      console.log('Customers loaded:', customersData)
       setCustomers(customersData?.map(pc => pc.customer as any) || [])
 
       // Tezgahlar
@@ -229,7 +232,8 @@ export default function ProjectDetailPage() {
       setEquipment(equipmentData?.map(pe => pe.equipment as any) || [])
 
       // Üretim kayıtları
-      const { data: productionsData } = await supabase
+      console.log('Loading productions...')
+      const { data: productionsData, error: productionsError } = await supabase
         .from('production_outputs')
         .select(`
           id,
@@ -241,6 +245,8 @@ export default function ProjectDetailPage() {
         `)
         .eq('project_id', projectId)
         .order('production_date', { ascending: false })
+
+      if (productionsError) console.error('Productions error:', productionsError)
 
       setProductions(productionsData?.map(p => ({
         id: p.id,

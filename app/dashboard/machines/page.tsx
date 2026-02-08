@@ -19,6 +19,9 @@ interface Machine {
   production_count?: number
   material_assignments_count?: number
   last_production_date?: string
+  calculated_efficiency?: number
+  total_given?: number
+  total_produced?: number
 }
 
 export default function MachinesPage() {
@@ -152,11 +155,34 @@ export default function MachinesPage() {
             .limit(1)
             .single()
 
+          // VERİMLİLİK HESAPLAMA
+          // 1. Tezgaha verilen toplam hammadde
+          const { data: givenMaterials } = await supabase
+            .from('production_to_machine_transfers')
+            .select('quantity')
+            .eq('machine_id', machine.id)
+
+          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+          // 2. Tezgahın ürettiği toplam mamül
+          const { data: producedItems } = await supabase
+            .from('production_outputs')
+            .select('quantity')
+            .eq('machine_id', machine.id)
+
+          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+          // 3. Verimlilik = (Üretilen / Verilen) × 100
+          const calculatedEfficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
+
           return {
             ...machine,
             production_count: productionCount || 0,
             material_assignments_count: assignmentsCount || 0,
-            last_production_date: lastProduction?.production_date || null
+            last_production_date: lastProduction?.production_date || null,
+            total_given: totalGiven,
+            total_produced: totalProduced,
+            calculated_efficiency: calculatedEfficiency
           }
         })
       )
@@ -399,13 +425,17 @@ export default function MachinesPage() {
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-gray-700">Verimlilik</span>
-                  <span className="text-sm font-semibold text-gray-800">%{machine.efficiency_rate}</span>
+                  <span className="text-sm font-semibold text-gray-800">%{machine.calculated_efficiency?.toFixed(1) || '0.0'}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
-                    className={`h-3 rounded-full ${getEfficiencyColor(machine.efficiency_rate)}`}
-                    style={{ width: `${machine.efficiency_rate}%` }}
+                    className={`h-3 rounded-full ${getEfficiencyColor(machine.calculated_efficiency || 0)}`}
+                    style={{ width: `${Math.min(machine.calculated_efficiency || 0, 100)}%` }}
                   ></div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-600 mt-1">
+                  <span>Verilen: {machine.total_given?.toFixed(2) || '0'}</span>
+                  <span>Üretilen: {machine.total_produced?.toFixed(2) || '0'}</span>
                 </div>
               </div>
 

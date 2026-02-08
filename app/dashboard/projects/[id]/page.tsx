@@ -39,6 +39,9 @@ interface Machine {
   machine_name: string
   machine_code: string
   status: string
+  totalGiven?: number
+  totalProduced?: number
+  efficiency?: number
 }
 
 interface Material {

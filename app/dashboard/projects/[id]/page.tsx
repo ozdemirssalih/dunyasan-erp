@@ -27,6 +27,7 @@ export default function ProjectDetailPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
 
   useEffect(() => {
+    console.log('🔍 PROJECT DETAIL PAGE LOADED - Project ID:', projectId)
     loadProjectData()
   }, [projectId])
 

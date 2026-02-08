@@ -1359,13 +1359,13 @@ export default function ProjectsPage() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={() => router.push(`/dashboard/projects/${project.id}`)}
+              <Link
+                href={`/dashboard/projects/${project.id}`}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
                 <Eye className="w-4 h-4" />
                 Detay
-              </button>
+              </Link>
               <button
                 onClick={() => {
                   setSelectedProject(project)

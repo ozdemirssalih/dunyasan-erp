@@ -2169,7 +2169,20 @@ export default function ProductionPage() {
                     </label>
                     <select
                       value={assignmentForm.machine_id}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, machine_id: e.target.value })}
+                      onChange={(e) => {
+                        const selectedMachine = machines.find(m => m.id === e.target.value)
+                        setAssignmentForm({
+                          ...assignmentForm,
+                          machine_id: e.target.value,
+                          project_id: selectedMachine?.project_id || '',
+                          project_part_id: ''
+                        })
+                        if (selectedMachine?.project_id) {
+                          loadProjectParts(selectedMachine.project_id)
+                        } else {
+                          setProjectParts([])
+                        }
+                      }}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
@@ -2177,6 +2190,7 @@ export default function ProductionPage() {
                       {machines.map(machine => (
                         <option key={machine.id} value={machine.id}>
                           {machine.machine_code} - {machine.machine_name}
+                          {machine.project_id && ' (Projeye atanmış)'}
                         </option>
                       ))}
                     </select>
@@ -2233,7 +2247,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Proje (Opsiyonel)
+                      Proje {assignmentForm.machine_id && assignmentForm.project_id && '(Tezgahtan otomatik)'}
                     </label>
                     <select
                       value={assignmentForm.project_id}
@@ -2245,7 +2259,8 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                      disabled={assignmentForm.machine_id && assignmentForm.project_id}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Proje Seçilmedi</option>
                       {projects.map(project => (
@@ -2323,7 +2338,20 @@ export default function ProductionPage() {
                     </label>
                     <select
                       value={outputForm.machine_id}
-                      onChange={(e) => setOutputForm({ ...outputForm, machine_id: e.target.value })}
+                      onChange={(e) => {
+                        const selectedMachine = machines.find(m => m.id === e.target.value)
+                        setOutputForm({
+                          ...outputForm,
+                          machine_id: e.target.value,
+                          project_id: selectedMachine?.project_id || '',
+                          project_part_id: ''
+                        })
+                        if (selectedMachine?.project_id) {
+                          loadProjectParts(selectedMachine.project_id)
+                        } else {
+                          setProjectParts([])
+                        }
+                      }}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
@@ -2331,6 +2359,7 @@ export default function ProductionPage() {
                       {machines.map(machine => (
                         <option key={machine.id} value={machine.id}>
                           {machine.machine_code} - {machine.machine_name}
+                          {machine.project_id && ' (Projeye atanmış)'}
                         </option>
                       ))}
                     </select>
@@ -2387,7 +2416,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Proje (Opsiyonel)
+                      Proje {outputForm.machine_id && outputForm.project_id && '(Tezgahtan otomatik)'}
                     </label>
                     <select
                       value={outputForm.project_id}
@@ -2399,7 +2428,8 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                      disabled={outputForm.machine_id && outputForm.project_id}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Proje Seçilmedi</option>
                       {projects.map(project => (

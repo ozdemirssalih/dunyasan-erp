@@ -470,8 +470,8 @@ export default function ProjectDetailPage() {
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-gray-600 font-medium">Verimlilik</span>
                       <span className={`font-bold ${
-                        machine.efficiency >= 80 ? 'text-green-600' :
-                        machine.efficiency >= 60 ? 'text-yellow-600' :
+                        (machine.efficiency ?? 0) >= 80 ? 'text-green-600' :
+                        (machine.efficiency ?? 0) >= 60 ? 'text-yellow-600' :
                         'text-red-600'
                       }`}>
                         %{machine.efficiency?.toFixed(1) || '0.0'}
@@ -480,8 +480,8 @@ export default function ProjectDetailPage() {
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-2 rounded-full transition-all ${
-                          machine.efficiency >= 80 ? 'bg-green-500' :
-                          machine.efficiency >= 60 ? 'bg-yellow-500' :
+                          (machine.efficiency ?? 0) >= 80 ? 'bg-green-500' :
+                          (machine.efficiency ?? 0) >= 60 ? 'bg-yellow-500' :
                           'bg-red-500'
                         }`}
                         style={{ width: `${Math.min(machine.efficiency || 0, 100)}%` }}

@@ -2459,9 +2459,20 @@ export default function ProjectsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Müşteriler */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-bold text-lg">Müşteriler</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Users className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-bold text-lg">Müşteriler</h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        alert('Müşteri ekleme özelliği yakında eklenecek!')
+                      }}
+                      className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      title="Müşteri Ekle"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                   {projectDetailData.customers.length > 0 ? (
                     <div className="space-y-2">
@@ -2482,9 +2493,20 @@ export default function ProjectsPage() {
 
                 {/* Tezgahlar */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Factory className="w-5 h-5 text-green-600" />
-                    <h3 className="font-bold text-lg">Tezgahlar</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Factory className="w-5 h-5 text-green-600" />
+                      <h3 className="font-bold text-lg">Tezgahlar</h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        alert('Tezgah ekleme özelliği yakında eklenecek!')
+                      }}
+                      className="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      title="Tezgah Ekle"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                   {projectDetailData.machines.length > 0 ? (
                     <div className="space-y-2">
@@ -2509,9 +2531,20 @@ export default function ProjectsPage() {
 
                 {/* Hammaddeler */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Package className="w-5 h-5 text-yellow-600" />
-                    <h3 className="font-bold text-lg">Hammadde İhtiyacı</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Package className="w-5 h-5 text-yellow-600" />
+                      <h3 className="font-bold text-lg">Hammadde İhtiyacı</h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        alert('Hammadde ekleme özelliği yakında eklenecek!')
+                      }}
+                      className="p-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+                      title="Hammadde Ekle"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                   {projectDetailData.materials.length > 0 ? (
                     <div className="space-y-2">
@@ -2534,9 +2567,20 @@ export default function ProjectsPage() {
 
                 {/* Mamüller */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Package className="w-5 h-5 text-purple-600" />
-                    <h3 className="font-bold text-lg">Mamül Hedefleri</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Package className="w-5 h-5 text-purple-600" />
+                      <h3 className="font-bold text-lg">Mamül Hedefleri</h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        alert('Mamül hedefi ekleme özelliği yakında eklenecek!')
+                      }}
+                      className="p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                      title="Mamül Ekle"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                   {projectDetailData.products.length > 0 ? (
                     <div className="space-y-3">
@@ -2572,9 +2616,20 @@ export default function ProjectsPage() {
 
                 {/* Ekipmanlar */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6 md:col-span-2">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Wrench className="w-5 h-5 text-gray-600" />
-                    <h3 className="font-bold text-lg">Kullanılan Ekipmanlar</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Wrench className="w-5 h-5 text-gray-600" />
+                      <h3 className="font-bold text-lg">Kullanılan Ekipmanlar</h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        alert('Ekipman ekleme özelliği yakında eklenecek!')
+                      }}
+                      className="p-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                      title="Ekipman Ekle"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                   {projectDetailData.equipment.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

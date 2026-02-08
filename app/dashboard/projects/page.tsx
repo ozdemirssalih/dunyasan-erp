@@ -112,6 +112,30 @@ export default function ProjectsPage() {
   const [showProjectDetailModal, setShowProjectDetailModal] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
+  // Project Detail Add Modals
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false)
+  const [showAddMachineModal, setShowAddMachineModal] = useState(false)
+  const [showAddMaterialModal, setShowAddMaterialModal] = useState(false)
+  const [showAddProductModal, setShowAddProductModal] = useState(false)
+  const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false)
+
+  // Selection Lists
+  const [availableCustomers, setAvailableCustomers] = useState<any[]>([])
+  const [availableMachines, setAvailableMachines] = useState<any[]>([])
+  const [availableWarehouseItems, setAvailableWarehouseItems] = useState<any[]>([])
+  const [availableEquipment, setAvailableEquipment] = useState<any[]>([])
+
+  // Add Forms
+  const [addForm, setAddForm] = useState({
+    customer_id: '',
+    machine_id: '',
+    material_id: '',
+    material_quantity: '',
+    product_id: '',
+    product_quantity: '',
+    equipment_id: ''
+  })
+
   // Project Detail Data
   const [projectDetailData, setProjectDetailData] = useState<any>({
     customers: [],
@@ -419,6 +443,134 @@ export default function ProjectsPage() {
       })
     } catch (error) {
       console.error('Error loading project details:', error)
+    }
+  }
+
+  const loadAvailableData = async () => {
+    try {
+      // Müşteriler
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+      setAvailableCustomers(customersData || [])
+
+      // Tezgahlar
+      const { data: machinesData } = await supabase
+        .from('machines')
+        .select('*')
+        .eq('company_id', companyId)
+      setAvailableMachines(machinesData || [])
+
+      // Depo stok kalemleri
+      const { data: warehouseData } = await supabase
+        .from('warehouse_items')
+        .select('*')
+        .eq('company_id', companyId)
+      setAvailableWarehouseItems(warehouseData || [])
+
+      // Ekipmanlar (takımhane - tools tablosu)
+      const { data: equipmentData } = await supabase
+        .from('equipment')
+        .select('*')
+        .eq('company_id', companyId)
+      setAvailableEquipment(equipmentData || [])
+    } catch (error) {
+      console.error('Error loading available data:', error)
+    }
+  }
+
+  const handleAddCustomer = async () => {
+    if (!selectedProject || !addForm.customer_id) return
+    try {
+      const { error } = await supabase
+        .from('project_customers')
+        .insert({
+          project_id: selectedProject.id,
+          customer_id: addForm.customer_id
+        })
+      if (error) throw error
+      await loadProjectDetail(selectedProject.id)
+      setShowAddCustomerModal(false)
+      setAddForm({ ...addForm, customer_id: '' })
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    }
+  }
+
+  const handleAddMachine = async () => {
+    if (!selectedProject || !addForm.machine_id) return
+    try {
+      const { error } = await supabase
+        .from('project_machines')
+        .insert({
+          project_id: selectedProject.id,
+          machine_id: addForm.machine_id
+        })
+      if (error) throw error
+      await loadProjectDetail(selectedProject.id)
+      setShowAddMachineModal(false)
+      setAddForm({ ...addForm, machine_id: '' })
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    }
+  }
+
+  const handleAddMaterial = async () => {
+    if (!selectedProject || !addForm.material_id || !addForm.material_quantity) return
+    try {
+      const { error } = await supabase
+        .from('project_required_materials')
+        .insert({
+          project_id: selectedProject.id,
+          material_id: addForm.material_id,
+          quantity_needed: parseFloat(addForm.material_quantity)
+        })
+      if (error) throw error
+      await loadProjectDetail(selectedProject.id)
+      setShowAddMaterialModal(false)
+      setAddForm({ ...addForm, material_id: '', material_quantity: '' })
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    }
+  }
+
+  const handleAddProduct = async () => {
+    if (!selectedProject || !addForm.product_id || !addForm.product_quantity) return
+    try {
+      const { error } = await supabase
+        .from('project_target_products')
+        .insert({
+          project_id: selectedProject.id,
+          product_id: addForm.product_id,
+          quantity_target: parseFloat(addForm.product_quantity),
+          quantity_produced: 0
+        })
+      if (error) throw error
+      await loadProjectDetail(selectedProject.id)
+      setShowAddProductModal(false)
+      setAddForm({ ...addForm, product_id: '', product_quantity: '' })
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    }
+  }
+
+  const handleAddEquipment = async () => {
+    if (!selectedProject || !addForm.equipment_id) return
+    try {
+      const { error } = await supabase
+        .from('project_equipment')
+        .insert({
+          project_id: selectedProject.id,
+          equipment_id: addForm.equipment_id
+        })
+      if (error) throw error
+      await loadProjectDetail(selectedProject.id)
+      setShowAddEquipmentModal(false)
+      setAddForm({ ...addForm, equipment_id: '' })
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
     }
   }
 
@@ -2465,8 +2617,9 @@ export default function ProjectsPage() {
                       <h3 className="font-bold text-lg">Müşteriler</h3>
                     </div>
                     <button
-                      onClick={() => {
-                        alert('Müşteri ekleme özelliği yakında eklenecek!')
+                      onClick={async () => {
+                        await loadAvailableData()
+                        setShowAddCustomerModal(true)
                       }}
                       className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       title="Müşteri Ekle"
@@ -2499,8 +2652,9 @@ export default function ProjectsPage() {
                       <h3 className="font-bold text-lg">Tezgahlar</h3>
                     </div>
                     <button
-                      onClick={() => {
-                        alert('Tezgah ekleme özelliği yakında eklenecek!')
+                      onClick={async () => {
+                        await loadAvailableData()
+                        setShowAddMachineModal(true)
                       }}
                       className="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
                       title="Tezgah Ekle"
@@ -2537,8 +2691,9 @@ export default function ProjectsPage() {
                       <h3 className="font-bold text-lg">Hammadde İhtiyacı</h3>
                     </div>
                     <button
-                      onClick={() => {
-                        alert('Hammadde ekleme özelliği yakında eklenecek!')
+                      onClick={async () => {
+                        await loadAvailableData()
+                        setShowAddMaterialModal(true)
                       }}
                       className="p-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
                       title="Hammadde Ekle"
@@ -2573,8 +2728,9 @@ export default function ProjectsPage() {
                       <h3 className="font-bold text-lg">Mamül Hedefleri</h3>
                     </div>
                     <button
-                      onClick={() => {
-                        alert('Mamül hedefi ekleme özelliği yakında eklenecek!')
+                      onClick={async () => {
+                        await loadAvailableData()
+                        setShowAddProductModal(true)
                       }}
                       className="p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                       title="Mamül Ekle"
@@ -2622,8 +2778,9 @@ export default function ProjectsPage() {
                       <h3 className="font-bold text-lg">Kullanılan Ekipmanlar</h3>
                     </div>
                     <button
-                      onClick={() => {
-                        alert('Ekipman ekleme özelliği yakında eklenecek!')
+                      onClick={async () => {
+                        await loadAvailableData()
+                        setShowAddEquipmentModal(true)
                       }}
                       className="p-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
                       title="Ekipman Ekle"
@@ -2655,6 +2812,137 @@ export default function ProjectsPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddCustomerModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Müşteri Ekle</h3>
+            <select
+              value={addForm.customer_id}
+              onChange={(e) => setAddForm({ ...addForm, customer_id: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            >
+              <option value="">Müşteri seçin...</option>
+              {availableCustomers.map(c => (
+                <option key={c.id} value={c.id}>{c.customer_name} - {c.customer_code}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddCustomerModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddCustomer} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Machine Modal */}
+      {showAddMachineModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddMachineModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Tezgah Ekle</h3>
+            <select
+              value={addForm.machine_id}
+              onChange={(e) => setAddForm({ ...addForm, machine_id: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            >
+              <option value="">Tezgah seçin...</option>
+              {availableMachines.map(m => (
+                <option key={m.id} value={m.id}>{m.machine_name} - {m.machine_code}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddMachineModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddMachine} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Material Modal */}
+      {showAddMaterialModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddMaterialModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Hammadde Ekle</h3>
+            <select
+              value={addForm.material_id}
+              onChange={(e) => setAddForm({ ...addForm, material_id: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            >
+              <option value="">Hammadde seçin...</option>
+              {availableWarehouseItems.filter(i => i.type === 'raw_material').map(i => (
+                <option key={i.id} value={i.id}>{i.name} - {i.code}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.001"
+              placeholder="Miktar"
+              value={addForm.material_quantity}
+              onChange={(e) => setAddForm({ ...addForm, material_quantity: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddMaterialModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddMaterial} className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Product Modal */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddProductModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Mamül Hedefi Ekle</h3>
+            <select
+              value={addForm.product_id}
+              onChange={(e) => setAddForm({ ...addForm, product_id: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            >
+              <option value="">Mamül seçin...</option>
+              {availableWarehouseItems.filter(i => i.type === 'finished_good').map(i => (
+                <option key={i.id} value={i.id}>{i.name} - {i.code}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.001"
+              placeholder="Hedef Miktar"
+              value={addForm.product_quantity}
+              onChange={(e) => setAddForm({ ...addForm, product_quantity: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddProductModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddProduct} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Equipment Modal */}
+      {showAddEquipmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddEquipmentModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Ekipman Ekle</h3>
+            <select
+              value={addForm.equipment_id}
+              onChange={(e) => setAddForm({ ...addForm, equipment_id: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            >
+              <option value="">Ekipman seçin...</option>
+              {availableEquipment.map(e => (
+                <option key={e.id} value={e.id}>{e.equipment_name} - {e.equipment_code}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddEquipmentModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddEquipment} className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">Ekle</button>
             </div>
           </div>
         </div>

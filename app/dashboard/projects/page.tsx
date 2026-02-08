@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { FolderKanban, Plus, Calendar, Building2, Clock, AlertCircle, CheckCircle2, Pause, X, Edit, Trash2, Eye, Package, Wrench, Scissors, Factory } from 'lucide-react'
 
@@ -92,6 +93,7 @@ interface Machine {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [customers, setCustomers] = useState<CustomerCompany[]>([])
   const [productionMaterials, setProductionMaterials] = useState<ProductionMaterial[]>([])
@@ -1067,7 +1069,7 @@ export default function ProjectsPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={() => openDetailsModal(project)}
+                onClick={() => router.push(`/dashboard/projects/${project.id}`)}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
                 <Eye className="w-4 h-4" />

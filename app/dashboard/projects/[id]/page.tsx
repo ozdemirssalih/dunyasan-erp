@@ -91,6 +91,8 @@ export default function ProjectDetailPage() {
   const params = useParams()
   const projectId = params.id as string
 
+  console.log('ProjectDetailPage loaded, params:', params, 'projectId:', projectId)
+
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState<Project | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])

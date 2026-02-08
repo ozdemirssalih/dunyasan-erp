@@ -333,7 +333,7 @@ export default function MachinesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
@@ -341,24 +341,6 @@ export default function MachinesPage() {
               <p className="text-3xl font-bold text-gray-800 mt-2">{activeMachines} / {machines.length}</p>
             </div>
             <Activity className="w-10 h-10 text-green-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Toplam Günlük Kapasite</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">{totalCapacity} adet</p>
-            </div>
-            <Package className="w-10 h-10 text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Ortalama Verimlilik</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">%{avgEfficiency}</p>
-            </div>
-            <TrendingUp className="w-10 h-10 text-purple-500" />
           </div>
         </div>
       </div>
@@ -389,20 +371,6 @@ export default function MachinesPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Model:</span>
                   <span className="font-semibold text-gray-800">{machine.model || '-'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
-                    <Package className="w-3 h-3" />
-                    Günlük Kapasite:
-                  </span>
-                  <span className="font-semibold text-gray-800">{machine.daily_capacity || 0} adet</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    Çalışma Saati:
-                  </span>
-                  <span className="font-semibold text-gray-800">{machine.working_hours} saat</span>
                 </div>
               </div>
 
@@ -530,42 +498,6 @@ export default function MachinesPage() {
                   <option value="maintenance">Bakımda</option>
                   <option value="offline">Çalışmıyor</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Günlük Kapasite (adet)</label>
-                <input
-                  type="number"
-                  value={formData.daily_capacity}
-                  onChange={(e) => setFormData({ ...formData, daily_capacity: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Verimlilik Oranı (%)</label>
-                <input
-                  type="number"
-                  value={formData.efficiency_rate}
-                  onChange={(e) => setFormData({ ...formData, efficiency_rate: parseFloat(e.target.value) || 0 })}
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Çalışma Saati</label>
-                <input
-                  type="number"
-                  value={formData.working_hours}
-                  onChange={(e) => setFormData({ ...formData, working_hours: parseFloat(e.target.value) || 0 })}
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
               </div>
 
               <div className="flex space-x-3 pt-4">

@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentDate, setCurrentDate] = useState('')
 
   useEffect(() => {
-    // Check authentication
+    // Check authentication - only once on mount
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -52,7 +52,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const interval = setInterval(updateTime, 1000)
 
     return () => clearInterval(interval)
-  }, [router])
+  }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()

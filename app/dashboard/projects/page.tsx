@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
-import { FolderKanban, Plus, Calendar, Building2, Clock, AlertCircle, CheckCircle2, Pause, X, Edit, Trash2, Eye, Package, Wrench, Scissors, Factory } from 'lucide-react'
+import { FolderKanban, Plus, Calendar, Building2, Clock, AlertCircle, CheckCircle2, Pause, X, Edit, Trash2, Eye, Package, Wrench, Scissors, Factory, Users } from 'lucide-react'
 
 interface CustomerCompany {
   id: string

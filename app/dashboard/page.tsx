@@ -13,6 +13,7 @@ export default function DashboardPage() {
     lowStockCount: 0,
   })
   const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function DashboardPage() {
         .eq('company_id', profile.company_id)
 
       // Get machines stats
-      const { data: machines } = await supabase
+      const { data: machinesData } = await supabase
         .from('machines')
         .select('*')
         .eq('company_id', profile.company_id)
@@ -63,13 +64,46 @@ export default function DashboardPage() {
         .select('*')
         .eq('company_id', profile.company_id)
 
+      // Calculate stats for each machine
+      const machinesWithStats = await Promise.all(
+        (machinesData || []).map(async (machine) => {
+          // Verilen hammadde
+          const { data: givenMaterials } = await supabase
+            .from('production_to_machine_transfers')
+            .select('quantity')
+            .eq('machine_id', machine.id)
+
+          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+          // Üretilen ürün
+          const { data: producedItems } = await supabase
+            .from('production_outputs')
+            .select('quantity')
+            .eq('machine_id', machine.id)
+
+          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+          // Verimlilik hesaplama
+          const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
+
+          return {
+            ...machine,
+            totalGiven,
+            totalProduced,
+            efficiency
+          }
+        })
+      )
+
+      setMachines(machinesWithStats)
+
       // Calculate stats
       setStats({
         totalOrders: orders?.length || 0,
         completedOrders: orders?.filter(o => o.status === 'completed').length || 0,
         inProgressOrders: orders?.filter(o => o.status === 'in_progress').length || 0,
-        activeMachines: machines?.filter(m => m.status === 'active').length || 0,
-        totalMachines: machines?.length || 0,
+        activeMachines: machinesData?.filter(m => m.status === 'active').length || 0,
+        totalMachines: machinesData?.length || 0,
         lowStockCount: inventory?.filter(i => i.quantity < i.min_stock_level).length || 0,
       })
 
@@ -287,6 +321,97 @@ export default function DashboardPage() {
             <span className="text-sm font-semibold text-gray-700">Rapor Oluştur</span>
           </a>
         </div>
+      </div>
+
+      {/* Tezgah Durumları */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-800">Tezgah Durumları</h3>
+          <a href="/dashboard/machines" className="text-sm text-blue-600 hover:text-blue-800 font-semibold">
+            Tümünü Gör →
+          </a>
+        </div>
+        {machines.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {machines.map(machine => (
+              <div key={machine.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-gradient-to-br from-gray-50 to-white">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    {/* Machine SVG Icon */}
+                    <div className={`p-2 rounded-lg ${
+                      machine.status === 'active' ? 'bg-green-100' :
+                      machine.status === 'maintenance' ? 'bg-yellow-100' :
+                      machine.status === 'idle' ? 'bg-gray-100' :
+                      'bg-red-100'
+                    }`}>
+                      <svg className={`w-6 h-6 ${
+                        machine.status === 'active' ? 'text-green-600' :
+                        machine.status === 'maintenance' ? 'text-yellow-600' :
+                        machine.status === 'idle' ? 'text-gray-600' :
+                        'text-red-600'
+                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">{machine.machine_name}</h4>
+                      <p className="text-xs text-gray-500">{machine.machine_code}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                    machine.status === 'active' ? 'bg-green-100 text-green-800' :
+                    machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                    machine.status === 'idle' ? 'bg-gray-100 text-gray-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {machine.status === 'active' ? 'Aktif' :
+                     machine.status === 'maintenance' ? 'Bakım' :
+                     machine.status === 'idle' ? 'Boşta' : 'Devre Dışı'}
+                  </span>
+                </div>
+
+                {/* Stats */}
+                <div className="space-y-2 mb-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Verilen:</span>
+                    <span className="font-semibold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'} kg</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Üretilen:</span>
+                    <span className="font-semibold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'} kg</span>
+                  </div>
+                </div>
+
+                {/* Efficiency Bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-600 font-medium">Verimlilik</span>
+                    <span className={`font-bold ${
+                      machine.efficiency >= 80 ? 'text-green-600' :
+                      machine.efficiency >= 60 ? 'text-yellow-600' :
+                      'text-red-600'
+                    }`}>
+                      %{machine.efficiency?.toFixed(1) || '0.0'}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        machine.efficiency >= 80 ? 'bg-green-500' :
+                        machine.efficiency >= 60 ? 'bg-yellow-500' :
+                        'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(machine.efficiency || 0, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 py-8">Henüz tezgah bulunmuyor</p>
+        )}
       </div>
     </div>
   )

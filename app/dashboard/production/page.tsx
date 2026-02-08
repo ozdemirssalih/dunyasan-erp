@@ -483,25 +483,37 @@ export default function ProductionPage() {
   const loadStats = async (companyId: string) => {
     console.log('📊 [PRODUCTION] loadStats çağrıldı')
 
-    // İşlenmeye hazır hammadde sayısı
-    const { data: rawMaterials } = await supabase
-      .from('production_inventory')
-      .select('current_stock')
+    // DOĞRU HESAPLAMA: İşlenmeye hazır hammadde = Tezgaha verilen - Üretilen - Fire
+
+    // 1. Tezgaha verilen toplam hammadde
+    const { data: givenToMachines } = await supabase
+      .from('production_to_machine_transfers')
+      .select('quantity')
       .eq('company_id', companyId)
-      .eq('item_type', 'raw_material')
-      .gt('current_stock', 0)
 
-    const rawMaterialsReady = rawMaterials?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+    const totalGivenToMachines = givenToMachines?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // Toplam işlenen mamul (finished products)
-    const { data: finishedProductsData } = await supabase
-      .from('production_inventory')
-      .select('current_stock')
+    // 2. Toplam üretilen mamül
+    const { data: allOutputs } = await supabase
+      .from('production_outputs')
+      .select('quantity')
       .eq('company_id', companyId)
-      .eq('item_type', 'finished_product')
-      .gt('current_stock', 0)
 
-    const finishedProducts = finishedProductsData?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+    const totalProduced = allOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // 3. Toplam fire
+    const { data: allFire } = await supabase
+      .from('production_scrap_records')
+      .select('quantity')
+      .eq('company_id', companyId)
+
+    const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+    // İşlenmeye hazır = Verilen - Üretilen - Fire
+    const rawMaterialsReady = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
+
+    // İşlenen mamul = Toplam üretilen (bu zaten doğru)
+    const finishedProducts = totalProduced
 
     // Kalite kontrolde bekleyen (ÜRÜN SAYISI, test sayısı değil)
     const { data: pendingQCData } = await supabase
@@ -537,52 +549,21 @@ export default function ProductionPage() {
     const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
     const recentProjects = Array.from(new Set(projectNames || []))
 
-    // HESAPLANAN FİRE: Tezgaha verilen - Üretimde kullanılan
-    // 1. Tezgaha verilen toplam hammadde
-    const { data: givenToMachines } = await supabase
-      .from('production_to_machine_transfers')
-      .select('quantity')
-      .eq('company_id', companyId)
+    // Verimlilik = Verilen - (Üretilen + Fire)
+    const calculatedScrap = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
 
-    const totalGivenToMachines = givenToMachines?.reduce((sum, item) => sum + item.quantity, 0) || 0
+    // Kayıtlı fire (zaten yukarıda hesaplandı)
+    const recordedFire = totalFire
 
-    // 2. Üretimde kullanılan (production_outputs * material_assignments)
-    const { data: productionOutputsAll } = await supabase
-      .from('production_outputs')
-      .select(`
-        id,
-        quantity,
-        machine_id,
-        production_date
-      `)
-      .eq('company_id', companyId)
-
-    let totalUsedInProduction = 0
-    for (const output of (productionOutputsAll || [])) {
-      // Bu üretim için atanan malzemeleri bul
-      const { data: assignments } = await supabase
-        .from('production_material_assignments')
-        .select('quantity')
-        .eq('company_id', companyId)
-        .eq('machine_id', output.machine_id)
-        .eq('assigned_date', output.production_date.split('T')[0])
-
-      const assignedPerUnit = assignments?.reduce((sum, a) => sum + a.quantity, 0) || 0
-      totalUsedInProduction += assignedPerUnit * output.quantity
-    }
-
-    // Hesaplanan Fire (Verimlilik) = Verilen - Kullanılan
-    const calculatedScrap = Math.max(0, totalGivenToMachines - totalUsedInProduction)
-
-    // 3. Kayıtlı fire miktarı (Sadece girilen fire)
-    const { data: fireRecords } = await supabase
-      .from('production_scrap_records')
-      .select('quantity')
-      .eq('company_id', companyId)
-
-    const recordedFire = fireRecords?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
-    console.log('📊 [PRODUCTION] İstatistikler:', { rawMaterialsReady, finishedProducts, pendingQC, todayProduction, calculatedScrap, recordedFire, recentProjects })
+    console.log('📊 [PRODUCTION] İstatistikler:', {
+      'Tezgaha Verilen': totalGivenToMachines,
+      'Üretilen': totalProduced,
+      'Fire': totalFire,
+      'Tezgahlarda Bekleyen (Verilen-Üretilen-Fire)': rawMaterialsReady,
+      'KK Bekleyen': pendingQC,
+      'Bugünkü Üretim': todayProduction,
+      'Projeler': recentProjects
+    })
 
     setStats({
       rawMaterialsReady,
@@ -1189,7 +1170,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.rawMaterialsReady}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenmeye Hazır Hammadde</h3>
-            <p className="text-xs text-gray-600 mt-1">Üretim deposundaki toplam miktar</p>
+            <p className="text-xs text-gray-600 mt-1">Tezgaha verilen - Üretilen - Fire</p>
             {stats.recentProjects.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-600 mb-1">Son projeler:</p>
@@ -1213,7 +1194,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.finishedProducts}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenen Mamul</h3>
-            <p className="text-xs text-gray-600 mt-1">Üretimde hazır ürünler</p>
+            <p className="text-xs text-gray-600 mt-1">Toplam üretilen ürün sayısı</p>
           </div>
 
           {/* Kalite Kontrolde Bekleyen */}
@@ -1250,8 +1231,8 @@ export default function ProductionPage() {
               </div>
               <span className="text-3xl font-bold text-gray-900">{stats.calculatedScrap.toFixed(2)}</span>
             </div>
-            <h3 className="text-sm font-medium text-gray-900">Verimlilik</h3>
-            <p className="text-xs text-gray-600 mt-1">Verilen - Kullanılan fark</p>
+            <h3 className="text-sm font-medium text-gray-900">Tezgahlarda Bekleyen</h3>
+            <p className="text-xs text-gray-600 mt-1">Verilen - (Üretilen + Fire)</p>
           </div>
 
           {/* Kayıtlı Fire */}

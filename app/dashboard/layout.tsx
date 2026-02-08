@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import Image from 'next/image'
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [profile, setProfile] = useState<any>(null)
   const [currentTime, setCurrentTime] = useState('')
   const [currentDate, setCurrentDate] = useState('')
+  const [authLoading, setAuthLoading] = useState(true)
   const hasCheckedAuth = useRef(false)
 
   useEffect(() => {
@@ -26,10 +28,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       console.log('🔐 Checking auth in layout...')
       hasCheckedAuth.current = true
+      setAuthLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         console.log('❌ No user, redirecting to login')
+        setAuthLoading(false)
         router.push('/login')
         return
       }
@@ -45,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .single()
 
       setProfile(profileData)
+      setAuthLoading(false)
     }
 
     checkAuth()
@@ -99,9 +104,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return canView(item.module as any)
   })
 
-  if (!user) {
-    return <div className="min-h-screen flex items-center justify-center">Yükleniyor...</div>
+  // Only show loading if auth is still being checked
+  if (authLoading) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-600">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        Yükleniyor...
+      </div>
+    </div>
   }
+
+  // If no user after auth check, they'll be redirected to login
+  // But render the layout anyway to avoid blocking child pages
+  console.log('🎨 Rendering layout - User:', user?.email || 'none')
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -121,17 +136,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* User Info */}
-        <div className="px-4 py-3 bg-blue-800/50">
-          <div className="text-sm font-semibold">{profile?.full_name || user.email}</div>
-          <div className="text-xs text-blue-200">{profile?.role || 'Kullanıcı'}</div>
-        </div>
+        {user && (
+          <div className="px-4 py-3 bg-blue-800/50">
+            <div className="text-sm font-semibold">{profile?.full_name || user.email}</div>
+            <div className="text-xs text-blue-200">{profile?.role || 'Kullanıcı'}</div>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">
           {filteredMenuItems.map((item) => {
             const isActive = pathname === item.href
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 className={`flex items-center px-4 py-3 text-sm transition-colors ${
@@ -149,7 +166,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                 </svg>
                 {item.label}
-              </a>
+              </Link>
             )
           })}
         </nav>

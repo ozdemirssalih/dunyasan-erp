@@ -18,11 +18,11 @@ import {
 interface Project {
   id: string
   project_name: string
-  project_code: string
-  description: string
+  project_code?: string
+  description?: string
   start_date: string
-  end_date: string
-  status: string
+  end_date?: string
+  status?: string
   created_at: string
 }
 
@@ -116,7 +116,12 @@ export default function ProjectDetailPage() {
         .eq('id', projectId)
         .single()
 
-      if (projectError) throw projectError
+      if (projectError) {
+        console.error('Project load error:', projectError)
+        throw projectError
+      }
+
+      console.log('Project loaded:', projectData)
       setProject(projectData)
 
       // Müşteriler
@@ -321,7 +326,7 @@ export default function ProjectDetailPage() {
             <p className="text-gray-600">{project.project_code}</p>
           </div>
         </div>
-        {getStatusBadge(project.status)}
+        {project.status && getStatusBadge(project.status)}
       </div>
 
       {/* Proje Bilgileri */}

@@ -107,7 +107,19 @@ export default function ProjectsPage() {
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showProjectDetailModal, setShowProjectDetailModal] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+
+  // Project Detail Data
+  const [projectDetailData, setProjectDetailData] = useState<any>({
+    customers: [],
+    machines: [],
+    materials: [],
+    products: [],
+    equipment: [],
+    productions: [],
+    shipments: []
+  })
 
   // Detail tabs and data
   const [detailTab, setDetailTab] = useState<'parts' | 'info' | 'production'>('parts')
@@ -346,6 +358,65 @@ export default function ProjectsPage() {
       setProductionMaterials(materials)
     } catch (error) {
       console.error('Error loading production materials:', error)
+    }
+  }
+
+  const loadProjectDetail = async (projectId: string) => {
+    try {
+      // Müşteriler
+      const { data: customersData } = await supabase
+        .from('project_customers')
+        .select('customer:customers(id, customer_name, customer_code, contact_person, phone)')
+        .eq('project_id', projectId)
+
+      // Tezgahlar
+      const { data: machinesData } = await supabase
+        .from('project_machines')
+        .select('machine:machines(id, machine_name, machine_code, status)')
+        .eq('project_id', projectId)
+
+      // Hammaddeler
+      const { data: materialsData } = await supabase
+        .from('project_required_materials')
+        .select('material_id, quantity_needed, item:warehouse_items(id, name, code, unit)')
+        .eq('project_id', projectId)
+
+      // Mamüller
+      const { data: productsData } = await supabase
+        .from('project_target_products')
+        .select('product_id, quantity_target, quantity_produced, item:warehouse_items(id, name, code, unit)')
+        .eq('project_id', projectId)
+
+      // Ekipmanlar
+      const { data: equipmentData } = await supabase
+        .from('project_equipment')
+        .select('equipment:equipment(id, equipment_name, equipment_code, equipment_type, status)')
+        .eq('project_id', projectId)
+
+      setProjectDetailData({
+        customers: customersData?.map((c: any) => c.customer) || [],
+        machines: machinesData?.map((m: any) => m.machine) || [],
+        materials: materialsData?.map((m: any) => ({
+          id: m.material_id,
+          item_name: m.item?.name || '',
+          item_code: m.item?.code || '',
+          quantity_needed: m.quantity_needed,
+          unit: m.item?.unit || ''
+        })) || [],
+        products: productsData?.map((p: any) => ({
+          id: p.product_id,
+          item_name: p.item?.name || '',
+          item_code: p.item?.code || '',
+          quantity_target: p.quantity_target,
+          quantity_produced: p.quantity_produced,
+          unit: p.item?.unit || ''
+        })) || [],
+        equipment: equipmentData?.map((e: any) => e.equipment) || [],
+        productions: [],
+        shipments: []
+      })
+    } catch (error) {
+      console.error('Error loading project details:', error)
     }
   }
 
@@ -1069,13 +1140,17 @@ export default function ProjectsPage() {
             </div>
 
             <div className="flex gap-2">
-              <Link
-                href={`/dashboard/projects/${project.id}`}
+              <button
+                onClick={async () => {
+                  setSelectedProject(project)
+                  await loadProjectDetail(project.id)
+                  setShowProjectDetailModal(true)
+                }}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
                 <Eye className="w-4 h-4" />
                 Detay
-              </Link>
+              </button>
               <button
                 onClick={() => openProjectModal(project)}
                 className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
@@ -2327,6 +2402,202 @@ export default function ProjectsPage() {
               >
                 Kaydet
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proje Detay Modal */}
+      {showProjectDetailModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowProjectDetailModal(false)}>
+          <div className="bg-white rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">{selectedProject.project_name}</h2>
+                  <p className="text-blue-100 text-sm mt-1">{selectedProject.project_code || 'Kod yok'}</p>
+                </div>
+                <button
+                  onClick={() => setShowProjectDetailModal(false)}
+                  className="p-2 hover:bg-blue-500 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+              {/* Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+                  <Users className="w-6 h-6 text-blue-600 mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.customers.length}</div>
+                  <div className="text-sm text-gray-600">Müşteriler</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
+                  <Factory className="w-6 h-6 text-green-600 mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.machines.length}</div>
+                  <div className="text-sm text-gray-600">Tezgahlar</div>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-500">
+                  <Package className="w-6 h-6 text-yellow-600 mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.materials.length}</div>
+                  <div className="text-sm text-gray-600">Hammaddeler</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500">
+                  <Wrench className="w-6 h-6 text-purple-600 mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.equipment.length}</div>
+                  <div className="text-sm text-gray-600">Ekipmanlar</div>
+                </div>
+              </div>
+
+              {/* Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Müşteriler */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-lg">Müşteriler</h3>
+                  </div>
+                  {projectDetailData.customers.length > 0 ? (
+                    <div className="space-y-2">
+                      {projectDetailData.customers.map((customer: any) => (
+                        <div key={customer.id} className="p-3 bg-blue-50 rounded-lg">
+                          <div className="font-semibold text-gray-900">{customer.customer_name}</div>
+                          <div className="text-sm text-gray-600">{customer.customer_code}</div>
+                          {customer.contact_person && (
+                            <div className="text-xs text-gray-500 mt-1">{customer.contact_person} - {customer.phone}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">Müşteri eklenmemiş</p>
+                  )}
+                </div>
+
+                {/* Tezgahlar */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Factory className="w-5 h-5 text-green-600" />
+                    <h3 className="font-bold text-lg">Tezgahlar</h3>
+                  </div>
+                  {projectDetailData.machines.length > 0 ? (
+                    <div className="space-y-2">
+                      {projectDetailData.machines.map((machine: any) => (
+                        <div key={machine.id} className="p-3 bg-green-50 rounded-lg flex justify-between items-center">
+                          <div>
+                            <div className="font-semibold text-gray-900">{machine.machine_name}</div>
+                            <div className="text-sm text-gray-600">{machine.machine_code}</div>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            machine.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {machine.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">Tezgah eklenmemiş</p>
+                  )}
+                </div>
+
+                {/* Hammaddeler */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Package className="w-5 h-5 text-yellow-600" />
+                    <h3 className="font-bold text-lg">Hammadde İhtiyacı</h3>
+                  </div>
+                  {projectDetailData.materials.length > 0 ? (
+                    <div className="space-y-2">
+                      {projectDetailData.materials.map((material: any) => (
+                        <div key={material.id} className="p-3 bg-yellow-50 rounded-lg flex justify-between">
+                          <div>
+                            <div className="font-semibold text-gray-900">{material.item_name}</div>
+                            <div className="text-sm text-gray-600">{material.item_code}</div>
+                          </div>
+                          <span className="font-bold text-yellow-700">
+                            {material.quantity_needed} {material.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">Hammadde eklenmemiş</p>
+                  )}
+                </div>
+
+                {/* Mamüller */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Package className="w-5 h-5 text-purple-600" />
+                    <h3 className="font-bold text-lg">Mamül Hedefleri</h3>
+                  </div>
+                  {projectDetailData.products.length > 0 ? (
+                    <div className="space-y-3">
+                      {projectDetailData.products.map((product: any) => (
+                        <div key={product.id} className="p-3 bg-purple-50 rounded-lg">
+                          <div className="flex justify-between mb-2">
+                            <div>
+                              <div className="font-semibold text-gray-900">{product.item_name}</div>
+                              <div className="text-sm text-gray-600">{product.item_code}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-purple-700">
+                                {product.quantity_produced} / {product.quantity_target} {product.unit}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                %{((product.quantity_produced / product.quantity_target) * 100).toFixed(0)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-purple-600 h-2 rounded-full"
+                              style={{ width: `${Math.min((product.quantity_produced / product.quantity_target) * 100, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">Mamül hedefi eklenmemiş</p>
+                  )}
+                </div>
+
+                {/* Ekipmanlar */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6 md:col-span-2">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Wrench className="w-5 h-5 text-gray-600" />
+                    <h3 className="font-bold text-lg">Kullanılan Ekipmanlar</h3>
+                  </div>
+                  {projectDetailData.equipment.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {projectDetailData.equipment.map((item: any) => (
+                        <div key={item.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                          <div>
+                            <div className="font-semibold text-gray-900">{item.equipment_name}</div>
+                            <div className="text-sm text-gray-600">{item.equipment_code} - {item.equipment_type}</div>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            item.status === 'available' ? 'bg-green-100 text-green-800' :
+                            item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
+                            item.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm">Ekipman eklenmemiş</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

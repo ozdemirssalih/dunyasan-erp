@@ -69,10 +69,18 @@ export default function ProjectsPage() {
     }
 
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Kullanıcı oturumu bulunamadı!')
+        return
+      }
+
       const { error } = await supabase
         .from('projects')
         .insert({
           company_id: companyId,
+          created_by: user.id,
           project_name: formData.project_name,
           project_code: formData.project_code || null,
           description: formData.description || null,

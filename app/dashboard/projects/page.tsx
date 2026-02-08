@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { FolderKanban, Plus, Calendar, Building2, Clock, AlertCircle, CheckCircle2, Pause, X, Edit, Trash2, Eye, Package, Wrench, Scissors, Factory } from 'lucide-react'
 
@@ -1068,16 +1069,13 @@ export default function ProjectsPage() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  console.log('Navigating to project:', project.id, `/dashboard/projects/${project.id}`)
-                  router.push(`/dashboard/projects/${project.id}`)
-                }}
+              <Link
+                href={`/dashboard/projects/${project.id}`}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
                 <Eye className="w-4 h-4" />
                 Detay
-              </button>
+              </Link>
               <button
                 onClick={() => openProjectModal(project)}
                 className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"

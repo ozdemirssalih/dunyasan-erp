@@ -82,7 +82,15 @@ export default function ProjectsPage() {
           unit: formData.unit
         })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Supabase Error Details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
 
       // Reset form and close modal
       setFormData({
@@ -98,9 +106,9 @@ export default function ProjectsPage() {
 
       // Reload projects
       await loadProjects()
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error creating project:', error)
-      alert('Proje oluşturulurken hata oluştu!')
+      alert(`Proje oluşturulurken hata oluştu!\n${error?.message || 'Bilinmeyen hata'}`)
     }
   }
 

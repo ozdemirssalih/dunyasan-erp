@@ -14,6 +14,7 @@ export default function ProjectDetailPage() {
   const [customer, setCustomer] = useState<any>(null)
   const [machines, setMachines] = useState<any[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
+  const [projectMaterials, setProjectMaterials] = useState<any[]>([])
   const [productions, setProductions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -26,6 +27,10 @@ export default function ProjectDetailPage() {
   const [showMachineModal, setShowMachineModal] = useState(false)
   const [availableMachines, setAvailableMachines] = useState<any[]>([])
   const [selectedMachineId, setSelectedMachineId] = useState('')
+
+  const [showMaterialModal, setShowMaterialModal] = useState(false)
+  const [selectedMaterialId, setSelectedMaterialId] = useState('')
+  const [materialQuantity, setMaterialQuantity] = useState('')
 
   useEffect(() => {
     console.log('🟢 PROJECT DETAIL PAGE - Loading project:', projectId)
@@ -105,7 +110,7 @@ export default function ProjectDetailPage() {
 
       setMachines(machinesWithStats)
 
-      // Load warehouse items (sadece depodaki stok, transfer yok)
+      // Load warehouse items (tüm depo - malzeme eklemek için)
       const { data: warehouseData } = await supabase
         .from('warehouse_items')
         .select('*')
@@ -114,6 +119,15 @@ export default function ProjectDetailPage() {
 
       console.log('✅ Warehouse items loaded:', warehouseData?.length || 0)
       setWarehouseItems(warehouseData || [])
+
+      // Load project materials (sadece bu projeye atanmış malzemeler)
+      const { data: projectMaterialsData } = await supabase
+        .from('project_materials')
+        .select('*, warehouse_item:warehouse_items(*)')
+        .eq('project_id', projectId)
+
+      console.log('✅ Project materials loaded:', projectMaterialsData?.length || 0)
+      setProjectMaterials(projectMaterialsData || [])
 
       // Load available customers for modal
       const { data: customersData } = await supabase
@@ -229,6 +243,54 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error('❌ Error removing machine:', error)
       alert('Tezgah çıkarılırken hata oluştu!')
+    }
+  }
+
+  const handleAddMaterial = async () => {
+    if (!selectedMaterialId) return
+
+    try {
+      const { error } = await supabase
+        .from('project_materials')
+        .insert({
+          project_id: projectId,
+          warehouse_item_id: selectedMaterialId,
+          required_quantity: materialQuantity ? parseFloat(materialQuantity) : 0
+        })
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+      setShowMaterialModal(false)
+      setSelectedMaterialId('')
+      setMaterialQuantity('')
+    } catch (error: any) {
+      console.error('❌ Error adding material:', error)
+      if (error?.code === '23505') {
+        alert('Bu malzeme zaten projeye eklenmiş!')
+      } else {
+        alert('Malzeme eklenirken hata oluştu!')
+      }
+    }
+  }
+
+  const handleRemoveMaterial = async (projectMaterialId: string) => {
+    if (!confirm('Bu malzemeyi projeden çıkarmak istediğinize emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('project_materials')
+        .delete()
+        .eq('id', projectMaterialId)
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+    } catch (error) {
+      console.error('❌ Error removing material:', error)
+      alert('Malzeme çıkarılırken hata oluştu!')
     }
   }
 
@@ -363,8 +425,8 @@ export default function ProjectDetailPage() {
         </div>
         <div className="bg-yellow-50 rounded-xl p-6 border-l-4 border-yellow-500">
           <Package className="w-8 h-8 text-yellow-600 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{warehouseItems.length}</div>
-          <div className="text-gray-600">Depo Stok Kalemi</div>
+          <div className="text-3xl font-bold text-gray-900">{projectMaterials.length}</div>
+          <div className="text-gray-600">Projede Kullanılan Malzeme</div>
         </div>
         <div className="bg-blue-50 rounded-xl p-6 border-l-4 border-blue-500">
           <TrendingUp className="w-8 h-8 text-blue-600 mb-2" />
@@ -500,37 +562,65 @@ export default function ProjectDetailPage() {
           )}
         </div>
 
-        {/* Warehouse Items */}
+        {/* Project Materials */}
         <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Package className="w-6 h-6 text-yellow-600" />
-            <h2 className="text-xl font-bold text-gray-800">Depo Stok Durumu</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <Package className="w-6 h-6 text-yellow-600" />
+              <h2 className="text-xl font-bold text-gray-800">Projede Kullanılan Malzemeler</h2>
+            </div>
+            <button
+              onClick={() => setShowMaterialModal(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Malzeme Ekle</span>
+            </button>
           </div>
 
-          {warehouseItems.length > 0 ? (
+          {projectMaterials.length > 0 ? (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {warehouseItems.map((item) => (
-                <div key={item.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              {projectMaterials.map((pm) => (
+                <div key={pm.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
-                      <div className="font-semibold text-gray-900 text-sm">{item.name}</div>
-                      <div className="text-xs text-gray-600">{item.code}</div>
+                      <div className="font-semibold text-gray-900 text-sm">{pm.warehouse_item?.name}</div>
+                      <div className="text-xs text-gray-600">{pm.warehouse_item?.code}</div>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      item.type === 'raw_material' ? 'bg-orange-100 text-orange-800' :
-                      item.type === 'semi_finished' ? 'bg-blue-100 text-blue-800' :
-                      'bg-purple-100 text-purple-800'
-                    }`}>
-                      {item.type === 'raw_material' ? 'Hammadde' :
-                       item.type === 'semi_finished' ? 'Yarı Mamül' : 'Mamül'}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        pm.warehouse_item?.type === 'raw_material' ? 'bg-orange-100 text-orange-800' :
+                        pm.warehouse_item?.type === 'semi_finished' ? 'bg-blue-100 text-blue-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {pm.warehouse_item?.type === 'raw_material' ? 'Hammadde' :
+                         pm.warehouse_item?.type === 'semi_finished' ? 'Yarı Mamül' : 'Mamül'}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveMaterial(pm.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                        title="Projeden Çıkar"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mt-2 pt-2 border-t border-gray-200">
-                    <div className="text-xs text-gray-600">Depodaki Miktar</div>
-                    <div className="text-sm font-bold text-gray-900">
-                      {item.current_stock?.toFixed(2) || '0.00'} {item.unit}
+                  <div className="mt-2 pt-2 border-t border-gray-200 grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-gray-600">Depodaki Miktar</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {pm.warehouse_item?.current_stock?.toFixed(2) || '0.00'} {pm.warehouse_item?.unit}
+                      </div>
                     </div>
+                    {pm.required_quantity > 0 && (
+                      <div>
+                        <div className="text-xs text-gray-600">Gerekli Miktar</div>
+                        <div className="text-sm font-bold text-blue-600">
+                          {pm.required_quantity?.toFixed(2)} {pm.warehouse_item?.unit}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -538,7 +628,13 @@ export default function ProjectDetailPage() {
           ) : (
             <div className="text-center py-8">
               <Package className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">Depoda stok yok.</p>
+              <p className="text-gray-500">Bu projeye henüz malzeme eklenmemiş.</p>
+              <button
+                onClick={() => setShowMaterialModal(true)}
+                className="mt-4 text-yellow-600 hover:text-yellow-800 font-semibold"
+              >
+                Malzeme Ekle
+              </button>
             </div>
           )}
         </div>
@@ -595,6 +691,117 @@ export default function ProjectDetailPage() {
                 className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Ata
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Material Assignment Modal */}
+      {showMaterialModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Malzeme Ekle</h3>
+              <button
+                onClick={() => {
+                  setShowMaterialModal(false)
+                  setSelectedMaterialId('')
+                  setMaterialQuantity('')
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {warehouseItems.length > 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Projeye eklenecek malzemeyi seçin. Depodaki tüm malzemeler listelenmektedir.
+                </p>
+
+                {/* Material Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Malzeme Seçin
+                  </label>
+                  <select
+                    value={selectedMaterialId}
+                    onChange={(e) => setSelectedMaterialId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                  >
+                    <option value="">Malzeme Seçiniz</option>
+                    {warehouseItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({item.code}) - Stok: {item.current_stock?.toFixed(2)} {item.unit}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Required Quantity */}
+                {selectedMaterialId && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Gerekli Miktar (Opsiyonel)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={materialQuantity}
+                      onChange={(e) => setMaterialQuantity(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                      placeholder="Bu proje için gereken miktar"
+                    />
+                  </div>
+                )}
+
+                {/* Selected Material Preview */}
+                {selectedMaterialId && (
+                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="text-sm font-semibold text-gray-700 mb-2">Seçilen Malzeme:</div>
+                    {(() => {
+                      const selected = warehouseItems.find(i => i.id === selectedMaterialId)
+                      return selected ? (
+                        <div>
+                          <div className="font-bold text-gray-900">{selected.name}</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Kod: {selected.code} |
+                            Tip: {selected.type === 'raw_material' ? 'Hammadde' :
+                                  selected.type === 'semi_finished' ? 'Yarı Mamül' : 'Mamül'} |
+                            Stok: {selected.current_stock?.toFixed(2)} {selected.unit}
+                          </div>
+                        </div>
+                      ) : null
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Package className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">Depoda malzeme bulunamadı.</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowMaterialModal(false)
+                  setSelectedMaterialId('')
+                  setMaterialQuantity('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleAddMaterial}
+                disabled={!selectedMaterialId}
+                className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Malzemeyi Ekle
               </button>
             </div>
           </div>

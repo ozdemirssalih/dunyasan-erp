@@ -14,6 +14,10 @@ BEGIN
         DELETE FROM production_outputs;
     END IF;
 
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_scrap_records') THEN
+        DELETE FROM production_scrap_records;
+    END IF;
+
     IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_to_machine_transfers') THEN
         DELETE FROM production_to_machine_transfers;
     END IF;

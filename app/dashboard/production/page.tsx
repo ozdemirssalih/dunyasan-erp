@@ -158,8 +158,6 @@ export default function ProductionPage() {
 
   const [outputForm, setOutputForm] = useState({
     machine_id: '',
-    input_item_id: '',
-    input_quantity: 0,
     output_item_id: '',
     quantity: 0,
     fire_quantity: 0,
@@ -797,26 +795,7 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      // 1. Eğer verilen hammadde varsa, tezgaha transfer kaydı oluştur
-      if (outputForm.input_quantity > 0 && outputForm.input_item_id) {
-        const { error: transferError } = await supabase
-          .from('production_to_machine_transfers')
-          .insert({
-            company_id: companyId,
-            machine_id: outputForm.machine_id,
-            item_id: outputForm.input_item_id,
-            quantity: outputForm.input_quantity,
-            shift: outputForm.shift,
-            assigned_by: currentUserId,
-            notes: outputForm.notes,
-            project_id: outputForm.project_id || null,
-            project_part_id: outputForm.project_part_id || null,
-          })
-
-        if (transferError) throw transferError
-      }
-
-      // 2. Üretim kaydını oluştur
+      // 1. Üretim kaydını oluştur
       const { error: outputError } = await supabase
         .from('production_outputs')
         .insert({
@@ -834,7 +813,7 @@ export default function ProductionPage() {
 
       if (outputError) throw outputError
 
-      // 3. Eğer fire varsa fire kaydını oluştur
+      // 2. Eğer fire varsa fire kaydını oluştur
       if (outputForm.fire_quantity > 0) {
         const { error: fireError } = await supabase
           .from('production_scrap_records')
@@ -854,16 +833,9 @@ export default function ProductionPage() {
 
       // Başarı mesajı oluştur
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
-      if (outputForm.input_quantity > 0) {
-        successMsg += `\n📦 Verilen: ${outputForm.input_quantity} birim`
-      }
       successMsg += `\n✨ Üretilen: ${outputForm.quantity} birim`
       if (outputForm.fire_quantity > 0) {
         successMsg += `\n🔥 Fire: ${outputForm.fire_quantity} birim`
-      }
-      if (outputForm.input_quantity > 0) {
-        const efficiency = (outputForm.quantity / outputForm.input_quantity * 100).toFixed(1)
-        successMsg += `\n📊 Verimlilik: ${efficiency}%`
       }
       alert(successMsg)
 
@@ -901,8 +873,6 @@ export default function ProductionPage() {
   const resetOutputForm = () => {
     setOutputForm({
       machine_id: '',
-      input_item_id: '',
-      input_quantity: 0,
       output_item_id: '',
       quantity: 0,
       fire_quantity: 0,
@@ -2368,40 +2338,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      📦 Verilen Hammadde
-                    </label>
-                    <select
-                      value={outputForm.input_item_id}
-                      onChange={(e) => setOutputForm({ ...outputForm, input_item_id: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Seçilmedi</option>
-                      {warehouseItems.map(item => (
-                        <option key={item.id} value={item.id}>
-                          {item.code} - {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      📦 Verilen Miktar
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={outputForm.input_quantity}
-                      onChange={(e) => setOutputForm({ ...outputForm, input_quantity: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                      placeholder="0"
-                      disabled={!outputForm.input_item_id}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      ✨ Üretilen Ürün <span className="text-red-500">*</span>
+                      Üretilen Ürün <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={outputForm.output_item_id}
@@ -2420,7 +2357,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      ✨ Üretilen Miktar <span className="text-red-500">*</span>
+                      Üretilen Miktar <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"

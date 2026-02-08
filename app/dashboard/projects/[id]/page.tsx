@@ -28,10 +28,14 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     console.log('🔍 PROJECT DETAIL PAGE LOADED - Project ID:', projectId)
+    console.log('🔍 Window location:', window.location.href)
+    console.log('🔍 Pathname:', window.location.pathname)
     loadProjectData()
   }, [projectId])
 
   const loadProjectData = async () => {
+    console.log('📊 Starting to load project data...')
+    console.log('📊 Project ID:', projectId)
     try {
       setLoading(true)
 
@@ -134,19 +138,23 @@ export default function ProjectDetailPage() {
     }
   }
 
+  console.log('🎨 RENDER - Loading:', loading, 'Project:', project?.project_name || 'null')
+
   if (loading) {
+    console.log('⏳ Showing loading screen...')
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-600">Yükleniyor...</div>
+        <div className="text-gray-600">Yükleniyor... (Project ID: {projectId})</div>
       </div>
     )
   }
 
   if (!project) {
+    console.log('❌ No project found, showing error')
     return (
       <div className="p-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Proje bulunamadı.</p>
+          <p className="text-red-800">Proje bulunamadı. ID: {projectId}</p>
           <button
             onClick={() => router.push('/dashboard/projects')}
             className="mt-4 text-blue-600 hover:text-blue-800"
@@ -157,6 +165,8 @@ export default function ProjectDetailPage() {
       </div>
     )
   }
+
+  console.log('✅ Rendering project detail page for:', project.project_name)
 
   return (
     <div className="space-y-6">

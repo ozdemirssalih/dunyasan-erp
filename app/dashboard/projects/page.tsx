@@ -17,6 +17,8 @@ interface CustomerCompany {
 interface Project {
   id: string
   project_name: string
+  project_code?: string
+  description?: string
   customer_company_id?: string
   customer_company?: CustomerCompany
   scope_duration?: number

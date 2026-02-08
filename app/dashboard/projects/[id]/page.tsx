@@ -23,6 +23,10 @@ export default function ProjectDetailPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
+  const [showMachineModal, setShowMachineModal] = useState(false)
+  const [availableMachines, setAvailableMachines] = useState<any[]>([])
+  const [selectedMachineId, setSelectedMachineId] = useState('')
+
   useEffect(() => {
     console.log('🟢 PROJECT DETAIL PAGE - Loading project:', projectId)
     loadData()
@@ -120,6 +124,17 @@ export default function ProjectDetailPage() {
 
       setCustomers(customersData || [])
 
+      // Load available machines (no project or this project)
+      const { data: availableMachinesData } = await supabase
+        .from('machines')
+        .select('*')
+        .eq('company_id', finalCompanyId)
+        .or(`project_id.is.null,project_id.eq.${projectId}`)
+        .order('machine_name', { ascending: true })
+
+      console.log('✅ Available machines loaded:', availableMachinesData?.length || 0)
+      setAvailableMachines(availableMachinesData || [])
+
     } catch (error) {
       console.error('❌ Error loading data:', error)
     } finally {
@@ -174,6 +189,46 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error('❌ Error assigning customer:', error)
       alert('Müşteri atanırken hata oluştu!')
+    }
+  }
+
+  const handleAssignMachine = async () => {
+    if (!selectedMachineId) return
+
+    try {
+      const { error } = await supabase
+        .from('machines')
+        .update({ project_id: projectId })
+        .eq('id', selectedMachineId)
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+      setShowMachineModal(false)
+      setSelectedMachineId('')
+    } catch (error) {
+      console.error('❌ Error assigning machine:', error)
+      alert('Tezgah atanırken hata oluştu!')
+    }
+  }
+
+  const handleRemoveMachine = async (machineId: string) => {
+    if (!confirm('Bu tezgahı projeden çıkarmak istediğinize emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('machines')
+        .update({ project_id: null })
+        .eq('id', machineId)
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+    } catch (error) {
+      console.error('❌ Error removing machine:', error)
+      alert('Tezgah çıkarılırken hata oluştu!')
     }
   }
 
@@ -371,9 +426,18 @@ export default function ProjectDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Machines */}
         <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Factory className="w-6 h-6 text-green-600" />
-            <h2 className="text-xl font-bold text-gray-800">Projede Çalışan Tezgahlar</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <Factory className="w-6 h-6 text-green-600" />
+              <h2 className="text-xl font-bold text-gray-800">Projede Çalışan Tezgahlar</h2>
+            </div>
+            <button
+              onClick={() => setShowMachineModal(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Tezgah Ekle</span>
+            </button>
           </div>
 
           {machines.length > 0 ? (
@@ -381,18 +445,27 @@ export default function ProjectDetailPage() {
               {machines.map((machine) => (
                 <div key={machine.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-start mb-3">
-                    <div>
+                    <div className="flex-1">
                       <div className="font-bold text-gray-900">{machine.machine_name}</div>
                       <div className="text-sm text-gray-600">{machine.machine_code}</div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      machine.status === 'active' ? 'bg-green-100 text-green-800' :
-                      machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {machine.status === 'active' ? 'Çalışıyor' :
-                       machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        machine.status === 'active' ? 'bg-green-100 text-green-800' :
+                        machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {machine.status === 'active' ? 'Çalışıyor' :
+                         machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveMachine(machine.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                        title="Projeden Çıkar"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-gray-200">
@@ -522,6 +595,97 @@ export default function ProjectDetailPage() {
                 className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Ata
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Machine Assignment Modal */}
+      {showMachineModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Tezgah Ekle</h3>
+              <button
+                onClick={() => {
+                  setShowMachineModal(false)
+                  setSelectedMachineId('')
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {availableMachines.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600 mb-4">
+                  Projeye atanacak tezgahı seçin. Sadece başka projeye atanmamış tezgahlar listelenmektedir.
+                </p>
+                {availableMachines.map((machine) => (
+                  <div
+                    key={machine.id}
+                    onClick={() => setSelectedMachineId(machine.id)}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedMachineId === machine.id
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-gray-200 hover:border-green-300 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">{machine.machine_name}</div>
+                        <div className="text-sm text-gray-600">{machine.machine_code}</div>
+                        {machine.location && (
+                          <div className="text-xs text-gray-500 mt-1">📍 {machine.location}</div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          machine.status === 'active' ? 'bg-green-100 text-green-800' :
+                          machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {machine.status === 'active' ? 'Çalışıyor' :
+                           machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                        </span>
+                        {machine.project_id === projectId && (
+                          <span className="text-xs text-green-600 font-semibold">
+                            ✓ Bu projede
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Factory className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">Atanabilir tezgah bulunamadı.</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Tüm tezgahlar başka projelere atanmış olabilir.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowMachineModal(false)
+                  setSelectedMachineId('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleAssignMachine}
+                disabled={!selectedMachineId}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Tezgahı Ekle
               </button>
             </div>
           </div>

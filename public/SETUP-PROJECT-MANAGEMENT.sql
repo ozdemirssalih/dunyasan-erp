@@ -14,6 +14,39 @@ BEGIN
 END $$;
 
 -- =====================================================
+-- ADIM 0: PROJECTS TABLOSUNU GÜNCELLE
+-- =====================================================
+-- Status, code ve description kolonları ekle
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'on_hold', 'cancelled'));
+
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS project_code VARCHAR(50);
+
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- Mevcut projelere kod ata (eğer yoksa)
+DO $$
+DECLARE
+    proj RECORD;
+    new_code VARCHAR(50);
+    counter INT := 1;
+BEGIN
+    FOR proj IN SELECT id FROM projects WHERE project_code IS NULL OR project_code = ''
+    LOOP
+        new_code := 'PRJ-' || LPAD(counter::TEXT, 4, '0');
+        UPDATE projects SET project_code = new_code WHERE id = proj.id;
+        counter := counter + 1;
+    END LOOP;
+END $$;
+
+DO $$
+BEGIN
+    RAISE NOTICE '✅ 0/7 - Projects tablosu güncellendi (status, code, description)';
+END $$;
+
+-- =====================================================
 -- ADIM 1: MÜŞTERİLER TABLOSU
 -- =====================================================
 CREATE TABLE IF NOT EXISTS customers (

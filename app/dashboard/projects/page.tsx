@@ -110,6 +110,7 @@ export default function ProjectsPage() {
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showProjectDetailModal, setShowProjectDetailModal] = useState(false)
+  const [showTestModal, setShowTestModal] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   // Project Detail Add Modals
@@ -136,11 +137,14 @@ export default function ProjectsPage() {
     equipment_id: ''
   })
 
+  // Test Data
+  const [testData, setTestData] = useState<any>({})
+  const [testLoading, setTestLoading] = useState(false)
+
   // Project Detail Data
   const [projectDetailData, setProjectDetailData] = useState<any>({
-    customers: [],
     machines: [],
-    materials: [],
+    warehouseItems: [],
     products: [],
     equipment: [],
     productions: [],
@@ -389,57 +393,72 @@ export default function ProjectsPage() {
 
   const loadProjectDetail = async (projectId: string) => {
     try {
-      // Müşteriler
-      const { data: customersData } = await supabase
-        .from('project_customers')
-        .select('customer:customers(id, customer_name, customer_code, contact_person, phone)')
-        .eq('project_id', projectId)
-
-      // Tezgahlar
+      // Bu projede çalışan tezgahlar (verimlilik hesaplamalı)
       const { data: machinesData } = await supabase
-        .from('project_machines')
-        .select('machine:machines(id, machine_name, machine_code, status)')
+        .from('machines')
+        .select('*')
         .eq('project_id', projectId)
+        .eq('company_id', companyId)
 
-      // Hammaddeler
-      const { data: materialsData } = await supabase
-        .from('project_required_materials')
-        .select('material_id, quantity_needed, item:warehouse_items(id, name, code, unit)')
-        .eq('project_id', projectId)
+      // Her tezgah için verimlilik hesapla
+      const machinesWithEfficiency = await Promise.all(
+        (machinesData || []).map(async (machine) => {
+          // Tezgaha verilen hammadde
+          const { data: givenMaterials } = await supabase
+            .from('production_to_machine_transfers')
+            .select('quantity')
+            .eq('machine_id', machine.id)
 
-      // Mamüller
-      const { data: productsData } = await supabase
-        .from('project_target_products')
-        .select('product_id, quantity_target, quantity_produced, item:warehouse_items(id, name, code, unit)')
-        .eq('project_id', projectId)
+          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-      // Ekipmanlar
-      const { data: equipmentData } = await supabase
-        .from('project_equipment')
-        .select('equipment:equipment(id, equipment_name, equipment_code, equipment_type, status)')
-        .eq('project_id', projectId)
+          // Üretilen ürün
+          const { data: producedItems } = await supabase
+            .from('production_outputs')
+            .select('quantity')
+            .eq('machine_id', machine.id)
+
+          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
+
+          // Verimlilik hesaplama
+          const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
+
+          return {
+            ...machine,
+            totalGiven,
+            totalProduced,
+            efficiency
+          }
+        })
+      )
+
+      // Depo stok durumu (tüm stok kalemleri)
+      const { data: warehouseItems } = await supabase
+        .from('warehouse_items')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('name', { ascending: true })
+
+      // Her stok kalemi için bu projeye sevk edilen miktarı hesapla
+      const itemsWithShipments = await Promise.all(
+        (warehouseItems || []).map(async (item) => {
+          const { data: shipments } = await supabase
+            .from('warehouse_to_production_transfers')
+            .select('quantity')
+            .eq('item_id', item.id)
+            .eq('project_id', projectId)
+
+          const totalShipped = shipments?.reduce((sum, s) => sum + s.quantity, 0) || 0
+
+          return {
+            ...item,
+            shipped_to_project: totalShipped
+          }
+        })
+      )
 
       setProjectDetailData({
-        customers: customersData?.map((c: any) => c.customer) || [],
-        machines: machinesData?.map((m: any) => m.machine) || [],
-        materials: materialsData?.map((m: any) => ({
-          id: m.material_id,
-          item_name: m.item?.name || '',
-          item_code: m.item?.code || '',
-          quantity_needed: m.quantity_needed,
-          unit: m.item?.unit || ''
-        })) || [],
-        products: productsData?.map((p: any) => ({
-          id: p.product_id,
-          item_name: p.item?.name || '',
-          item_code: p.item?.code || '',
-          quantity_target: p.quantity_target,
-          quantity_produced: p.quantity_produced,
-          unit: p.item?.unit || ''
-        })) || [],
-        equipment: equipmentData?.map((e: any) => e.equipment) || [],
-        productions: [],
-        shipments: []
+        machines: machinesWithEfficiency,
+        warehouseItems: itemsWithShipments
       })
     } catch (error) {
       console.error('Error loading project details:', error)
@@ -478,6 +497,52 @@ export default function ProjectsPage() {
       setAvailableEquipment(equipmentData || [])
     } catch (error) {
       console.error('Error loading available data:', error)
+    }
+  }
+
+  const loadTestData = async () => {
+    setTestLoading(true)
+    try {
+      // Test 1: Müşteriler
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .limit(5)
+
+      // Test 2: Tezgahlar
+      const { data: machinesData, error: machinesError } = await supabase
+        .from('machines')
+        .select('*')
+        .limit(5)
+
+      // Test 3: Depo stok
+      const { data: warehouseData, error: warehouseError } = await supabase
+        .from('warehouse_items')
+        .select('*')
+        .limit(10)
+
+      // Test 4: Ekipmanlar
+      const { data: equipmentData, error: equipmentError } = await supabase
+        .from('equipment')
+        .select('*')
+        .limit(5)
+
+      setTestData({
+        customers: customersData || [],
+        machines: machinesData || [],
+        warehouse: warehouseData || [],
+        equipment: equipmentData || [],
+        errors: {
+          customersError: customersError?.message,
+          machinesError: machinesError?.message,
+          warehouseError: warehouseError?.message,
+          equipmentError: equipmentError?.message
+        }
+      })
+    } catch (error: any) {
+      console.error('Error:', error)
+    } finally {
+      setTestLoading(false)
     }
   }
 
@@ -1295,15 +1360,21 @@ export default function ProjectsPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={async () => {
-                  setSelectedProject(project)
-                  await loadProjectDetail(project.id)
-                  setShowProjectDetailModal(true)
-                }}
+                onClick={() => router.push(`/dashboard/projects/${project.id}`)}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
               >
                 <Eye className="w-4 h-4" />
                 Detay
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedProject(project)
+                  setShowTestModal(true)
+                }}
+                className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs"
+                title="Test Veri Yükleme"
+              >
+                Test
               </button>
               <button
                 onClick={() => openProjectModal(project)}
@@ -2560,8 +2631,7 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
-
-      {/* Proje Detay Modal */}
+      {/* Proje Detay Modal - SIMPLE VERSION */}
       {showProjectDetailModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowProjectDetailModal(false)}>
           <div className="bg-white rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -2570,7 +2640,7 @@ export default function ProjectsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-white">{selectedProject.project_name}</h2>
-                  <p className="text-blue-100 text-sm mt-1">{selectedProject.project_code || 'Kod yok'}</p>
+                  <p className="text-blue-100 text-sm mt-1">{selectedProject.project_code || 'Kod belirtilmemiş'}</p>
                 </div>
                 <button
                   onClick={() => setShowProjectDetailModal(false)}
@@ -2584,231 +2654,116 @@ export default function ProjectsPage() {
             {/* Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
               {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
-                  <Users className="w-6 h-6 text-blue-600 mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.customers.length}</div>
-                  <div className="text-sm text-gray-600">Müşteriler</div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
                   <Factory className="w-6 h-6 text-green-600 mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.machines.length}</div>
-                  <div className="text-sm text-gray-600">Tezgahlar</div>
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.machines?.length || 0}</div>
+                  <div className="text-sm text-gray-600">Bu Projede Çalışan Tezgahlar</div>
                 </div>
                 <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-500">
                   <Package className="w-6 h-6 text-yellow-600 mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.materials.length}</div>
-                  <div className="text-sm text-gray-600">Hammaddeler</div>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500">
-                  <Wrench className="w-6 h-6 text-purple-600 mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.equipment.length}</div>
-                  <div className="text-sm text-gray-600">Ekipmanlar</div>
+                  <div className="text-2xl font-bold text-gray-900">{projectDetailData.warehouseItems?.length || 0}</div>
+                  <div className="text-sm text-gray-600">Depo Stok Kalemleri</div>
                 </div>
               </div>
 
               {/* Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Müşteriler */}
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-5 h-5 text-blue-600" />
-                      <h3 className="font-bold text-lg">Müşteriler</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await loadAvailableData()
-                        setShowAddCustomerModal(true)
-                      }}
-                      className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      title="Müşteri Ekle"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {projectDetailData.customers.length > 0 ? (
-                    <div className="space-y-2">
-                      {projectDetailData.customers.map((customer: any) => (
-                        <div key={customer.id} className="p-3 bg-blue-50 rounded-lg">
-                          <div className="font-semibold text-gray-900">{customer.customer_name}</div>
-                          <div className="text-sm text-gray-600">{customer.customer_code}</div>
-                          {customer.contact_person && (
-                            <div className="text-xs text-gray-500 mt-1">{customer.contact_person} - {customer.phone}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Müşteri eklenmemiş</p>
-                  )}
-                </div>
-
                 {/* Tezgahlar */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Factory className="w-5 h-5 text-green-600" />
-                      <h3 className="font-bold text-lg">Tezgahlar</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await loadAvailableData()
-                        setShowAddMachineModal(true)
-                      }}
-                      className="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                      title="Tezgah Ekle"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Factory className="w-5 h-5 text-green-600" />
+                    <h3 className="font-bold text-lg">Projede Çalışan Tezgahlar</h3>
                   </div>
-                  {projectDetailData.machines.length > 0 ? (
-                    <div className="space-y-2">
-                      {projectDetailData.machines.map((machine: any) => (
-                        <div key={machine.id} className="p-3 bg-green-50 rounded-lg flex justify-between items-center">
-                          <div>
-                            <div className="font-semibold text-gray-900">{machine.machine_name}</div>
-                            <div className="text-sm text-gray-600">{machine.machine_code}</div>
-                          </div>
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            machine.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {machine.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Tezgah eklenmemiş</p>
-                  )}
-                </div>
-
-                {/* Hammaddeler */}
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Package className="w-5 h-5 text-yellow-600" />
-                      <h3 className="font-bold text-lg">Hammadde İhtiyacı</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await loadAvailableData()
-                        setShowAddMaterialModal(true)
-                      }}
-                      className="p-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
-                      title="Hammadde Ekle"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {projectDetailData.materials.length > 0 ? (
-                    <div className="space-y-2">
-                      {projectDetailData.materials.map((material: any) => (
-                        <div key={material.id} className="p-3 bg-yellow-50 rounded-lg flex justify-between">
-                          <div>
-                            <div className="font-semibold text-gray-900">{material.item_name}</div>
-                            <div className="text-sm text-gray-600">{material.item_code}</div>
-                          </div>
-                          <span className="font-bold text-yellow-700">
-                            {material.quantity_needed} {material.unit}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Hammadde eklenmemiş</p>
-                  )}
-                </div>
-
-                {/* Mamüller */}
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Package className="w-5 h-5 text-purple-600" />
-                      <h3 className="font-bold text-lg">Mamül Hedefleri</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await loadAvailableData()
-                        setShowAddProductModal(true)
-                      }}
-                      className="p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                      title="Mamül Ekle"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {projectDetailData.products.length > 0 ? (
+                  {projectDetailData.machines && projectDetailData.machines.length > 0 ? (
                     <div className="space-y-3">
-                      {projectDetailData.products.map((product: any) => (
-                        <div key={product.id} className="p-3 bg-purple-50 rounded-lg">
-                          <div className="flex justify-between mb-2">
+                      {projectDetailData.machines.map((machine: any) => (
+                        <div key={machine.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-start mb-2">
                             <div>
-                              <div className="font-semibold text-gray-900">{product.item_name}</div>
-                              <div className="text-sm text-gray-600">{product.item_code}</div>
+                              <div className="font-bold text-gray-900">{machine.machine_name}</div>
+                              <div className="text-sm text-gray-600">{machine.machine_code}</div>
                             </div>
-                            <div className="text-right">
-                              <div className="font-bold text-purple-700">
-                                {product.quantity_produced} / {product.quantity_target} {product.unit}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                %{((product.quantity_produced / product.quantity_target) * 100).toFixed(0)}
-                              </div>
-                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              machine.status === 'active' ? 'bg-green-100 text-green-800' :
+                              machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {machine.status === 'active' ? 'Çalışıyor' :
+                               machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                            </span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-purple-600 h-2 rounded-full"
-                              style={{ width: `${Math.min((product.quantity_produced / product.quantity_target) * 100, 100)}%` }}
-                            ></div>
+                          <div className="grid grid-cols-3 gap-2 mt-3">
+                            <div className="text-center">
+                              <div className="text-xs text-gray-600">Verilen</div>
+                              <div className="text-sm font-bold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'}</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-600">Üretilen</div>
+                              <div className="text-sm font-bold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'}</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-600">Verimlilik</div>
+                              <div className={`text-sm font-bold ${
+                                (machine.efficiency || 0) >= 80 ? 'text-green-600' :
+                                (machine.efficiency || 0) >= 60 ? 'text-yellow-600' :
+                                'text-red-600'
+                              }`}>
+                                {machine.efficiency?.toFixed(1) || '0.0'}%
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">Mamül hedefi eklenmemiş</p>
+                    <p className="text-gray-500 text-sm">Bu projede çalışan tezgah yok. Tezgah Yönetimi sayfasından tezgahlara proje atayabilirsiniz.</p>
                   )}
                 </div>
 
-                {/* Ekipmanlar */}
-                <div className="bg-white border border-gray-200 rounded-xl p-6 md:col-span-2">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Wrench className="w-5 h-5 text-gray-600" />
-                      <h3 className="font-bold text-lg">Kullanılan Ekipmanlar</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await loadAvailableData()
-                        setShowAddEquipmentModal(true)
-                      }}
-                      className="p-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                      title="Ekipman Ekle"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                {/* Depo Stok */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Package className="w-5 h-5 text-yellow-600" />
+                    <h3 className="font-bold text-lg">Depo Stok Durumu</h3>
                   </div>
-                  {projectDetailData.equipment.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {projectDetailData.equipment.map((item: any) => (
-                        <div key={item.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
-                          <div>
-                            <div className="font-semibold text-gray-900">{item.equipment_name}</div>
-                            <div className="text-sm text-gray-600">{item.equipment_code} - {item.equipment_type}</div>
+                  {projectDetailData.warehouseItems && projectDetailData.warehouseItems.length > 0 ? (
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {projectDetailData.warehouseItems.map((item: any) => (
+                        <div key={item.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-900 text-sm">{item.name}</div>
+                              <div className="text-xs text-gray-600">{item.code}</div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              item.type === 'raw_material' ? 'bg-orange-100 text-orange-800' :
+                              item.type === 'semi_finished' ? 'bg-blue-100 text-blue-800' :
+                              'bg-purple-100 text-purple-800'
+                            }`}>
+                              {item.type === 'raw_material' ? 'Hammadde' :
+                               item.type === 'semi_finished' ? 'Yarı Mamül' : 'Mamül'}
+                            </span>
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            item.status === 'available' ? 'bg-green-100 text-green-800' :
-                            item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
-                            item.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {item.status}
-                          </span>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                              <div className="text-xs text-gray-600">Depodaki Miktar</div>
+                              <div className="text-sm font-bold text-gray-900">
+                                {item.current_stock?.toFixed(2) || '0.00'} {item.unit}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-600">Projeye Sevk Edilen</div>
+                              <div className="text-sm font-bold text-blue-600">
+                                {item.shipped_to_project?.toFixed(2) || '0.00'} {item.unit}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">Ekipman eklenmemiş</p>
+                    <p className="text-gray-500 text-sm">Depoda stok kalemi yok.</p>
                   )}
                 </div>
               </div>
@@ -2817,132 +2772,87 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Add Customer Modal */}
-      {showAddCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddCustomerModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Müşteri Ekle</h3>
-            <select
-              value={addForm.customer_id}
-              onChange={(e) => setAddForm({ ...addForm, customer_id: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            >
-              <option value="">Müşteri seçin...</option>
-              {availableCustomers.map(c => (
-                <option key={c.id} value={c.id}>{c.customer_name} - {c.customer_code}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button onClick={() => setShowAddCustomerModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-              <button onClick={handleAddCustomer} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Ekle</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Add Machine Modal */}
-      {showAddMachineModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddMachineModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Tezgah Ekle</h3>
-            <select
-              value={addForm.machine_id}
-              onChange={(e) => setAddForm({ ...addForm, machine_id: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            >
-              <option value="">Tezgah seçin...</option>
-              {availableMachines.map(m => (
-                <option key={m.id} value={m.id}>{m.machine_name} - {m.machine_code}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button onClick={() => setShowAddMachineModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-              <button onClick={handleAddMachine} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Ekle</button>
+      {/* Test Modal */}
+      {showTestModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b bg-blue-600 text-white flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold">{selectedProject.project_name}</h2>
+                <p className="text-sm">Test - Veri Kontrolü</p>
+              </div>
+              <button onClick={() => setShowTestModal(false)} className="p-2 hover:bg-blue-500 rounded">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Add Material Modal */}
-      {showAddMaterialModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddMaterialModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Hammadde Ekle</h3>
-            <select
-              value={addForm.material_id}
-              onChange={(e) => setAddForm({ ...addForm, material_id: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            >
-              <option value="">Hammadde seçin...</option>
-              {availableWarehouseItems.filter(i => i.type === 'raw_material').map(i => (
-                <option key={i.id} value={i.id}>{i.name} - {i.code}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              step="0.001"
-              placeholder="Miktar"
-              value={addForm.material_quantity}
-              onChange={(e) => setAddForm({ ...addForm, material_quantity: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setShowAddMaterialModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-              <button onClick={handleAddMaterial} className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">Ekle</button>
-            </div>
-          </div>
-        </div>
-      )}
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <button
+                onClick={loadTestData}
+                disabled={testLoading}
+                className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {testLoading ? 'Yükleniyor...' : 'Verileri Test Et'}
+              </button>
 
-      {/* Add Product Modal */}
-      {showAddProductModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddProductModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Mamül Hedefi Ekle</h3>
-            <select
-              value={addForm.product_id}
-              onChange={(e) => setAddForm({ ...addForm, product_id: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            >
-              <option value="">Mamül seçin...</option>
-              {availableWarehouseItems.filter(i => i.type === 'finished_good').map(i => (
-                <option key={i.id} value={i.id}>{i.name} - {i.code}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              step="0.001"
-              placeholder="Hedef Miktar"
-              value={addForm.product_quantity}
-              onChange={(e) => setAddForm({ ...addForm, product_quantity: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setShowAddProductModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-              <button onClick={handleAddProduct} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Ekle</button>
-            </div>
-          </div>
-        </div>
-      )}
+              {Object.keys(testData).length > 0 && (
+                <div className="space-y-4">
+                  {/* Müşteriler */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-bold mb-2">
+                      Müşteriler ({testData.customers?.length || 0})
+                      {testData.errors?.customersError && (
+                        <span className="text-red-600 text-sm ml-2">Hata: {testData.errors.customersError}</span>
+                      )}
+                    </h3>
+                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(testData.customers, null, 2)}
+                    </pre>
+                  </div>
 
-      {/* Add Equipment Modal */}
-      {showAddEquipmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => setShowAddEquipmentModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Ekipman Ekle</h3>
-            <select
-              value={addForm.equipment_id}
-              onChange={(e) => setAddForm({ ...addForm, equipment_id: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
-            >
-              <option value="">Ekipman seçin...</option>
-              {availableEquipment.map(e => (
-                <option key={e.id} value={e.id}>{e.equipment_name} - {e.equipment_code}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button onClick={() => setShowAddEquipmentModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-              <button onClick={handleAddEquipment} className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">Ekle</button>
+                  {/* Tezgahlar */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-bold mb-2">
+                      Tezgahlar ({testData.machines?.length || 0})
+                      {testData.errors?.machinesError && (
+                        <span className="text-red-600 text-sm ml-2">Hata: {testData.errors.machinesError}</span>
+                      )}
+                    </h3>
+                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(testData.machines, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Depo Stok */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-bold mb-2">
+                      Depo Stok ({testData.warehouse?.length || 0})
+                      {testData.errors?.warehouseError && (
+                        <span className="text-red-600 text-sm ml-2">Hata: {testData.errors.warehouseError}</span>
+                      )}
+                    </h3>
+                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(testData.warehouse, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Ekipmanlar */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-bold mb-2">
+                      Ekipmanlar ({testData.equipment?.length || 0})
+                      {testData.errors?.equipmentError && (
+                        <span className="text-red-600 text-sm ml-2">Hata: {testData.errors.equipmentError}</span>
+                      )}
+                    </h3>
+                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+                      {JSON.stringify(testData.equipment, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

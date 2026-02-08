@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
-import { Factory, TrendingUp, Clock, Package, Activity, Settings, Wrench, AlertCircle } from 'lucide-react'
+import { Factory, TrendingUp, Clock, Package, Activity, Settings, Wrench, AlertCircle, FolderKanban } from 'lucide-react'
 
 interface Machine {
   id: string
@@ -15,6 +15,8 @@ interface Machine {
   daily_capacity: number | null
   efficiency_rate: number
   working_hours: number
+  project_id?: string | null
+  project?: { project_name: string } | null
   created_at: string
   production_count?: number
   material_assignments_count?: number
@@ -30,6 +32,7 @@ export default function MachinesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingMachine, setEditingMachine] = useState<Machine | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [projects, setProjects] = useState<any[]>([])
 
   const [formData, setFormData] = useState<{
     machine_code: string
@@ -40,6 +43,7 @@ export default function MachinesPage() {
     daily_capacity: number
     efficiency_rate: number
     working_hours: number
+    project_id: string
   }>({
     machine_code: '',
     machine_name: '',
@@ -49,10 +53,12 @@ export default function MachinesPage() {
     daily_capacity: 0,
     efficiency_rate: 0,
     working_hours: 0,
+    project_id: '',
   })
 
   useEffect(() => {
     loadMachines()
+    loadProjects()
 
     // Subscribe to real-time updates
     const subscription = supabase
@@ -66,6 +72,32 @@ export default function MachinesPage() {
       subscription.unsubscribe()
     }
   }, [])
+
+  const loadProjects = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.company_id) return
+
+      const { data } = await supabase
+        .from('projects')
+        .select('id, project_name, project_code, status')
+        .eq('company_id', profile.company_id)
+        .in('status', ['planning', 'in_progress'])
+        .order('project_name', { ascending: true })
+
+      setProjects(data || [])
+    } catch (error) {
+      console.error('Error loading projects:', error)
+    }
+  }
 
   const loadMachines = async () => {
     try {
@@ -125,7 +157,7 @@ export default function MachinesPage() {
 
       const { data, error } = await supabase
         .from('machines')
-        .select('*')
+        .select('*, project:projects(project_name)')
         .eq('company_id', finalCompanyId)
         .order('machine_code', { ascending: true })
 
@@ -213,6 +245,7 @@ export default function MachinesPage() {
             daily_capacity: formData.daily_capacity,
             efficiency_rate: formData.efficiency_rate,
             working_hours: formData.working_hours,
+            project_id: formData.project_id || null,
           })
           .eq('id', editingMachine.id)
 
@@ -231,6 +264,7 @@ export default function MachinesPage() {
             daily_capacity: formData.daily_capacity,
             efficiency_rate: formData.efficiency_rate,
             working_hours: formData.working_hours,
+            project_id: formData.project_id || null,
           })
 
         if (error) throw error
@@ -246,6 +280,7 @@ export default function MachinesPage() {
         daily_capacity: 0,
         efficiency_rate: 0,
         working_hours: 0,
+        project_id: '',
       })
       setEditingMachine(null)
       setShowModal(false)
@@ -266,6 +301,7 @@ export default function MachinesPage() {
       daily_capacity: machine.daily_capacity || 0,
       efficiency_rate: machine.efficiency_rate,
       working_hours: machine.working_hours,
+      project_id: machine.project_id || '',
     })
     setShowModal(true)
   }
@@ -348,6 +384,7 @@ export default function MachinesPage() {
               daily_capacity: 0,
               efficiency_rate: 0,
               working_hours: 0,
+              project_id: '',
             })
             setShowModal(true)
           }}
@@ -398,6 +435,15 @@ export default function MachinesPage() {
                   <span className="text-gray-600">Model:</span>
                   <span className="font-semibold text-gray-800">{machine.model || '-'}</span>
                 </div>
+                {machine.project && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1">
+                      <FolderKanban className="w-3 h-3" />
+                      Proje:
+                    </span>
+                    <span className="font-semibold text-blue-600">{machine.project.project_name}</span>
+                  </div>
+                )}
               </div>
 
               {/* Production Stats */}
@@ -528,6 +574,23 @@ export default function MachinesPage() {
                   <option value="maintenance">Bakımda</option>
                   <option value="offline">Çalışmıyor</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Çalıştığı Proje</label>
+                <select
+                  value={formData.project_id}
+                  onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="">Proje Seçiniz (Opsiyonel)</option>
+                  {projects.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.project_name} {project.project_code ? `(${project.project_code})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Bu tezgah hangi proje için çalışıyor?</p>
               </div>
 
               <div className="flex space-x-3 pt-4">

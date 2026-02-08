@@ -89,10 +89,12 @@ export default function ProjectDetailPage() {
 
       const machinesWithStats = await Promise.all(
         (machinesData || []).map(async (machine) => {
+          // Sadece bu projeye ait verileri çek
           const { data: givenMaterials } = await supabase
             .from('production_to_machine_transfers')
             .select('quantity')
             .eq('machine_id', machine.id)
+            .eq('project_id', projectId)
 
           const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
@@ -100,6 +102,7 @@ export default function ProjectDetailPage() {
             .from('production_outputs')
             .select('quantity')
             .eq('machine_id', machine.id)
+            .eq('project_id', projectId)
 
           const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
           const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0

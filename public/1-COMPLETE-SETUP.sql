@@ -381,23 +381,50 @@ END;
 $$;
 CREATE TRIGGER trg_record_scrap AFTER INSERT ON production_scrap_records FOR EACH ROW EXECUTE FUNCTION record_production_scrap();
 
--- 7. Üretim Kaydı → Tezgahtan Otomatik Azalt
+-- 7. Üretim Kaydı → Tezgahtan Otomatik Azalt + Fazla Hammadde Geri Dön
 CREATE OR REPLACE FUNCTION add_production_output_to_inventory()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
-DECLARE req RECORD;
+DECLARE
+    req RECORD;
+    total_assigned DECIMAL := 0;
+    fire_quantity DECIMAL := 0;
+    unused_material DECIMAL := 0;
 BEGIN
+    -- Mamülü üretim stoğuna ekle
     INSERT INTO production_inventory (company_id, item_id, current_stock, item_type, notes)
     VALUES (NEW.company_id, NEW.output_item_id, NEW.quantity, 'finished_product', 'Üretim #' || NEW.id)
     ON CONFLICT (company_id, item_id, item_type)
     DO UPDATE SET current_stock = production_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
 
+    -- Tezgahtan atanan malzemeleri çıkar
     FOR req IN
         SELECT item_id, quantity FROM production_material_assignments
         WHERE company_id = NEW.company_id AND machine_id = NEW.machine_id AND assigned_date::date = NEW.production_date::date
     LOOP
+        total_assigned := total_assigned + (req.quantity * NEW.quantity);
         UPDATE machine_inventory SET current_stock = current_stock - (req.quantity * NEW.quantity), updated_at = NOW()
         WHERE company_id = NEW.company_id AND machine_id = NEW.machine_id AND item_id = req.item_id;
     END LOOP;
+
+    -- Fire miktarını hesapla
+    SELECT COALESCE(SUM(quantity), 0) INTO fire_quantity FROM production_scrap_records
+    WHERE company_id = NEW.company_id AND machine_id = NEW.machine_id AND recorded_at::date = NEW.production_date::date;
+
+    -- Fazla hammadde = Verilen - Üretilen - Fire
+    unused_material := total_assigned - NEW.quantity - fire_quantity;
+
+    -- Fazla varsa üretim stoğuna geri ekle
+    IF unused_material > 0 THEN
+        FOR req IN
+            SELECT item_id FROM production_material_assignments
+            WHERE company_id = NEW.company_id AND machine_id = NEW.machine_id AND assigned_date::date = NEW.production_date::date
+        LOOP
+            INSERT INTO production_inventory (company_id, item_id, current_stock, item_type, notes)
+            VALUES (NEW.company_id, req.item_id, unused_material, 'raw_material', 'Fazla - Üretim #' || NEW.id)
+            ON CONFLICT (company_id, item_id, item_type)
+            DO UPDATE SET current_stock = production_inventory.current_stock + EXCLUDED.current_stock, updated_at = NOW();
+        END LOOP;
+    END IF;
 
     RETURN NEW;
 END;

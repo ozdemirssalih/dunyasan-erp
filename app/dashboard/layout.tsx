@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { usePermissions } from '@/lib/hooks/usePermissions'
@@ -14,15 +14,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [profile, setProfile] = useState<any>(null)
   const [currentTime, setCurrentTime] = useState('')
   const [currentDate, setCurrentDate] = useState('')
+  const hasCheckedAuth = useRef(false)
 
   useEffect(() => {
-    // Check authentication - only once on mount
+    // Check authentication - only once ever using ref
     const checkAuth = async () => {
+      if (hasCheckedAuth.current) {
+        console.log('⏭️ Auth already checked, skipping...')
+        return
+      }
+
+      console.log('🔐 Checking auth in layout...')
+      hasCheckedAuth.current = true
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
+        console.log('❌ No user, redirecting to login')
         router.push('/login')
         return
       }
+
+      console.log('✅ User authenticated:', user.email)
       setUser(user)
 
       // Get user profile

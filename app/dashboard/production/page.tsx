@@ -1671,7 +1671,7 @@ export default function ProductionPage() {
               <div className="px-6 py-4 bg-orange-50 border-b border-gray-200">
                 <h3 className="text-lg font-bold text-orange-800 flex items-center gap-2">
                   <Package className="w-5 h-5" />
-                  Taşihe Gönderilen Ürünler
+                  Tashih Bekleyen Ürünler
                 </h3>
                 <p className="text-sm text-orange-600 mt-1">Kalite kontrolden geçemeyenler - Yeniden işlenip KK'ya gönderilebilir</p>
               </div>
@@ -1698,7 +1698,7 @@ export default function ProductionPage() {
                         <td className="px-6 py-4 text-sm font-bold text-orange-600">{inv.current_stock}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{inv.unit}</td>
                         <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate">
-                          Kalite kontrolden geçemedi - Taşih gerekli
+                          Kalite kontrolden geçemedi - Tashih gerekli
                         </td>
                       </tr>
                     ))}
@@ -1707,7 +1707,7 @@ export default function ProductionPage() {
 
                 {productionInventory.filter(inv => inv.item_type === 'tashih').length === 0 && (
                   <div className="text-center py-12">
-                    <p className="text-gray-500">Taşihe gönderilen ürün yok.</p>
+                    <p className="text-gray-500">Tashih bekleyen ürün yok.</p>
                   </div>
                 )}
               </div>

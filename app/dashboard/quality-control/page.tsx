@@ -375,7 +375,7 @@ export default function QualityControlPage() {
           throw prodStockError
         }
 
-        alert('✅ Kalite test sonucu kaydedildi! Ürün taşihe gönderildi (üretim deposu).')
+        alert('✅ Kalite test sonucu kaydedildi! Ürün tashih için üretim deposuna gönderildi.')
       }
 
       setShowTransferModal(false)

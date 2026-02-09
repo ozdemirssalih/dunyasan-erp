@@ -6,6 +6,27 @@ import { usePermissions } from '@/lib/hooks/usePermissions'
 
 type Tab = 'users' | 'roles' | 'invitations' | 'company' | 'activity'
 
+// Modül isimlerinin Türkçe karşılıkları
+const MODULE_NAMES: Record<string, string> = {
+  dashboard: 'Ana Sayfa',
+  production: 'Üretim',
+  machines: 'Tezgahlar',
+  inventory: 'Envanter',
+  planning: 'Planlama',
+  warehouse: 'Depo',
+  toolroom: 'Takım Tezgahı',
+  accounting: 'Muhasebe',
+  invoices: 'Faturalar',
+  accounts: 'Hesaplar',
+  costs: 'Maliyetler',
+  reports: 'Raporlar',
+  quality_control: 'Kalite Kontrol',
+  projects: 'Projeler',
+  customers: 'Müşteriler',
+  users: 'Kullanıcılar',
+  settings: 'Ayarlar'
+}
+
 interface User {
   id: string
   full_name: string
@@ -1091,7 +1112,7 @@ export default function SettingsPage() {
                               key={module}
                               className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded"
                             >
-                              {module}
+                              {MODULE_NAMES[module] || module}
                             </span>
                           ))}
                       </div>
@@ -1454,7 +1475,7 @@ export default function SettingsPage() {
                   {Object.entries(roleForm.permissions).map(([module, perms]: [string, any]) => (
                     <div key={module} className="bg-white rounded-lg p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
-                        <h5 className="font-bold text-gray-800 capitalize">{module}</h5>
+                        <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
                         <div className="flex space-x-2">
                           <button
                             type="button"

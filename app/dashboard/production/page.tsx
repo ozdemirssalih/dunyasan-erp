@@ -807,10 +807,10 @@ export default function ProductionPage() {
       // 1. Tezgaha verilen son hammaddeyi bul
       const { data: lastTransfer, error: transferError } = await supabase
         .from('production_to_machine_transfers')
-        .select('item_id, quantity, item:warehouse_items(code, name)')
+        .select('item_id, quantity')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
+        .order('assigned_date', { ascending: false })
         .limit(1)
         .maybeSingle()
 

@@ -380,8 +380,7 @@ export default function ProductionPage() {
       .select(`
         *,
         machine:machines(machine_name, machine_code),
-        item:warehouse_items(code, name, unit),
-        assigned_by:profiles(full_name)
+        item:warehouse_items(code, name, unit)
       `)
       .eq('company_id', companyId)
       .order('assigned_date', { ascending: false })
@@ -395,9 +394,9 @@ export default function ProductionPage() {
       item_code: a.item?.code || '',
       quantity: a.quantity,
       unit: a.item?.unit || '',
-      assigned_by_name: a.assigned_by?.full_name || '',
+      assigned_by_name: '',
       assigned_date: a.assigned_date,
-      shift: a.shift || ''
+      shift: ''
     })) || []
 
     setAssignments(assignmentsData)
@@ -535,20 +534,20 @@ export default function ProductionPage() {
 
     const todayProduction = todayOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // En son atanan projeleri al
-    const { data: recentAssignments } = await supabase
-      .from('production_to_machine_transfers')
-      .select(`
-        project_id,
-        project:projects(project_name)
-      `)
-      .eq('company_id', companyId)
-      .not('project_id', 'is', null)
-      .order('assigned_date', { ascending: false })
-      .limit(5)
+    // En son atanan projeleri al (Geçici olarak devre dışı - project_id kolonu eklendikten sonra aktif olacak)
+    // const { data: recentAssignments } = await supabase
+    //   .from('production_to_machine_transfers')
+    //   .select(`
+    //     project_id,
+    //     project:projects(project_name)
+    //   `)
+    //   .eq('company_id', companyId)
+    //   .not('project_id', 'is', null)
+    //   .order('assigned_date', { ascending: false })
+    //   .limit(5)
 
-    const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
-    const recentProjects = Array.from(new Set(projectNames || []))
+    // const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
+    const recentProjects: string[] = []
 
     // Verimlilik = Verilen - (Üretilen + Fire)
     const calculatedScrap = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
@@ -753,10 +752,6 @@ export default function ProductionPage() {
           machine_id: assignmentForm.machine_id,
           item_id: assignmentForm.item_id,
           quantity: assignmentForm.quantity,
-          shift: assignmentForm.shift,
-          notes: assignmentForm.notes,
-          project_id: assignmentForm.project_id || null,
-          project_part_id: assignmentForm.project_part_id || null,
         })
 
       if (error) throw error

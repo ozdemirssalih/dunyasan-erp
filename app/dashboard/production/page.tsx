@@ -779,7 +779,7 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      // 1. Üretim deposundan hammadde stoğunu kontrol et ve düş
+      // 1. Üretim deposundan hammadde stoğunu kontrol et (trigger düşürecek, sadece kontrol)
       const { data: existingStock } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -798,20 +798,7 @@ export default function ProductionPage() {
         return
       }
 
-      // Stoktan düş
-      const { error: stockError } = await supabase
-        .from('production_inventory')
-        .update({
-          current_stock: existingStock.current_stock - assignmentForm.quantity,
-          updated_at: new Date().toISOString()
-        })
-        .eq('company_id', companyId)
-        .eq('item_id', assignmentForm.item_id)
-        .eq('item_type', 'raw_material')
-
-      if (stockError) throw stockError
-
-      // 2. Transfer kaydını oluştur
+      // 2. Transfer kaydını oluştur (trigger otomatik: production_inventory'den düşer, machine_inventory'ye ekler)
       const { error } = await supabase
         .from('production_to_machine_transfers')
         .insert({
@@ -830,7 +817,7 @@ export default function ProductionPage() {
 
       setShowAssignmentModal(false)
       resetAssignmentForm()
-      await loadData() // ⚠️ await ekledik
+      await loadData()
 
       alert('✅ Hammadde tezgaha verildi ve stoktan düşüldü!')
     } catch (error: any) {

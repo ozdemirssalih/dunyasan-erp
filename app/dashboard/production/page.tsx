@@ -755,7 +755,6 @@ export default function ProductionPage() {
           quantity: assignmentForm.quantity,
           shift: assignmentForm.shift,
           notes: assignmentForm.notes,
-          assigned_by: currentUserId,
           project_id: assignmentForm.project_id || null,
           project_part_id: assignmentForm.project_part_id || null,
         })

@@ -1207,7 +1207,7 @@ export default function ProductionPage() {
     if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) kalite kontrole göndermek istediğinizden emin misiniz?`)) return
 
     try {
-      // Kalite kontrole transfer kaydı oluştur
+      // Kalite kontrole transfer talebi oluştur (pending - onay beklesin)
       const { data: transferData, error: transferError } = await supabase
         .from('production_to_qc_transfers')
         .insert({
@@ -1216,7 +1216,7 @@ export default function ProductionPage() {
           quantity: output.quantity,
           notes: `Üretim kaydı #${output.id} - ${output.machine_name} - ${new Date(output.production_date).toLocaleDateString('tr-TR')}`,
           requested_by: currentUserId,
-          status: 'approved' // Direkt onaylı olarak gönder
+          status: 'pending' // Kalite kontrol onaylayacak
         })
         .select()
         .single()
@@ -1235,7 +1235,7 @@ export default function ProductionPage() {
       if (updateError) throw updateError
 
       await loadData()
-      alert('✅ Ürün kalite kontrole gönderildi!')
+      alert('✅ Kalite kontrole onay talebi gönderildi!')
     } catch (error: any) {
       console.error('Error sending to QC:', error)
       alert('❌ Hata: ' + error.message)

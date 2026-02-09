@@ -40,6 +40,9 @@ export default function QualityControlPage() {
     notes: '',
   })
 
+  // Submitting state (çift tıklama engellemek için)
+  const [submittingTransfer, setSubmittingTransfer] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
@@ -311,8 +314,10 @@ export default function QualityControlPage() {
   const handleCreateOutgoingTransfer = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingTransfer) return // Çift tıklama engelle
 
     try {
+      setSubmittingTransfer(true)
       if (transferForm.quality_result === 'passed') {
         // GEÇERSE: Ana depoya transfer talebi oluştur (depo onayı bekle)
         const { error } = await supabase
@@ -402,6 +407,8 @@ export default function QualityControlPage() {
     } catch (error: any) {
       console.error('Error creating transfer:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingTransfer(false)
     }
   }
 

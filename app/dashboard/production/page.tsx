@@ -138,6 +138,14 @@ export default function ProductionPage() {
   const [showManualStockModal, setShowManualStockModal] = useState(false)
   const [showQCTransferModal, setShowQCTransferModal] = useState(false)
 
+  // Submitting states (çift tıklama engellemek için)
+  const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [submittingAssignment, setSubmittingAssignment] = useState(false)
+  const [submittingOutput, setSubmittingOutput] = useState(false)
+  const [submittingTransfer, setSubmittingTransfer] = useState(false)
+  const [submittingManualStock, setSubmittingManualStock] = useState(false)
+  const [submittingQCTransfer, setSubmittingQCTransfer] = useState(false)
+
   // Form states
   const [requestForm, setRequestForm] = useState({
     item_id: '',
@@ -748,8 +756,10 @@ export default function ProductionPage() {
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingRequest) return // Çift tıklama engelle
 
     try {
+      setSubmittingRequest(true)
       const { error } = await supabase
         .from('production_material_requests')
         .insert({
@@ -771,14 +781,19 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error creating request:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingRequest(false)
     }
   }
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingAssignment) return // Çift tıklama engelle
 
     try {
+      setSubmittingAssignment(true)
+
       // 1. Üretim deposundan hammadde stoğunu kontrol et (trigger düşürecek, sadece kontrol)
       const { data: existingStock } = await supabase
         .from('production_inventory')
@@ -823,14 +838,18 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error creating assignment:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingAssignment(false)
     }
   }
 
   const handleCreateOutput = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingOutput) return // Çift tıklama engelle
 
     try {
+      setSubmittingOutput(true)
       // 1. Tezgaha verilen son hammaddeyi bul
       const { data: lastTransfer, error: transferError } = await supabase
         .from('production_to_machine_transfers')
@@ -1027,6 +1046,8 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error creating output:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingOutput(false)
     }
   }
 
@@ -1107,8 +1128,11 @@ export default function ProductionPage() {
   const handleManualStockAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingManualStock) return // Çift tıklama engelle
 
     try {
+      setSubmittingManualStock(true)
+
       // Üretim deposuna bitmiş ürün ekle
       const { data: existing } = await supabase
         .from('production_inventory')
@@ -1155,14 +1179,19 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error adding manual stock:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingManualStock(false)
     }
   }
 
   const handleCreateQCTransfer = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (submittingQCTransfer) return // Çift tıklama engelle
 
     try {
+      setSubmittingQCTransfer(true)
+
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .insert({
@@ -1183,6 +1212,8 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error creating QC transfer:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingQCTransfer(false)
     }
   }
 
@@ -1205,8 +1236,11 @@ export default function ProductionPage() {
 
   const handleSendOutputToQC = async (output: ProductionOutput) => {
     if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) kalite kontrole göndermek istediğinizden emin misiniz?`)) return
+    if (submittingQCTransfer) return // Çift tıklama engelle
 
     try {
+      setSubmittingQCTransfer(true)
+
       // Kalite kontrole transfer talebi oluştur (pending - onay beklesin)
       const { data: transferData, error: transferError } = await supabase
         .from('production_to_qc_transfers')
@@ -1239,6 +1273,8 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error sending to QC:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingQCTransfer(false)
     }
   }
 

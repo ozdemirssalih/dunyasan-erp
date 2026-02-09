@@ -289,7 +289,21 @@ export default function ProductionPage() {
   const loadProductionInventory = async (companyId: string) => {
     console.log('🔍 [PRODUCTION] loadProductionInventory çağrıldı, companyId:', companyId)
 
-    // Üretim deposundan tüm stokları çek (hem hammadde hem bitmiş ürün)
+    // ÖNCE join olmadan tüm kayıtları çek - kaç tane var?
+    const { data: rawData, error: rawError } = await supabase
+      .from('production_inventory')
+      .select('*')
+      .eq('company_id', companyId)
+      .gt('current_stock', 0)
+
+    console.log('📊 [RAW DATA] production_inventory (join YOK):', {
+      count: rawData?.length,
+      hammadde: rawData?.filter((r: any) => r.item_type === 'raw_material').length,
+      bitmiş: rawData?.filter((r: any) => r.item_type === 'finished_product').length
+    })
+    console.log('📦 [RAW DATA] İlk 3 kayıt:', rawData?.slice(0, 3))
+
+    // Şimdi join ile çek
     const { data, error } = await supabase
       .from('production_inventory')
       .select(`
@@ -306,8 +320,8 @@ export default function ProductionPage() {
       return
     }
 
-    console.log('🏭 [PRODUCTION] production_inventory sonucu:', { count: data?.length })
-    console.log('📦 [PRODUCTION] İlk 3 kayıt:', data?.slice(0, 3))
+    console.log('🏭 [WITH JOIN] production_inventory sonucu:', { count: data?.length })
+    console.log('📦 [WITH JOIN] İlk 3 kayıt:', data?.slice(0, 3))
 
     const inventoryData = data?.map((inv: any) => ({
       id: inv.id,

@@ -296,19 +296,48 @@ export default function ProductionPage() {
   const loadProductionInventory = async (companyId: string) => {
     console.log('🔍 [PRODUCTION] loadProductionInventory çağrıldı, companyId:', companyId)
 
-    const { data, error } = await supabase
+    // Hammaddeleri ana depodan (warehouse_items) çek - gerçek stok
+    const { data: rawMaterials } = await supabase
+      .from('warehouse_items')
+      .select(`
+        id,
+        code,
+        name,
+        unit,
+        current_stock,
+        category:warehouse_categories(name)
+      `)
+      .eq('company_id', companyId)
+      .gt('current_stock', 0)
+      .order('code')
+
+    // Bitmiş ürünleri üretim deposundan (production_inventory) çek
+    const { data: finishedProducts } = await supabase
       .from('production_inventory')
       .select(`
         *,
         item:warehouse_items(code, name, unit, category:warehouse_categories(name))
       `)
       .eq('company_id', companyId)
+      .eq('item_type', 'finished_product')
       .gt('current_stock', 0)
-      .order('item_type', { ascending: true })
 
-    console.log('🏭 [PRODUCTION] production_inventory sorgu sonucu:', { data, error, count: data?.length })
+    console.log('🏭 [PRODUCTION] Hammadde sayısı:', rawMaterials?.length, 'Bitmiş ürün sayısı:', finishedProducts?.length)
 
-    const inventoryData = data?.map((inv: any) => ({
+    // Hammaddeleri formatla
+    const rawMaterialsData = rawMaterials?.map((item: any) => ({
+      id: item.id,
+      item_id: item.id,
+      item_code: item.code || '',
+      item_name: item.name || '',
+      category_name: item.category?.name || '',
+      unit: item.unit || '',
+      current_stock: item.current_stock || 0,
+      item_type: 'raw_material' as const
+    })) || []
+
+    // Bitmiş ürünleri formatla
+    const finishedProductsData = finishedProducts?.map((inv: any) => ({
       id: inv.id,
       item_id: inv.item_id,
       item_code: inv.item?.code || '',
@@ -316,8 +345,11 @@ export default function ProductionPage() {
       category_name: inv.item?.category?.name || '',
       unit: inv.item?.unit || '',
       current_stock: inv.current_stock,
-      item_type: inv.item_type || 'raw_material'
+      item_type: 'finished_product' as const
     })) || []
+
+    // İki listeyi birleştir: önce hammaddeler, sonra bitmiş ürünler
+    const inventoryData = [...rawMaterialsData, ...finishedProductsData]
 
     console.log('✅ [PRODUCTION] ProductionInventory state güncelleniyor:', inventoryData.length, 'kayıt')
     setProductionInventory(inventoryData)
@@ -1004,45 +1036,26 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      // Üretim deposuna hammadde ekle
+      // Ana depoya (warehouse_items) hammadde stok ekle
       const { data: existing } = await supabase
-        .from('production_inventory')
+        .from('warehouse_items')
         .select('current_stock')
-        .eq('company_id', companyId)
-        .eq('item_id', manualRawMaterialForm.item_id)
-        .eq('item_type', 'raw_material')
+        .eq('id', manualRawMaterialForm.item_id)
         .single()
 
       if (existing) {
-        // Güncelle
+        // Mevcut stoku güncelle
         const { error } = await supabase
-          .from('production_inventory')
+          .from('warehouse_items')
           .update({
             current_stock: existing.current_stock + manualRawMaterialForm.quantity,
-            notes: manualRawMaterialForm.notes,
-            updated_at: new Date().toISOString()
           })
-          .eq('company_id', companyId)
-          .eq('item_id', manualRawMaterialForm.item_id)
-          .eq('item_type', 'raw_material')
-
-        if (error) throw error
-      } else {
-        // Yeni kayıt
-        const { error } = await supabase
-          .from('production_inventory')
-          .insert({
-            company_id: companyId,
-            item_id: manualRawMaterialForm.item_id,
-            current_stock: manualRawMaterialForm.quantity,
-            item_type: 'raw_material',
-            notes: manualRawMaterialForm.notes
-          })
+          .eq('id', manualRawMaterialForm.item_id)
 
         if (error) throw error
       }
 
-      alert('✅ Hammadde üretim deposuna eklendi!')
+      alert('✅ Hammadde stoğu güncellendi!')
       setShowManualRawMaterialModal(false)
       resetManualRawMaterialForm()
       loadData()

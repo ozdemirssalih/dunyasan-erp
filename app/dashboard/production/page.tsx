@@ -375,7 +375,7 @@ export default function ProductionPage() {
 
   const loadAssignments = async (companyId: string) => {
     const { data } = await supabase
-      .from('production_material_assignments')
+      .from('production_to_machine_transfers')
       .select(`
         *,
         machine:machines(machine_name, machine_code),
@@ -536,7 +536,7 @@ export default function ProductionPage() {
 
     // En son atanan projeleri al
     const { data: recentAssignments } = await supabase
-      .from('production_material_assignments')
+      .from('production_to_machine_transfers')
       .select(`
         project_id,
         project:projects(project_name)
@@ -746,7 +746,7 @@ export default function ProductionPage() {
 
     try {
       const { error } = await supabase
-        .from('production_material_assignments')
+        .from('production_to_machine_transfers')
         .insert({
           company_id: companyId,
           machine_id: assignmentForm.machine_id,

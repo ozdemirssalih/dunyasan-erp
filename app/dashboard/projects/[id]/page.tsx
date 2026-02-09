@@ -89,20 +89,23 @@ export default function ProjectDetailPage() {
 
       const machinesWithStats = await Promise.all(
         (machinesData || []).map(async (machine) => {
-          // Bu projeye ait malzeme ve üretim kayıtları (project_id veya null olanlar)
-          const { data: givenMaterials } = await supabase
+          // Bu tezgaha verilen malzemeler (tüm kayıtlar - tezgah zaten projeye atanmış)
+          const { data: givenMaterials, error: givenError } = await supabase
             .from('production_to_machine_transfers')
             .select('quantity')
             .eq('machine_id', machine.id)
-            .or(`project_id.eq.${projectId},project_id.is.null`)
+
+          if (givenError) console.error('Error loading given materials:', givenError)
 
           const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-          const { data: producedItems } = await supabase
+          // Bu tezgahta üretilen ürünler (tüm kayıtlar)
+          const { data: producedItems, error: producedError } = await supabase
             .from('production_outputs')
             .select('quantity')
             .eq('machine_id', machine.id)
-            .or(`project_id.eq.${projectId},project_id.is.null`)
+
+          if (producedError) console.error('Error loading produced items:', producedError)
 
           const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
           const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0

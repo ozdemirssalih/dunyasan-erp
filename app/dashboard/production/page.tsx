@@ -381,7 +381,7 @@ export default function ProductionPage() {
         *,
         machine:machines(machine_name, machine_code),
         item:warehouse_items(code, name, unit),
-        assigned_by:profiles(full_name)
+        transferred_by:profiles(full_name)
       `)
       .eq('company_id', companyId)
       .order('assigned_date', { ascending: false })
@@ -395,7 +395,7 @@ export default function ProductionPage() {
       item_code: a.item?.code || '',
       quantity: a.quantity,
       unit: a.item?.unit || '',
-      assigned_by_name: a.assigned_by?.full_name || '',
+      assigned_by_name: a.transferred_by?.full_name || '',
       assigned_date: a.assigned_date,
       shift: a.shift || ''
     })) || []
@@ -755,7 +755,7 @@ export default function ProductionPage() {
           quantity: assignmentForm.quantity,
           shift: assignmentForm.shift,
           notes: assignmentForm.notes,
-          assigned_by: currentUserId,
+          transferred_by: currentUserId,
           project_id: assignmentForm.project_id || null,
           project_part_id: assignmentForm.project_part_id || null,
         })

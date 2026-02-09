@@ -66,6 +66,7 @@ interface Machine {
   machine_name: string
   machine_code: string
   status: string
+  project_id?: string | null
 }
 
 interface MaterialAssignment {

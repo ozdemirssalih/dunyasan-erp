@@ -1365,20 +1365,6 @@ export default function ProductionPage() {
             <p className="text-xs text-gray-600 mt-1">Bugün üretilen toplam miktar</p>
           </div>
 
-          {/* Verimlilik */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-3 bg-red-100 rounded-lg">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <span className="text-3xl font-bold text-gray-900">{stats.calculatedScrap.toFixed(2)}</span>
-            </div>
-            <h3 className="text-sm font-medium text-gray-900">Tezgahlarda Bekleyen</h3>
-            <p className="text-xs text-gray-600 mt-1">Verilen - (Üretilen + Fire)</p>
-          </div>
-
           {/* Kayıtlı Fire */}
           <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
             <div className="flex items-center justify-between mb-2">

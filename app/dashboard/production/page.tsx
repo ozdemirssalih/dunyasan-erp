@@ -376,7 +376,7 @@ export default function ProductionPage() {
       .from('production_to_machine_transfers')
       .select('*')
       .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(100)
 
     if (transferError) {
@@ -430,7 +430,7 @@ export default function ProductionPage() {
         quantity: a.quantity,
         unit: item?.unit || 'adet',
         assigned_by_name: '',
-        assigned_date: a.created_at,
+        assigned_date: a.created_at || new Date().toISOString(),
         shift: a.shift || '-'
       }
     })
@@ -852,7 +852,7 @@ export default function ProductionPage() {
         .select('item_id, quantity')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1)
         .maybeSingle()
 

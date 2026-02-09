@@ -378,7 +378,7 @@ export default function ProductionPage() {
         transferred_by:profiles(full_name)
       `)
       .eq('company_id', companyId)
-      .order('assigned_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(100)
 
     const assignmentsData = data?.map((a: any) => ({
@@ -390,7 +390,7 @@ export default function ProductionPage() {
       quantity: a.quantity,
       unit: a.item?.unit || '',
       assigned_by_name: a.transferred_by?.full_name || '',
-      assigned_date: a.assigned_date,
+      assigned_date: a.created_at,
       shift: a.shift || ''
     })) || []
 
@@ -538,7 +538,7 @@ export default function ProductionPage() {
       `)
       .eq('company_id', companyId)
       .not('project_id', 'is', null)
-      .order('assigned_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5)
 
     const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
@@ -810,7 +810,7 @@ export default function ProductionPage() {
         .select('item_id, quantity')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
-        .order('assigned_date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
 

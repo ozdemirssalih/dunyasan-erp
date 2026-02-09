@@ -2241,7 +2241,7 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
-                      disabled={assignmentForm.machine_id && assignmentForm.project_id}
+                      disabled={!!(assignmentForm.machine_id && assignmentForm.project_id)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Proje Seçilmedi</option>
@@ -2410,7 +2410,7 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
-                      disabled={outputForm.machine_id && outputForm.project_id}
+                      disabled={!!(outputForm.machine_id && outputForm.project_id)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Proje Seçilmedi</option>

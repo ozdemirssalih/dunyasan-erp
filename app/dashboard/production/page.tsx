@@ -805,14 +805,20 @@ export default function ProductionPage() {
 
     try {
       // 1. Tezgaha verilen son hammaddeyi bul
-      const { data: lastTransfer } = await supabase
+      const { data: lastTransfer, error: transferError } = await supabase
         .from('production_to_machine_transfers')
         .select('item_id, quantity, item:warehouse_items(code, name)')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
-        .order('assigned_date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
+
+      if (transferError) {
+        console.error('Transfer sorgu hatası:', transferError)
+        alert('❌ Hata: ' + transferError.message)
+        return
+      }
 
       if (!lastTransfer) {
         alert('❌ Bu tezgaha henüz hammadde atanmamış!')

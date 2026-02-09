@@ -779,7 +779,25 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      const { error } = await supabase
+      // 1. Ana depoda stok kontrolü
+      const { data: warehouseItem } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, code, name')
+        .eq('id', requestForm.item_id)
+        .single()
+
+      if (!warehouseItem) {
+        alert('❌ Ürün bulunamadı!')
+        return
+      }
+
+      if (warehouseItem.current_stock < requestForm.quantity) {
+        alert(`❌ Ana depoda yeterli stok yok!\nMevcut: ${warehouseItem.current_stock}\nİstenen: ${requestForm.quantity}`)
+        return
+      }
+
+      // 2. Talep kaydı oluştur
+      const { error: requestError } = await supabase
         .from('production_material_requests')
         .insert({
           company_id: companyId,
@@ -788,15 +806,63 @@ export default function ProductionPage() {
           urgency: requestForm.urgency,
           reason: requestForm.reason,
           requested_by: currentUserId,
+          status: 'approved' // Otomatik onaylı
         })
 
-      if (error) throw error
+      if (requestError) throw requestError
+
+      // 3. Ana depodan düş
+      const { error: warehouseError } = await supabase
+        .from('warehouse_items')
+        .update({
+          current_stock: warehouseItem.current_stock - requestForm.quantity,
+        })
+        .eq('id', requestForm.item_id)
+
+      if (warehouseError) throw warehouseError
+
+      // 4. Üretim deposuna ekle
+      const { data: existingProd } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', requestForm.item_id)
+        .eq('item_type', 'raw_material')
+        .maybeSingle()
+
+      if (existingProd) {
+        // Mevcut stoğu güncelle
+        const { error: updateError } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existingProd.current_stock + requestForm.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', requestForm.item_id)
+          .eq('item_type', 'raw_material')
+
+        if (updateError) throw updateError
+      } else {
+        // Yeni kayıt
+        const { error: insertError } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: requestForm.item_id,
+            current_stock: requestForm.quantity,
+            item_type: 'raw_material',
+            notes: `Ana depodan transfer - ${requestForm.reason}`
+          })
+
+        if (insertError) throw insertError
+      }
 
       setShowRequestModal(false)
       resetRequestForm()
       await loadData()
 
-      alert('✅ Malzeme talebi gönderildi!')
+      alert(`✅ ${warehouseItem.code} - ${warehouseItem.name}\n${requestForm.quantity} birim üretim deposuna transfer edildi!`)
     } catch (error: any) {
       console.error('Error creating request:', error)
       alert('❌ Hata: ' + error.message)

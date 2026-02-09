@@ -520,7 +520,10 @@ export default function ProductionPage() {
   const loadStats = async (companyId: string) => {
     console.log('📊 [PRODUCTION] loadStats çağrıldı')
 
-    // DOĞRU HESAPLAMA: İşlenmeye hazır hammadde = Tezgaha verilen - Üretilen - Fire
+    // DOĞRU MANTIK:
+    // 1. Tezgahlarda bekleyen hammadde = Tezgaha verilen - (Üretilen + Fire)
+    // 2. Üretim deposundaki hammadde = production_inventory'den çek
+    // 3. Toplam işlenebilir = Tezgahlardaki + Deposundaki
 
     // 1. Tezgaha verilen toplam hammadde
     const { data: givenToMachines } = await supabase
@@ -530,7 +533,7 @@ export default function ProductionPage() {
 
     const totalGivenToMachines = givenToMachines?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 2. Toplam üretilen mamül
+    // 2. Toplam üretilen (bitmiş ürün)
     const { data: allOutputs } = await supabase
       .from('production_outputs')
       .select('quantity')
@@ -546,10 +549,22 @@ export default function ProductionPage() {
 
     const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // İşlenmeye hazır = Verilen - Üretilen - Fire
-    const rawMaterialsReady = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
+    // 4. Üretim deposundaki hammaddeler (geri dönenler dahil)
+    const { data: warehouseStock } = await supabase
+      .from('production_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+      .eq('item_type', 'raw_material')
 
-    // İşlenen mamul = Toplam üretilen (bu zaten doğru)
+    const warehouseRawMaterials = warehouseStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
+    // Tezgahlarda kalan = Verilen - Kullanılan (Not: 1:1 oran varsayımı)
+    const onMachines = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
+
+    // TOPLAM işlenmeye hazır = Tezgahlardaki + Depodaki
+    const rawMaterialsReady = warehouseRawMaterials + onMachines
+
+    // Bitmiş ürünler
     const finishedProducts = totalProduced
 
     // Kalite kontrolde bekleyen (ÜRÜN SAYISI, test sayısı değil)
@@ -767,10 +782,11 @@ export default function ProductionPage() {
 
       if (error) throw error
 
-      alert('✅ Malzeme talebi gönderildi!')
       setShowRequestModal(false)
       resetRequestForm()
-      loadData()
+      await loadData()
+
+      alert('✅ Malzeme talebi gönderildi!')
     } catch (error: any) {
       console.error('Error creating request:', error)
       alert('❌ Hata: ' + error.message)
@@ -831,10 +847,11 @@ export default function ProductionPage() {
 
       if (error) throw error
 
-      alert('✅ Hammadde tezgaha verildi ve stoktan düşüldü!')
       setShowAssignmentModal(false)
       resetAssignmentForm()
-      loadData()
+      await loadData() // ⚠️ await ekledik
+
+      alert('✅ Hammadde tezgaha verildi ve stoktan düşüldü!')
     } catch (error: any) {
       console.error('Error creating assignment:', error)
       alert('❌ Hata: ' + error.message)
@@ -988,11 +1005,12 @@ export default function ProductionPage() {
       if (remainingQuantity > 0) {
         successMsg += `\n↩️ Stoğa dönen: ${remainingQuantity} birim hammadde`
       }
-      alert(successMsg)
-
+      // Başarı mesajını göster ve verileri yenile
       setShowOutputModal(false)
       resetOutputForm()
-      loadData()
+      await loadData() // ⚠️ await ekledik - stoklar güncellenmeden devam etmesin!
+
+      alert(successMsg) // Veriler yenilendikten SONRA mesaj göster
     } catch (error: any) {
       console.error('Error creating output:', error)
       alert('❌ Hata: ' + error.message)
@@ -1054,10 +1072,11 @@ export default function ProductionPage() {
 
       if (error) throw error
 
-      alert('✅ Ana depoya transfer talebi gönderildi!')
       setShowTransferModal(false)
       resetTransferForm()
-      loadData()
+      await loadData()
+
+      alert('✅ Ana depoya transfer talebi gönderildi!')
     } catch (error: any) {
       console.error('Error creating transfer:', error)
       alert('❌ Hata: ' + error.message)
@@ -1115,10 +1134,11 @@ export default function ProductionPage() {
         if (error) throw error
       }
 
-      alert('✅ Bitmiş ürün üretim deposuna eklendi!')
       setShowManualStockModal(false)
       resetManualStockForm()
-      loadData()
+      await loadData()
+
+      alert('✅ Bitmiş ürün üretim deposuna eklendi!')
     } catch (error: any) {
       console.error('Error adding manual stock:', error)
       alert('❌ Hata: ' + error.message)
@@ -1142,10 +1162,11 @@ export default function ProductionPage() {
 
       if (error) throw error
 
-      alert('✅ Kalite kontrole transfer talebi gönderildi!')
       setShowQCTransferModal(false)
       resetQCTransferForm()
-      loadData()
+      await loadData()
+
+      alert('✅ Kalite kontrole transfer talebi gönderildi!')
     } catch (error: any) {
       console.error('Error creating QC transfer:', error)
       alert('❌ Hata: ' + error.message)
@@ -1200,8 +1221,8 @@ export default function ProductionPage() {
 
       if (updateError) throw updateError
 
+      await loadData()
       alert('✅ Ürün kalite kontrole gönderildi!')
-      loadData()
     } catch (error: any) {
       console.error('Error sending to QC:', error)
       alert('❌ Hata: ' + error.message)
@@ -1239,8 +1260,8 @@ export default function ProductionPage() {
 
       if (updateError) throw updateError
 
+      await loadData()
       alert('✅ Ürün ana depoya gönderildi!')
-      loadData()
     } catch (error: any) {
       console.error('Error sending to warehouse:', error)
       alert('❌ Hata: ' + error.message)

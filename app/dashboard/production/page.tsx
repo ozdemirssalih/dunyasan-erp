@@ -544,28 +544,36 @@ export default function ProductionPage() {
   const loadStats = async (companyId: string) => {
     console.log('📊 [PRODUCTION] loadStats çağrıldı')
 
-    // DOĞRU MANTIK:
-    // 1. Tezgahlarda bekleyen hammadde = Tezgaha verilen - (Üretilen + Fire)
-    // 2. Üretim deposundaki hammadde = production_inventory'den çek
-    // 3. Toplam işlenebilir = Tezgahlardaki + Deposundaki
+    // SADECE KESİN BİLİNEN VERİLER
+    // Oran bilgisi olmadan tezgahlardaki hesaplanamaz!
 
-    // 1. Tezgaha verilen toplam hammadde
-    const { data: givenToMachines } = await supabase
-      .from('production_to_machine_transfers')
-      .select('quantity')
+    // 1. Üretim deposundaki hammaddeler
+    const { data: rawStock } = await supabase
+      .from('production_inventory')
+      .select('current_stock')
       .eq('company_id', companyId)
+      .eq('item_type', 'raw_material')
 
-    const totalGivenToMachines = givenToMachines?.reduce((sum, item) => sum + item.quantity, 0) || 0
+    const rawMaterialsReady = rawStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
 
-    // 2. Toplam üretilen (bitmiş ürün)
+    // 2. Üretim deposundaki bitmiş ürünler
+    const { data: finishedStock } = await supabase
+      .from('production_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+      .eq('item_type', 'finished_product')
+
+    const finishedProducts = finishedStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
+    // 3. Toplam üretilen (tüm zamanlar - sadece bilgi için)
     const { data: allOutputs } = await supabase
       .from('production_outputs')
       .select('quantity')
       .eq('company_id', companyId)
 
-    const totalProduced = allOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
+    const totalProducedEver = allOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 3. Toplam fire
+    // 4. Toplam fire (tüm zamanlar - sadece bilgi için)
     const { data: allFire } = await supabase
       .from('production_scrap_records')
       .select('quantity')
@@ -573,34 +581,7 @@ export default function ProductionPage() {
 
     const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 4. Üretim deposundaki hammaddeler (geri dönenler dahil)
-    const { data: warehouseStock } = await supabase
-      .from('production_inventory')
-      .select('current_stock')
-      .eq('company_id', companyId)
-      .eq('item_type', 'raw_material')
-
-    const warehouseRawMaterials = warehouseStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
-
-    // Tezgahlarda kalan = Verilen - Kullanılan (Not: 1:1 oran varsayımı)
-    const onMachines = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
-
-    // TOPLAM işlenmeye hazır = Tezgahlardaki + Depodaki
-    const rawMaterialsReady = warehouseRawMaterials + onMachines
-
-    // Bitmiş ürünler
-    const finishedProducts = totalProduced
-
-    // Kalite kontrolde bekleyen (ÜRÜN SAYISI, test sayısı değil)
-    const { data: pendingQCData } = await supabase
-      .from('production_outputs')
-      .select('quantity')
-      .eq('company_id', companyId)
-      .eq('quality_status', 'pending')
-
-    const pendingQC = pendingQCData?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
-    // Bugünkü üretim
+    // 5. Bugünkü üretim
     const today = new Date().toISOString().split('T')[0]
     const { data: todayOutputs } = await supabase
       .from('production_outputs')
@@ -610,45 +591,21 @@ export default function ProductionPage() {
 
     const todayProduction = todayOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // En son atanan projeleri al (şimdilik devre dışı - join hatası var)
-    // const { data: recentAssignments } = await supabase
-    //   .from('production_to_machine_transfers')
-    //   .select(`
-    //     project_id,
-    //     project:projects(project_name)
-    //   `)
-    //   .eq('company_id', companyId)
-    //   .not('project_id', 'is', null)
-    //   .order('created_at', { ascending: false })
-    //   .limit(5)
-
-    // const projectNames = recentAssignments?.map((a: any) => a.project?.project_name).filter(Boolean) as string[]
-    const recentProjects: string[] = []
-
-    // Verimlilik = Verilen - (Üretilen + Fire)
-    const calculatedScrap = Math.max(0, totalGivenToMachines - totalProduced - totalFire)
-
-    // Kayıtlı fire (zaten yukarıda hesaplandı)
-    const recordedFire = totalFire
-
     console.log('📊 [PRODUCTION] İstatistikler:', {
-      'Tezgaha Verilen': totalGivenToMachines,
-      'Üretilen': totalProduced,
-      'Fire': totalFire,
-      'Tezgahlarda Bekleyen (Verilen-Üretilen-Fire)': rawMaterialsReady,
-      'KK Bekleyen': pendingQC,
+      'Üretim Deposu Hammadde': rawMaterialsReady,
+      'Üretim Deposu Bitmiş Ürün': finishedProducts,
       'Bugünkü Üretim': todayProduction,
-      'Projeler': recentProjects
+      'Toplam Fire': totalFire
     })
 
     setStats({
       rawMaterialsReady,
       finishedProducts,
-      pendingQC: pendingQC || 0,
+      pendingQC: 0, // Kalite kontrol sistemi henüz yok
       todayProduction,
-      calculatedScrap,
-      recordedFire,
-      recentProjects
+      calculatedScrap: 0, // Hesaplanamaz - oran bilgisi yok
+      recordedFire: totalFire,
+      recentProjects: []
     })
   }
 

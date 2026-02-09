@@ -136,7 +136,6 @@ export default function ProductionPage() {
   const [showOutputModal, setShowOutputModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showManualStockModal, setShowManualStockModal] = useState(false)
-  const [showManualRawMaterialModal, setShowManualRawMaterialModal] = useState(false)
   const [showQCTransferModal, setShowQCTransferModal] = useState(false)
 
   // Form states
@@ -183,12 +182,6 @@ export default function ProductionPage() {
   })
 
   const [qcTransferForm, setQCTransferForm] = useState({
-    item_id: '',
-    quantity: 0,
-    notes: '',
-  })
-
-  const [manualRawMaterialForm, setManualRawMaterialForm] = useState({
     item_id: '',
     quantity: 0,
     notes: '',
@@ -1000,93 +993,6 @@ export default function ProductionPage() {
     })
   }
 
-  const handleManualRawMaterialAdd = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!companyId) return
-
-    try {
-      // Ana depodan stok kontrolü
-      const { data: warehouseItem } = await supabase
-        .from('warehouse_items')
-        .select('current_stock, code, name')
-        .eq('id', manualRawMaterialForm.item_id)
-        .single()
-
-      if (!warehouseItem) {
-        alert('❌ Ürün bulunamadı!')
-        return
-      }
-
-      if (warehouseItem.current_stock < manualRawMaterialForm.quantity) {
-        alert(`❌ Ana depoda yeterli stok yok!\nMevcut: ${warehouseItem.current_stock}\nİstenen: ${manualRawMaterialForm.quantity}`)
-        return
-      }
-
-      // Ana depodan düş
-      const { error: warehouseError } = await supabase
-        .from('warehouse_items')
-        .update({
-          current_stock: warehouseItem.current_stock - manualRawMaterialForm.quantity,
-        })
-        .eq('id', manualRawMaterialForm.item_id)
-
-      if (warehouseError) throw warehouseError
-
-      // Üretim deposuna ekle
-      const { data: existing } = await supabase
-        .from('production_inventory')
-        .select('current_stock')
-        .eq('company_id', companyId)
-        .eq('item_id', manualRawMaterialForm.item_id)
-        .eq('item_type', 'raw_material')
-        .single()
-
-      if (existing) {
-        // Güncelle
-        const { error } = await supabase
-          .from('production_inventory')
-          .update({
-            current_stock: existing.current_stock + manualRawMaterialForm.quantity,
-            notes: manualRawMaterialForm.notes,
-            updated_at: new Date().toISOString()
-          })
-          .eq('company_id', companyId)
-          .eq('item_id', manualRawMaterialForm.item_id)
-          .eq('item_type', 'raw_material')
-
-        if (error) throw error
-      } else {
-        // Yeni kayıt
-        const { error } = await supabase
-          .from('production_inventory')
-          .insert({
-            company_id: companyId,
-            item_id: manualRawMaterialForm.item_id,
-            current_stock: manualRawMaterialForm.quantity,
-            item_type: 'raw_material',
-            notes: manualRawMaterialForm.notes
-          })
-
-        if (error) throw error
-      }
-
-      alert(`✅ Ana depodan üretim deposuna transfer edildi!\n${warehouseItem.code} - ${warehouseItem.name}: ${manualRawMaterialForm.quantity} adet`)
-      setShowManualRawMaterialModal(false)
-      resetManualRawMaterialForm()
-      loadData()
-    } catch (error: any) {
-      console.error('Error transferring from warehouse:', error)
-      alert('❌ Hata: ' + error.message)
-    }
-  }
-
-  const resetManualRawMaterialForm = () => {
-    setManualRawMaterialForm({
-      item_id: '',
-      quantity: 0,
-      notes: '',
-    })
-  }
 
   const handleSendOutputToQC = async (output: ProductionOutput) => {
     if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) kalite kontrole göndermek istediğinizden emin misiniz?`)) return
@@ -1400,19 +1306,11 @@ export default function ProductionPage() {
           <div className="space-y-6">
             {/* Hammaddeler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-green-50 border-b border-gray-200 flex justify-between items-center">
+              <div className="px-6 py-4 bg-green-50 border-b border-gray-200">
                 <h3 className="text-lg font-bold text-green-800 flex items-center gap-2">
                   <FlaskConical className="w-5 h-5" />
                   Hammaddeler (Depodan Gelen)
                 </h3>
-                {canCreate('production') && (
-                  <button
-                    onClick={() => setShowManualRawMaterialModal(true)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-                  >
-                    📦 Ana Depodan Çek
-                  </button>
-                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -2538,83 +2436,6 @@ export default function ProductionPage() {
           </div>
         )}
 
-        {/* Manual Raw Material Modal */}
-        {showManualRawMaterialModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">Ana Depodan Hammadde Transfer</h3>
-              <p className="text-sm text-gray-600 mb-6">Ana depodan üretim deposuna hammadde çekin</p>
-
-              <form onSubmit={handleManualRawMaterialAdd} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Hammadde (Ana Depo) <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={manualRawMaterialForm.item_id}
-                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, item_id: e.target.value })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Seçin...</option>
-                      {warehouseItems.map(item => (
-                        <option key={item.id} value={item.id}>
-                          {item.code} - {item.name} (Stok: {item.current_stock} {item.unit})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Transfer Miktarı <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={manualRawMaterialForm.quantity}
-                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, quantity: parseFloat(e.target.value) })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                      placeholder="Ana depodan çekilecek miktar"
-                    />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
-                    <textarea
-                      value={manualRawMaterialForm.notes}
-                      onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, notes: e.target.value })}
-                      rows={3}
-                      placeholder="Transfer nedeni veya açıklamalar..."
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex space-x-4 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
-                  >
-                    📦 Depodan Transfer Et
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowManualRawMaterialModal(false)
-                      resetManualRawMaterialForm()
-                    }}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
         {/* Manual Stock Modal */}
         {showManualStockModal && (

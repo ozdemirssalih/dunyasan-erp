@@ -333,11 +333,20 @@ export default function QualityControlPage() {
       } else {
         // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
 
-        // 1. Kalite kontrol stoğundan düş
+        // 1. Kalite kontrol stoğundan düş - önce mevcut stoğu çek
+        const { data: qcStock, error: qcCheckError } = await supabase
+          .from('quality_control_inventory')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', transferForm.item_id)
+          .single()
+
+        if (qcCheckError) throw qcCheckError
+
         const { error: qcStockError } = await supabase
           .from('quality_control_inventory')
           .update({
-            current_stock: supabase.raw(`current_stock - ${transferForm.quantity}`),
+            current_stock: qcStock.current_stock - transferForm.quantity,
             updated_at: new Date().toISOString()
           })
           .eq('company_id', companyId)
@@ -345,25 +354,23 @@ export default function QualityControlPage() {
 
         if (qcStockError) throw qcStockError
 
-        // 2. Üretim deposuna tashih olarak ekle
-        const { error: prodStockError } = await supabase
+        // 2. Üretim deposuna tashih olarak ekle - önce kontrol et var mı
+        const { data: existingTashih, error: tashihCheckError } = await supabase
           .from('production_inventory')
-          .insert({
-            company_id: companyId,
-            item_id: transferForm.item_id,
-            current_stock: transferForm.quantity,
-            item_type: 'tashih',
-            notes: `KK reddetti - ${transferForm.notes || 'Kalite testinden geçemedi'}`
-          })
-          .select()
-          .single()
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', transferForm.item_id)
+          .eq('item_type', 'tashih')
+          .maybeSingle()
 
-        // Eğer zaten tashih kaydı varsa güncelle
-        if (prodStockError && prodStockError.code === '23505') {
+        if (tashihCheckError && tashihCheckError.code !== 'PGRST116') throw tashihCheckError
+
+        if (existingTashih) {
+          // Varsa güncelle
           const { error: updateError } = await supabase
             .from('production_inventory')
             .update({
-              current_stock: supabase.raw(`current_stock + ${transferForm.quantity}`),
+              current_stock: existingTashih.current_stock + transferForm.quantity,
               updated_at: new Date().toISOString()
             })
             .eq('company_id', companyId)
@@ -371,8 +378,19 @@ export default function QualityControlPage() {
             .eq('item_type', 'tashih')
 
           if (updateError) throw updateError
-        } else if (prodStockError) {
-          throw prodStockError
+        } else {
+          // Yoksa yeni kayıt oluştur
+          const { error: insertError } = await supabase
+            .from('production_inventory')
+            .insert({
+              company_id: companyId,
+              item_id: transferForm.item_id,
+              current_stock: transferForm.quantity,
+              item_type: 'tashih',
+              notes: `KK reddetti - ${transferForm.notes || 'Kalite testinden geçemedi'}`
+            })
+
+          if (insertError) throw insertError
         }
 
         alert('✅ Kalite test sonucu kaydedildi! Ürün tashih için üretim deposuna gönderildi.')

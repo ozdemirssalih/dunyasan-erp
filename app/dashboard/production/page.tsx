@@ -794,17 +794,17 @@ export default function ProductionPage() {
     try {
       setSubmittingAssignment(true)
 
-      // 1. Üretim deposundan hammadde stoğunu kontrol et (trigger düşürecek, sadece kontrol)
+      // 1. Üretim deposundan hammadde/tashih stoğunu kontrol et (trigger düşürecek, sadece kontrol)
       const { data: existingStock } = await supabase
         .from('production_inventory')
-        .select('current_stock')
+        .select('current_stock, item_type')
         .eq('company_id', companyId)
         .eq('item_id', assignmentForm.item_id)
-        .eq('item_type', 'raw_material')
-        .single()
+        .in('item_type', ['raw_material', 'tashih'])
+        .maybeSingle()
 
       if (!existingStock) {
-        alert('❌ Üretim deposunda bu hammadde bulunamadı!')
+        alert('❌ Üretim deposunda bu hammadde/tashih ürünü bulunamadı!')
         return
       }
 

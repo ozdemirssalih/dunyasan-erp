@@ -394,8 +394,8 @@ export default function ProductionPage() {
     }
 
     // Machine ID'lerini topla
-    const machineIds = [...new Set(transfers.map(t => t.machine_id).filter(Boolean))]
-    const itemIds = [...new Set(transfers.map(t => t.item_id).filter(Boolean))]
+    const machineIds = Array.from(new Set(transfers.map(t => t.machine_id).filter(Boolean)))
+    const itemIds = Array.from(new Set(transfers.map(t => t.item_id).filter(Boolean)))
 
     console.log('📊 [ASSIGNMENTS] Machine IDs:', machineIds.length, 'Item IDs:', itemIds.length)
 

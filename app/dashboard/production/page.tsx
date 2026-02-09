@@ -16,7 +16,7 @@ interface ProductionInventoryItem {
   category_name: string
   unit: string
   current_stock: number
-  item_type: 'raw_material' | 'finished_product'
+  item_type: 'raw_material' | 'finished_product' | 'tashih'
 }
 
 interface WarehouseTransfer {

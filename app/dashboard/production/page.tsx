@@ -369,31 +369,73 @@ export default function ProductionPage() {
   }
 
   const loadAssignments = async (companyId: string) => {
-    const { data } = await supabase
+    console.log('🔍 [ASSIGNMENTS] loadAssignments çağrıldı, companyId:', companyId)
+
+    // Önce basit sorgu ile kayıtları çek
+    const { data: transfers, error: transferError } = await supabase
       .from('production_to_machine_transfers')
-      .select(`
-        *,
-        machine:machines(machine_name, machine_code),
-        item:warehouse_items(code, name, unit),
-        transferred_by:profiles(full_name)
-      `)
+      .select('*')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(100)
 
-    const assignmentsData = data?.map((a: any) => ({
-      id: a.id,
-      machine_name: a.machine?.machine_name || '',
-      machine_code: a.machine?.machine_code || '',
-      item_name: a.item?.name || '',
-      item_code: a.item?.code || '',
-      quantity: a.quantity,
-      unit: a.item?.unit || '',
-      assigned_by_name: a.transferred_by?.full_name || '',
-      assigned_date: a.created_at,
-      shift: a.shift || ''
-    })) || []
+    if (transferError) {
+      console.error('❌ [ASSIGNMENTS] Sorgu hatası:', transferError)
+      setAssignments([])
+      return
+    }
 
+    console.log('✅ [ASSIGNMENTS] Transfer kayıtları:', transfers?.length)
+
+    if (!transfers || transfers.length === 0) {
+      console.log('⚠️ [ASSIGNMENTS] Hiç transfer kaydı bulunamadı')
+      setAssignments([])
+      return
+    }
+
+    // Machine ID'lerini topla
+    const machineIds = [...new Set(transfers.map(t => t.machine_id).filter(Boolean))]
+    const itemIds = [...new Set(transfers.map(t => t.item_id).filter(Boolean))]
+
+    console.log('📊 [ASSIGNMENTS] Machine IDs:', machineIds.length, 'Item IDs:', itemIds.length)
+
+    // Tezgahları çek
+    const { data: machines } = await supabase
+      .from('machines')
+      .select('id, machine_name, machine_code')
+      .in('id', machineIds)
+
+    // Ürünleri çek
+    const { data: items } = await supabase
+      .from('warehouse_items')
+      .select('id, code, name, unit')
+      .in('id', itemIds)
+
+    console.log('✅ [ASSIGNMENTS] Machines:', machines?.length, 'Items:', items?.length)
+
+    // Map oluştur
+    const machineMap = new Map(machines?.map(m => [m.id, m]) || [])
+    const itemMap = new Map(items?.map(i => [i.id, i]) || [])
+
+    const assignmentsData = transfers.map((a: any) => {
+      const machine = machineMap.get(a.machine_id)
+      const item = itemMap.get(a.item_id)
+
+      return {
+        id: a.id,
+        machine_name: machine?.machine_name || 'Bilinmeyen Tezgah',
+        machine_code: machine?.machine_code || '-',
+        item_name: item?.name || 'Bilinmeyen Ürün',
+        item_code: item?.code || '-',
+        quantity: a.quantity,
+        unit: item?.unit || 'adet',
+        assigned_by_name: '',
+        assigned_date: a.created_at,
+        shift: a.shift || '-'
+      }
+    })
+
+    console.log('✅ [ASSIGNMENTS] State güncelleniyor:', assignmentsData.length, 'kayıt')
     setAssignments(assignmentsData)
   }
 

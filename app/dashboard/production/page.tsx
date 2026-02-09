@@ -740,6 +740,39 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
+      // 1. Üretim deposundan hammadde stoğunu kontrol et ve düş
+      const { data: existingStock } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', assignmentForm.item_id)
+        .eq('item_type', 'raw_material')
+        .single()
+
+      if (!existingStock) {
+        alert('❌ Üretim deposunda bu hammadde bulunamadı!')
+        return
+      }
+
+      if (existingStock.current_stock < assignmentForm.quantity) {
+        alert(`❌ Yetersiz stok!\nMevcut: ${existingStock.current_stock}\nİstenen: ${assignmentForm.quantity}`)
+        return
+      }
+
+      // Stoktan düş
+      const { error: stockError } = await supabase
+        .from('production_inventory')
+        .update({
+          current_stock: existingStock.current_stock - assignmentForm.quantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('company_id', companyId)
+        .eq('item_id', assignmentForm.item_id)
+        .eq('item_type', 'raw_material')
+
+      if (stockError) throw stockError
+
+      // 2. Transfer kaydını oluştur
       const { error } = await supabase
         .from('production_to_machine_transfers')
         .insert({
@@ -756,7 +789,7 @@ export default function ProductionPage() {
 
       if (error) throw error
 
-      alert('✅ Hammadde tezgaha verildi!')
+      alert('✅ Hammadde tezgaha verildi ve stoktan düşüldü!')
       setShowAssignmentModal(false)
       resetAssignmentForm()
       loadData()
@@ -771,7 +804,32 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      // 1. Üretim kaydını oluştur
+      // 1. Tezgaha verilen son hammaddeyi bul
+      const { data: lastTransfer } = await supabase
+        .from('production_to_machine_transfers')
+        .select('item_id, quantity, item:warehouse_items(code, name)')
+        .eq('machine_id', outputForm.machine_id)
+        .eq('company_id', companyId)
+        .order('assigned_date', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!lastTransfer) {
+        alert('❌ Bu tezgaha henüz hammadde atanmamış!')
+        return
+      }
+
+      const rawMaterialId = lastTransfer.item_id
+      const givenQuantity = lastTransfer.quantity
+      const usedQuantity = outputForm.quantity + outputForm.fire_quantity
+      const remainingQuantity = givenQuantity - usedQuantity
+
+      if (usedQuantity > givenQuantity) {
+        alert(`❌ Kullanılan miktar tezgaha verilenden fazla olamaz!\nVerilen: ${givenQuantity}\nKullanılan: ${usedQuantity}`)
+        return
+      }
+
+      // 2. Üretim kaydını oluştur
       const { error: outputError } = await supabase
         .from('production_outputs')
         .insert({
@@ -789,7 +847,7 @@ export default function ProductionPage() {
 
       if (outputError) throw outputError
 
-      // 2. Eğer fire varsa fire kaydını oluştur
+      // 3. Eğer fire varsa fire kaydını oluştur
       if (outputForm.fire_quantity > 0) {
         const { error: fireError } = await supabase
           .from('production_scrap_records')
@@ -797,7 +855,7 @@ export default function ProductionPage() {
             company_id: companyId,
             source_type: 'machine',
             machine_id: outputForm.machine_id,
-            item_id: outputForm.output_item_id,
+            item_id: rawMaterialId,
             quantity: outputForm.fire_quantity,
             scrap_reason: outputForm.fire_reason,
             notes: `Üretim sırasında fire - ${outputForm.notes || ''}`,
@@ -807,11 +865,80 @@ export default function ProductionPage() {
         if (fireError) throw fireError
       }
 
+      // 4. Bitmiş ürünü stoğa ekle
+      const { data: existingFinished } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', outputForm.output_item_id)
+        .eq('item_type', 'finished_product')
+        .single()
+
+      if (existingFinished) {
+        // Mevcut stoğu güncelle
+        await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existingFinished.current_stock + outputForm.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', outputForm.output_item_id)
+          .eq('item_type', 'finished_product')
+      } else {
+        // Yeni kayıt oluştur
+        await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: outputForm.output_item_id,
+            current_stock: outputForm.quantity,
+            item_type: 'finished_product',
+            notes: 'Üretimden gelen bitmiş ürün'
+          })
+      }
+
+      // 5. Kalan hammaddeyi stoğa geri ekle
+      if (remainingQuantity > 0) {
+        const { data: existingRaw } = await supabase
+          .from('production_inventory')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', rawMaterialId)
+          .eq('item_type', 'raw_material')
+          .single()
+
+        if (existingRaw) {
+          await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: existingRaw.current_stock + remainingQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', rawMaterialId)
+            .eq('item_type', 'raw_material')
+        } else {
+          await supabase
+            .from('production_inventory')
+            .insert({
+              company_id: companyId,
+              item_id: rawMaterialId,
+              current_stock: remainingQuantity,
+              item_type: 'raw_material',
+              notes: 'Tezgahtan kalan hammadde'
+            })
+        }
+      }
+
       // Başarı mesajı oluştur
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
-      successMsg += `\n✨ Üretilen: ${outputForm.quantity} birim`
+      successMsg += `\n✨ Üretilen: ${outputForm.quantity} birim bitmiş ürün`
       if (outputForm.fire_quantity > 0) {
         successMsg += `\n🔥 Fire: ${outputForm.fire_quantity} birim`
+      }
+      if (remainingQuantity > 0) {
+        successMsg += `\n↩️ Stoğa dönen: ${remainingQuantity} birim hammadde`
       }
       alert(successMsg)
 

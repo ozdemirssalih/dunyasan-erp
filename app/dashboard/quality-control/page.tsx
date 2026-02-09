@@ -313,22 +313,71 @@ export default function QualityControlPage() {
     if (!companyId) return
 
     try {
-      const { error } = await supabase
-        .from('qc_to_warehouse_transfers')
-        .insert({
-          company_id: companyId,
-          item_id: transferForm.item_id,
-          quantity: transferForm.quantity,
-          quality_result: transferForm.quality_result,
-          notes: transferForm.notes,
-          requested_by: currentUserId,
-          status: 'pending',  // Pending olarak kaydet, depo onaylasın
-        })
+      if (transferForm.quality_result === 'passed') {
+        // GEÇERSE: Ana depoya transfer talebi oluştur (depo onayı bekle)
+        const { error } = await supabase
+          .from('qc_to_warehouse_transfers')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            quantity: transferForm.quantity,
+            quality_result: transferForm.quality_result,
+            notes: transferForm.notes,
+            requested_by: currentUserId,
+            status: 'pending',
+          })
 
-      if (error) throw error
+        if (error) throw error
 
-      const resultText = transferForm.quality_result === 'passed' ? 'Ana depoya transfer talebi' : 'Üretim deposuna geri gönderme talebi'
-      alert(`✅ Kalite test sonucu kaydedildi! ${resultText} oluşturuldu. Depo görevlisi onayını bekliyor.`)
+        alert('✅ Kalite test sonucu kaydedildi! Ana depoya transfer talebi oluşturuldu. Depo görevlisi onayını bekliyor.')
+      } else {
+        // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
+
+        // 1. Kalite kontrol stoğundan düş
+        const { error: qcStockError } = await supabase
+          .from('quality_control_inventory')
+          .update({
+            current_stock: supabase.raw(`current_stock - ${transferForm.quantity}`),
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', transferForm.item_id)
+
+        if (qcStockError) throw qcStockError
+
+        // 2. Üretim deposuna tashih olarak ekle
+        const { error: prodStockError } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            current_stock: transferForm.quantity,
+            item_type: 'tashih',
+            notes: `KK reddetti - ${transferForm.notes || 'Kalite testinden geçemedi'}`
+          })
+          .select()
+          .single()
+
+        // Eğer zaten tashih kaydı varsa güncelle
+        if (prodStockError && prodStockError.code === '23505') {
+          const { error: updateError } = await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: supabase.raw(`current_stock + ${transferForm.quantity}`),
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', transferForm.item_id)
+            .eq('item_type', 'tashih')
+
+          if (updateError) throw updateError
+        } else if (prodStockError) {
+          throw prodStockError
+        }
+
+        alert('✅ Kalite test sonucu kaydedildi! Ürün taşihe gönderildi (üretim deposu).')
+      }
+
       setShowTransferModal(false)
       resetTransferForm()
       loadData()

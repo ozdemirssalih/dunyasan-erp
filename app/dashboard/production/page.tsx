@@ -1665,6 +1665,53 @@ export default function ProductionPage() {
                 )}
               </div>
             </div>
+
+            {/* Tashih Bekleyen Ürünler */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 bg-orange-50 border-b border-gray-200">
+                <h3 className="text-lg font-bold text-orange-800 flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Taşihe Gönderilen Ürünler
+                </h3>
+                <p className="text-sm text-orange-600 mt-1">Kalite kontrolden geçemeyenler - Yeniden işlenip KK'ya gönderilebilir</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Kodu</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Birim</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Notlar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productionInventory.filter(inv => inv.item_type === 'tashih').map(inv => (
+                      <tr key={inv.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{inv.item_code}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{inv.item_name}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">{inv.category_name}</span>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-bold text-orange-600">{inv.current_stock}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{inv.unit}</td>
+                        <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate">
+                          Kalite kontrolden geçemedi - Taşih gerekli
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {productionInventory.filter(inv => inv.item_type === 'tashih').length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Taşihe gönderilen ürün yok.</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

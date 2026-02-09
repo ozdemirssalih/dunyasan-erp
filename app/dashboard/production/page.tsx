@@ -296,48 +296,20 @@ export default function ProductionPage() {
   const loadProductionInventory = async (companyId: string) => {
     console.log('🔍 [PRODUCTION] loadProductionInventory çağrıldı, companyId:', companyId)
 
-    // Hammaddeleri ana depodan (warehouse_items) çek - gerçek stok
-    const { data: rawMaterials } = await supabase
-      .from('warehouse_items')
-      .select(`
-        id,
-        code,
-        name,
-        unit,
-        current_stock,
-        category:warehouse_categories(name)
-      `)
-      .eq('company_id', companyId)
-      .gt('current_stock', 0)
-      .order('code')
-
-    // Bitmiş ürünleri üretim deposundan (production_inventory) çek
-    const { data: finishedProducts } = await supabase
+    // Üretim deposundan tüm stokları çek (hem hammadde hem bitmiş ürün)
+    const { data, error } = await supabase
       .from('production_inventory')
       .select(`
         *,
         item:warehouse_items(code, name, unit, category:warehouse_categories(name))
       `)
       .eq('company_id', companyId)
-      .eq('item_type', 'finished_product')
       .gt('current_stock', 0)
+      .order('item_type', { ascending: true })
 
-    console.log('🏭 [PRODUCTION] Hammadde sayısı:', rawMaterials?.length, 'Bitmiş ürün sayısı:', finishedProducts?.length)
+    console.log('🏭 [PRODUCTION] production_inventory sorgu sonucu:', { data, error, count: data?.length })
 
-    // Hammaddeleri formatla
-    const rawMaterialsData = rawMaterials?.map((item: any) => ({
-      id: item.id,
-      item_id: item.id,
-      item_code: item.code || '',
-      item_name: item.name || '',
-      category_name: item.category?.name || '',
-      unit: item.unit || '',
-      current_stock: item.current_stock || 0,
-      item_type: 'raw_material' as const
-    })) || []
-
-    // Bitmiş ürünleri formatla
-    const finishedProductsData = finishedProducts?.map((inv: any) => ({
+    const inventoryData = data?.map((inv: any) => ({
       id: inv.id,
       item_id: inv.item_id,
       item_code: inv.item?.code || '',
@@ -345,11 +317,8 @@ export default function ProductionPage() {
       category_name: inv.item?.category?.name || '',
       unit: inv.item?.unit || '',
       current_stock: inv.current_stock,
-      item_type: 'finished_product' as const
+      item_type: inv.item_type || 'raw_material'
     })) || []
-
-    // İki listeyi birleştir: önce hammaddeler, sonra bitmiş ürünler
-    const inventoryData = [...rawMaterialsData, ...finishedProductsData]
 
     console.log('✅ [PRODUCTION] ProductionInventory state güncelleniyor:', inventoryData.length, 'kayıt')
     setProductionInventory(inventoryData)
@@ -1036,31 +1005,77 @@ export default function ProductionPage() {
     if (!companyId) return
 
     try {
-      // Ana depoya (warehouse_items) hammadde stok ekle
-      const { data: existing } = await supabase
+      // Ana depodan stok kontrolü
+      const { data: warehouseItem } = await supabase
         .from('warehouse_items')
-        .select('current_stock')
+        .select('current_stock, code, name')
         .eq('id', manualRawMaterialForm.item_id)
         .single()
 
+      if (!warehouseItem) {
+        alert('❌ Ürün bulunamadı!')
+        return
+      }
+
+      if (warehouseItem.current_stock < manualRawMaterialForm.quantity) {
+        alert(`❌ Ana depoda yeterli stok yok!\nMevcut: ${warehouseItem.current_stock}\nİstenen: ${manualRawMaterialForm.quantity}`)
+        return
+      }
+
+      // Ana depodan düş
+      const { error: warehouseError } = await supabase
+        .from('warehouse_items')
+        .update({
+          current_stock: warehouseItem.current_stock - manualRawMaterialForm.quantity,
+        })
+        .eq('id', manualRawMaterialForm.item_id)
+
+      if (warehouseError) throw warehouseError
+
+      // Üretim deposuna ekle
+      const { data: existing } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', manualRawMaterialForm.item_id)
+        .eq('item_type', 'raw_material')
+        .single()
+
       if (existing) {
-        // Mevcut stoku güncelle
+        // Güncelle
         const { error } = await supabase
-          .from('warehouse_items')
+          .from('production_inventory')
           .update({
             current_stock: existing.current_stock + manualRawMaterialForm.quantity,
+            notes: manualRawMaterialForm.notes,
+            updated_at: new Date().toISOString()
           })
-          .eq('id', manualRawMaterialForm.item_id)
+          .eq('company_id', companyId)
+          .eq('item_id', manualRawMaterialForm.item_id)
+          .eq('item_type', 'raw_material')
+
+        if (error) throw error
+      } else {
+        // Yeni kayıt
+        const { error } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: manualRawMaterialForm.item_id,
+            current_stock: manualRawMaterialForm.quantity,
+            item_type: 'raw_material',
+            notes: manualRawMaterialForm.notes
+          })
 
         if (error) throw error
       }
 
-      alert('✅ Hammadde stoğu güncellendi!')
+      alert(`✅ Ana depodan üretim deposuna transfer edildi!\n${warehouseItem.code} - ${warehouseItem.name}: ${manualRawMaterialForm.quantity} adet`)
       setShowManualRawMaterialModal(false)
       resetManualRawMaterialForm()
       loadData()
     } catch (error: any) {
-      console.error('Error adding manual raw material:', error)
+      console.error('Error transferring from warehouse:', error)
       alert('❌ Hata: ' + error.message)
     }
   }
@@ -1395,7 +1410,7 @@ export default function ProductionPage() {
                     onClick={() => setShowManualRawMaterialModal(true)}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
                   >
-                    + Manuel Hammadde Ekle
+                    📦 Ana Depodan Çek
                   </button>
                 )}
               </div>
@@ -2527,14 +2542,14 @@ export default function ProductionPage() {
         {showManualRawMaterialModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">Manuel Hammadde Ekle</h3>
-              <p className="text-sm text-gray-600 mb-6">Üretim deposuna doğrudan hammadde ekleyin</p>
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Ana Depodan Hammadde Transfer</h3>
+              <p className="text-sm text-gray-600 mb-6">Ana depodan üretim deposuna hammadde çekin</p>
 
               <form onSubmit={handleManualRawMaterialAdd} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Hammadde <span className="text-red-500">*</span>
+                      Hammadde (Ana Depo) <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={manualRawMaterialForm.item_id}
@@ -2545,7 +2560,7 @@ export default function ProductionPage() {
                       <option value="">Seçin...</option>
                       {warehouseItems.map(item => (
                         <option key={item.id} value={item.id}>
-                          {item.code} - {item.name}
+                          {item.code} - {item.name} (Stok: {item.current_stock} {item.unit})
                         </option>
                       ))}
                     </select>
@@ -2553,7 +2568,7 @@ export default function ProductionPage() {
 
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Miktar <span className="text-red-500">*</span>
+                      Transfer Miktarı <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -2562,6 +2577,7 @@ export default function ProductionPage() {
                       onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, quantity: parseFloat(e.target.value) })}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                      placeholder="Ana depodan çekilecek miktar"
                     />
                   </div>
 
@@ -2571,7 +2587,7 @@ export default function ProductionPage() {
                       value={manualRawMaterialForm.notes}
                       onChange={(e) => setManualRawMaterialForm({ ...manualRawMaterialForm, notes: e.target.value })}
                       rows={3}
-                      placeholder="Manuel giriş nedeni..."
+                      placeholder="Transfer nedeni veya açıklamalar..."
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     />
                   </div>
@@ -2582,7 +2598,7 @@ export default function ProductionPage() {
                     type="submit"
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
                   >
-                    Hammadde Ekle
+                    📦 Depodan Transfer Et
                   </button>
                   <button
                     type="button"

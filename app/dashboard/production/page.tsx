@@ -300,7 +300,14 @@ export default function ProductionPage() {
       .gt('current_stock', 0)
       .order('item_type', { ascending: true })
 
-    console.log('🏭 [PRODUCTION] production_inventory sorgu sonucu:', { data, error, count: data?.length })
+    if (error) {
+      console.error('❌ [PRODUCTION] production_inventory sorgu hatası:', error)
+      setProductionInventory([])
+      return
+    }
+
+    console.log('🏭 [PRODUCTION] production_inventory sonucu:', { count: data?.length })
+    console.log('📦 [PRODUCTION] İlk 3 kayıt:', data?.slice(0, 3))
 
     const inventoryData = data?.map((inv: any) => ({
       id: inv.id,
@@ -313,7 +320,10 @@ export default function ProductionPage() {
       item_type: inv.item_type || 'raw_material'
     })) || []
 
-    console.log('✅ [PRODUCTION] ProductionInventory state güncelleniyor:', inventoryData.length, 'kayıt')
+    console.log('✅ [PRODUCTION] ProductionInventory state:', inventoryData.length, 'kayıt')
+    console.log('📊 [PRODUCTION] Hammadde:', inventoryData.filter(i => i.item_type === 'raw_material').length)
+    console.log('📊 [PRODUCTION] Bitmiş ürün:', inventoryData.filter(i => i.item_type === 'finished_product').length)
+
     setProductionInventory(inventoryData)
   }
 
@@ -931,17 +941,25 @@ export default function ProductionPage() {
       }
 
       // 4. Bitmiş ürünü stoğa ekle
-      const { data: existingFinished } = await supabase
+      console.log('✨ [PRODUCTION] Bitmiş ürün stoğa ekleniyor:', {
+        item_id: outputForm.output_item_id,
+        quantity: outputForm.quantity
+      })
+
+      const { data: existingFinished, error: checkFinishedError } = await supabase
         .from('production_inventory')
         .select('current_stock')
         .eq('company_id', companyId)
         .eq('item_id', outputForm.output_item_id)
         .eq('item_type', 'finished_product')
-        .single()
+        .maybeSingle()
+
+      if (checkFinishedError) {
+        console.error('❌ [PRODUCTION] Bitmiş ürün kontrolü hatası:', checkFinishedError)
+      }
 
       if (existingFinished) {
-        // Mevcut stoğu güncelle
-        await supabase
+        const { error: updateFinishedError } = await supabase
           .from('production_inventory')
           .update({
             current_stock: existingFinished.current_stock + outputForm.quantity,
@@ -950,9 +968,14 @@ export default function ProductionPage() {
           .eq('company_id', companyId)
           .eq('item_id', outputForm.output_item_id)
           .eq('item_type', 'finished_product')
+
+        if (updateFinishedError) {
+          console.error('❌ [PRODUCTION] Bitmiş ürün güncelleme hatası:', updateFinishedError)
+          throw updateFinishedError
+        }
+        console.log('✅ [PRODUCTION] Bitmiş ürün stoku güncellendi')
       } else {
-        // Yeni kayıt oluştur
-        await supabase
+        const { error: insertFinishedError } = await supabase
           .from('production_inventory')
           .insert({
             company_id: companyId,
@@ -961,20 +984,38 @@ export default function ProductionPage() {
             item_type: 'finished_product',
             notes: 'Üretimden gelen bitmiş ürün'
           })
+
+        if (insertFinishedError) {
+          console.error('❌ [PRODUCTION] Bitmiş ürün ekleme hatası:', insertFinishedError)
+          throw insertFinishedError
+        }
+        console.log('✅ [PRODUCTION] Yeni bitmiş ürün kaydı oluşturuldu')
       }
 
       // 5. Kalan hammaddeyi stoğa geri ekle
       if (remainingQuantity > 0) {
-        const { data: existingRaw } = await supabase
+        console.log('↩️ [PRODUCTION] Geri dönen hammadde ekleniyor:', {
+          rawMaterialId,
+          remainingQuantity,
+          companyId
+        })
+
+        const { data: existingRaw, error: checkError } = await supabase
           .from('production_inventory')
           .select('current_stock')
           .eq('company_id', companyId)
           .eq('item_id', rawMaterialId)
           .eq('item_type', 'raw_material')
-          .single()
+          .maybeSingle()
+
+        if (checkError) {
+          console.error('❌ [PRODUCTION] Mevcut stok kontrolü hatası:', checkError)
+        }
 
         if (existingRaw) {
-          await supabase
+          console.log('📝 [PRODUCTION] Mevcut stok bulundu:', existingRaw.current_stock, '+ yeni:', remainingQuantity, '=', existingRaw.current_stock + remainingQuantity)
+
+          const { error: updateError } = await supabase
             .from('production_inventory')
             .update({
               current_stock: existingRaw.current_stock + remainingQuantity,
@@ -983,8 +1024,16 @@ export default function ProductionPage() {
             .eq('company_id', companyId)
             .eq('item_id', rawMaterialId)
             .eq('item_type', 'raw_material')
+
+          if (updateError) {
+            console.error('❌ [PRODUCTION] Stok güncelleme hatası:', updateError)
+            throw updateError
+          }
+          console.log('✅ [PRODUCTION] Stok güncellendi')
         } else {
-          await supabase
+          console.log('📝 [PRODUCTION] Yeni kayıt oluşturuluyor')
+
+          const { error: insertError } = await supabase
             .from('production_inventory')
             .insert({
               company_id: companyId,
@@ -993,6 +1042,12 @@ export default function ProductionPage() {
               item_type: 'raw_material',
               notes: 'Tezgahtan kalan hammadde'
             })
+
+          if (insertError) {
+            console.error('❌ [PRODUCTION] Stok ekleme hatası:', insertError)
+            throw insertError
+          }
+          console.log('✅ [PRODUCTION] Yeni stok kaydı oluşturuldu')
         }
       }
 

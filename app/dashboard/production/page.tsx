@@ -1335,50 +1335,6 @@ export default function ProductionPage() {
   }
 
 
-  const handleSendOutputToQC = async (output: ProductionOutput) => {
-    if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) kalite kontrole göndermek istediğinizden emin misiniz?`)) return
-    if (submittingQCTransfer) return // Çift tıklama engelle
-
-    try {
-      setSubmittingQCTransfer(true)
-
-      // Kalite kontrole transfer talebi oluştur (pending - onay beklesin)
-      const { data: transferData, error: transferError } = await supabase
-        .from('production_to_qc_transfers')
-        .insert({
-          company_id: companyId,
-          item_id: output.output_item_id,
-          quantity: output.quantity,
-          notes: `Üretim kaydı #${output.id} - ${output.machine_name} - ${new Date(output.production_date).toLocaleDateString('tr-TR')}`,
-          requested_by: currentUserId,
-          status: 'pending' // Kalite kontrol onaylayacak
-        })
-        .select()
-        .single()
-
-      if (transferError) throw transferError
-
-      // Üretim kaydının durumunu güncelle
-      const { error: updateError } = await supabase
-        .from('production_outputs')
-        .update({
-          transfer_status: 'sent_to_qc',
-          qc_transfer_id: transferData.id
-        })
-        .eq('id', output.id)
-
-      if (updateError) throw updateError
-
-      await loadData()
-      alert('✅ Kalite kontrole onay talebi gönderildi!')
-    } catch (error: any) {
-      console.error('Error sending to QC:', error)
-      alert('❌ Hata: ' + error.message)
-    } finally {
-      setSubmittingQCTransfer(false)
-    }
-  }
-
   const handleSendOutputToWarehouse = async (output: ProductionOutput) => {
     if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) ana depoya göndermek istediğinizden emin misiniz?`)) return
 
@@ -1756,20 +1712,12 @@ export default function ProductionPage() {
                           </td>
                           <td className="px-6 py-4">
                             {output.transfer_status === 'pending' && canCreate('production') && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleSendOutputToQC(output)}
-                                  className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs font-semibold"
-                                >
-                                  KK'ya Gönder
-                                </button>
-                                <button
-                                  onClick={() => handleSendOutputToWarehouse(output)}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold"
-                                >
-                                  Depoya Gönder
-                                </button>
-                              </div>
+                              <button
+                                onClick={() => handleSendOutputToWarehouse(output)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold"
+                              >
+                                Depoya Gönder
+                              </button>
                             )}
                             {output.transfer_status !== 'pending' && (
                               <span className="text-xs text-gray-500">Gönderildi</span>

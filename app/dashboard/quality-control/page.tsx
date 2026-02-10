@@ -318,6 +318,37 @@ export default function QualityControlPage() {
 
     try {
       setSubmittingTransfer(true)
+
+      // 1. ÖNCE KALİTE INVENTORY KONTROLÜ (hem passed hem failed için)
+      const { data: qcStock, error: qcCheckError } = await supabase
+        .from('quality_control_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transferForm.item_id)
+        .single()
+
+      if (qcCheckError) {
+        throw new Error('Kalite kontrol stoğu bulunamadı!')
+      }
+
+      // Stok yeterli mi kontrol et
+      if (qcStock.current_stock < transferForm.quantity) {
+        alert(`❌ Yetersiz stok!\n\nKalite deposunda: ${qcStock.current_stock} birim\nGöndermek istediğiniz: ${transferForm.quantity} birim`)
+        return
+      }
+
+      // 2. Kalite inventory'den stoğu düş
+      const { error: qcStockError } = await supabase
+        .from('quality_control_inventory')
+        .update({
+          current_stock: qcStock.current_stock - transferForm.quantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('company_id', companyId)
+        .eq('item_id', transferForm.item_id)
+
+      if (qcStockError) throw qcStockError
+
       if (transferForm.quality_result === 'passed') {
         // GEÇERSE: Ana depoya transfer talebi oluştur (depo onayı bekle)
         const { error } = await supabase
@@ -334,32 +365,12 @@ export default function QualityControlPage() {
 
         if (error) throw error
 
-        alert('✅ Kalite test sonucu kaydedildi! Ana depoya transfer talebi oluşturuldu. Depo görevlisi onayını bekliyor.')
+        alert('✅ Kalite test sonucu kaydedildi! Kalite deposundan düşüldü. Ana depoya transfer talebi oluşturuldu, depo onayını bekliyor.')
       } else {
         // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
+        // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı
 
-        // 1. Kalite kontrol stoğundan düş - önce mevcut stoğu çek
-        const { data: qcStock, error: qcCheckError } = await supabase
-          .from('quality_control_inventory')
-          .select('current_stock')
-          .eq('company_id', companyId)
-          .eq('item_id', transferForm.item_id)
-          .single()
-
-        if (qcCheckError) throw qcCheckError
-
-        const { error: qcStockError } = await supabase
-          .from('quality_control_inventory')
-          .update({
-            current_stock: qcStock.current_stock - transferForm.quantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('company_id', companyId)
-          .eq('item_id', transferForm.item_id)
-
-        if (qcStockError) throw qcStockError
-
-        // 2. Üretim deposuna tashih olarak ekle - önce kontrol et var mı
+        // Üretim deposuna tashih olarak ekle - önce kontrol et var mı
         const { data: existingTashih, error: tashihCheckError } = await supabase
           .from('production_inventory')
           .select('current_stock')

@@ -1483,7 +1483,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-1 bg-gray-200 rounded">
                       📊 Genel
                     </div>
-                    {['dashboard'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['dashboard'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-gray-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1522,7 +1522,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-blue-600 uppercase tracking-wider px-2 py-1 bg-blue-100 rounded">
                       🏭 Üretim Modülleri
                     </div>
-                    {['production', 'machines'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['production', 'machines'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-blue-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1577,7 +1577,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-orange-600 uppercase tracking-wider px-2 py-1 bg-orange-100 rounded">
                       ✅ Kalite Kontrol
                     </div>
-                    {['quality_control'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['quality_control'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-orange-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1632,7 +1632,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-green-600 uppercase tracking-wider px-2 py-1 bg-green-100 rounded">
                       📦 Depo & Envanter
                     </div>
-                    {['warehouse', 'inventory', 'toolroom'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['warehouse', 'inventory', 'toolroom'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-green-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1687,7 +1687,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-purple-600 uppercase tracking-wider px-2 py-1 bg-purple-100 rounded">
                       📋 İş Yönetimi
                     </div>
-                    {['projects', 'customers', 'planning'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['projects', 'customers', 'planning'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-purple-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1742,7 +1742,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-yellow-600 uppercase tracking-wider px-2 py-1 bg-yellow-100 rounded">
                       💰 Muhasebe & Finans
                     </div>
-                    {['accounting', 'invoices', 'accounts', 'costs'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['accounting', 'invoices', 'accounts', 'costs'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-yellow-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
@@ -1797,7 +1797,7 @@ export default function SettingsPage() {
                     <div className="text-xs font-bold text-red-600 uppercase tracking-wider px-2 py-1 bg-red-100 rounded">
                       ⚙️ Sistem & Yönetim
                     </div>
-                    {['reports', 'settings', 'users'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                    {['reports', 'settings', 'users'].map((module) => (
                       <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-red-400">
                         <div className="flex items-center justify-between mb-3">
                           <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>

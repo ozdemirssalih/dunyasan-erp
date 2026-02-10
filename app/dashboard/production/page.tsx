@@ -1335,45 +1335,6 @@ export default function ProductionPage() {
   }
 
 
-  const handleSendOutputToWarehouse = async (output: ProductionOutput) => {
-    if (!confirm(`${output.output_item_name} ürününü (${output.quantity} ${output.unit}) ana depoya göndermek istediğinizden emin misiniz?`)) return
-
-    try {
-      // Ana depoya transfer kaydı oluştur
-      const { data: transferData, error: transferError } = await supabase
-        .from('production_to_warehouse_transfers')
-        .insert({
-          company_id: companyId,
-          item_id: output.output_item_id,
-          quantity: output.quantity,
-          notes: `Üretim kaydı #${output.id} - ${output.machine_name} - ${new Date(output.production_date).toLocaleDateString('tr-TR')}`,
-          requested_by: currentUserId,
-          status: 'approved' // Direkt onaylı olarak gönder
-        })
-        .select()
-        .single()
-
-      if (transferError) throw transferError
-
-      // Üretim kaydının durumunu güncelle
-      const { error: updateError } = await supabase
-        .from('production_outputs')
-        .update({
-          transfer_status: 'sent_to_warehouse',
-          warehouse_transfer_id: transferData.id
-        })
-        .eq('id', output.id)
-
-      if (updateError) throw updateError
-
-      await loadData()
-      alert('✅ Ürün ana depoya gönderildi!')
-    } catch (error: any) {
-      console.error('Error sending to warehouse:', error)
-      alert('❌ Hata: ' + error.message)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -1711,17 +1672,7 @@ export default function ProductionPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            {output.transfer_status === 'pending' && canCreate('production') && (
-                              <button
-                                onClick={() => handleSendOutputToWarehouse(output)}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs font-semibold"
-                              >
-                                Depoya Gönder
-                              </button>
-                            )}
-                            {output.transfer_status !== 'pending' && (
-                              <span className="text-xs text-gray-500">Gönderildi</span>
-                            )}
+                            <span className="text-xs text-gray-500">-</span>
                           </td>
                         </tr>
                       )

@@ -401,6 +401,34 @@ export default function WarehousePage() {
     if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Üretim deposu azalacak, ana depo stoğu artacak.')) return
 
     try {
+      // 1. Transfer bilgilerini al
+      const { data: transfer, error: transferError } = await supabase
+        .from('production_to_warehouse_transfers')
+        .select('item_id, quantity')
+        .eq('id', transferId)
+        .single()
+
+      if (transferError) throw transferError
+
+      // 2. Üretim deposunda yeterli stok var mı kontrol et
+      const { data: productionStock, error: stockError } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transfer.item_id)
+        .eq('item_type', 'finished_product')
+        .maybeSingle()
+
+      if (stockError) throw stockError
+
+      const availableStock = productionStock?.current_stock || 0
+
+      if (availableStock < transfer.quantity) {
+        alert(`❌ Yetersiz stok!\n\nÜretim deposunda: ${availableStock} birim\nTransfer talebi: ${transfer.quantity} birim\n\nEksik: ${transfer.quantity - availableStock} birim`)
+        return
+      }
+
+      // 3. Stok yeterliyse transferi onayla
       const { error } = await supabase
         .from('production_to_warehouse_transfers')
         .update({
@@ -450,6 +478,34 @@ export default function WarehousePage() {
     if (!confirm(`Bu transferi onaylamak istediğinizden emin misiniz? KK deposu azalacak, ${destination} eklenecek.`)) return
 
     try {
+      // 1. Transfer bilgilerini al
+      const { data: transferData, error: transferError } = await supabase
+        .from('qc_to_warehouse_transfers')
+        .select('item_id, quantity')
+        .eq('id', transferId)
+        .single()
+
+      if (transferError) throw transferError
+
+      // 2. Kalite kontrol deposunda yeterli stok var mı kontrol et
+      // NOT: Normalde transfer oluşturulurken stok düşüyor ama güvenlik için kontrol edelim
+      const { data: qcStock, error: stockError } = await supabase
+        .from('quality_control_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transferData.item_id)
+        .maybeSingle()
+
+      if (stockError) throw stockError
+
+      const availableStock = qcStock?.current_stock || 0
+
+      if (availableStock < 0) {
+        alert(`❌ Kalite deposunda stok hatası tespit edildi!\n\nMevcut stok: ${availableStock} birim (negatif)\n\nLütfen stok kayıtlarını kontrol edin.`)
+        return
+      }
+
+      // 3. Transferi onayla
       const { error } = await supabase
         .from('qc_to_warehouse_transfers')
         .update({
@@ -496,6 +552,33 @@ export default function WarehousePage() {
     if (!confirm('Bu talebi onaylamak istediğinizden emin misiniz? Depo stoğu azalacak, üretim stoğu artacak.')) return
 
     try {
+      // 1. Talep bilgilerini al
+      const { data: request, error: requestError } = await supabase
+        .from('production_material_requests')
+        .select('item_id, quantity')
+        .eq('id', requestId)
+        .single()
+
+      if (requestError) throw requestError
+
+      // 2. Ana depoda yeterli stok var mı kontrol et
+      const { data: warehouseStock, error: stockError } = await supabase
+        .from('warehouse_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', request.item_id)
+        .maybeSingle()
+
+      if (stockError) throw stockError
+
+      const availableStock = warehouseStock?.current_stock || 0
+
+      if (availableStock < request.quantity) {
+        alert(`❌ Yetersiz stok!\n\nAna depoda: ${availableStock} birim\nTalep edilen: ${request.quantity} birim\n\nEksik: ${request.quantity - availableStock} birim`)
+        return
+      }
+
+      // 3. Stok yeterliyse talebi onayla
       const { error } = await supabase
         .from('production_material_requests')
         .update({

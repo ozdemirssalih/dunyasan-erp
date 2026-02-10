@@ -147,23 +147,23 @@ export default function WarehousePage() {
   useEffect(() => {
     loadData()
 
-    // Her 5 dakikada bir otomatik yenile
+    // Her 5 dakikada bir otomatik yenile (sessizce, loading gösterme)
     const interval = setInterval(() => {
-      console.log('🔄 [AUTO-REFRESH] Depo verileri yenileniyor...')
-      loadData()
+      console.log('🔄 [AUTO-REFRESH] Depo verileri sessizce yenileniyor...')
+      loadData(true) // silent mode
     }, 5 * 60 * 1000) // 5 dakika
 
     return () => clearInterval(interval)
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         console.error('No user found')
-        setLoading(false)
+        if (!silent) setLoading(false)
         return
       }
 
@@ -211,7 +211,7 @@ export default function WarehousePage() {
 
       if (!finalCompanyId) {
         console.error('No company found')
-        setLoading(false)
+        if (!silent) setLoading(false)
         return
       }
 
@@ -241,9 +241,9 @@ export default function WarehousePage() {
 
     } catch (error) {
       console.error('Error loading data:', error)
-      alert('Veri yüklenirken hata oluştu!')
+      if (!silent) alert('Veri yüklenirken hata oluştu!')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

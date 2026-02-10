@@ -46,23 +46,23 @@ export default function QualityControlPage() {
   useEffect(() => {
     loadData()
 
-    // Her 5 dakikada bir otomatik yenile
+    // Her 5 dakikada bir otomatik yenile (sessizce, loading gösterme)
     const interval = setInterval(() => {
-      console.log('🔄 [AUTO-REFRESH] Kalite kontrol verileri yenileniyor...')
-      loadData()
+      console.log('🔄 [AUTO-REFRESH] Kalite kontrol verileri sessizce yenileniyor...')
+      loadData(true) // silent mode
     }, 5 * 60 * 1000) // 5 dakika
 
     return () => clearInterval(interval)
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         console.error('No user found')
-        setLoading(false)
+        if (!silent) setLoading(false)
         return
       }
 
@@ -109,7 +109,7 @@ export default function QualityControlPage() {
 
       if (!finalCompanyId) {
         console.error('No company found')
-        setLoading(false)
+        if (!silent) setLoading(false)
         return
       }
 
@@ -126,9 +126,9 @@ export default function QualityControlPage() {
 
     } catch (error) {
       console.error('Error loading data:', error)
-      alert('Veri yüklenirken hata oluştu!')
+      if (!silent) alert('Veri yüklenirken hata oluştu!')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

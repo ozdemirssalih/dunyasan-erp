@@ -947,11 +947,11 @@ export default function ProductionPage() {
         if (fireError) throw fireError
       }
 
-      // 4. Tezgah stoğundan kullanılan hammaddeyi düş
+      // 4. Tezgahı tamamen boşalt (kalan hammadde depoya dönecek)
       const { error: machineStockError } = await supabase
         .from('machine_inventory')
         .update({
-          current_stock: remainingQuantity, // Kalan miktar
+          current_stock: 0, // Tezgahı tamamen boşalt
           updated_at: new Date().toISOString()
         })
         .eq('machine_id', outputForm.machine_id)
@@ -962,9 +962,9 @@ export default function ProductionPage() {
         console.error('❌ [PRODUCTION] Tezgah stoğu güncelleme hatası:', machineStockError)
         throw machineStockError
       }
-      console.log('✅ [PRODUCTION] Tezgah stoğu güncellendi:', {
+      console.log('✅ [PRODUCTION] Tezgah tamamen boşaltıldı:', {
         used: usedQuantity,
-        remaining: remainingQuantity
+        toWarehouse: remainingQuantity
       })
 
       // 5. Bitmiş ürünü stoğa ekle
@@ -1080,17 +1080,17 @@ export default function ProductionPage() {
 
       // Başarı mesajı oluştur
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
-      successMsg += `\n\n📊 Tezgahtaki Durum:`
+      successMsg += `\n\n📊 Tezgah İşlemi:`
       successMsg += `\n  • Başlangıç: ${availableStock} birim`
       successMsg += `\n  • Kullanılan: ${usedQuantity} birim`
-      successMsg += `\n  • Kalan: ${remainingQuantity} birim`
+      successMsg += `\n  • Tezgah Durumu: BOŞALTILDI ✓`
       successMsg += `\n\n✨ Üretim Sonucu:`
       successMsg += `\n  • Mamül: ${outputForm.quantity} birim`
       if (outputForm.fire_quantity > 0) {
         successMsg += `\n  • Fire: ${outputForm.fire_quantity} birim`
       }
       if (remainingQuantity > 0) {
-        successMsg += `\n\n↩️ ${remainingQuantity} birim hammadde üretim deposuna döndü`
+        successMsg += `\n\n↩️ ${remainingQuantity} birim hammadde depoya döndü`
       }
       // Başarı mesajını göster ve verileri yenile
       setShowOutputModal(false)

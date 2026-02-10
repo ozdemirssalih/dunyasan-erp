@@ -875,12 +875,15 @@ export default function ProductionPage() {
       setSubmittingOutput(true)
 
       // 1. Tezgahtaki MEVCUT hammadde stoğunu kontrol et (machine_inventory'den)
+      // En son güncellenen (son eklenen) hammaddeyi kullan
       const { data: machineStock, error: stockError } = await supabase
         .from('machine_inventory')
         .select('item_id, current_stock')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
         .gt('current_stock', 0)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
 
       if (stockError) {

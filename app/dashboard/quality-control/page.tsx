@@ -275,16 +275,25 @@ export default function QualityControlPage() {
 
   const handleApproveIncoming = async (transferId: string) => {
     if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Kalite kontrol deposuna eklenecek.')) return
+    if (submittingTransfer) return // Çift tıklama engelle
 
     try {
-      // 1. Transfer bilgilerini al
+      setSubmittingTransfer(true)
+
+      // 1. Transfer bilgilerini al ve durumunu kontrol et
       const { data: transfer, error: transferError } = await supabase
         .from('production_to_qc_transfers')
-        .select('item_id, quantity')
+        .select('item_id, quantity, status')
         .eq('id', transferId)
         .single()
 
       if (transferError) throw transferError
+
+      // Eğer transfer zaten onaylanmışsa işlem yapma
+      if (transfer.status !== 'pending') {
+        alert('⚠️ Bu transfer zaten işlenmiş!')
+        return
+      }
 
       // 2. Kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
       const { data: existingStock, error: checkError } = await supabase
@@ -322,7 +331,7 @@ export default function QualityControlPage() {
         if (insertError) throw insertError
       }
 
-      // 3. Transfer durumunu güncelle
+      // 3. Transfer durumunu güncelle (sadece pending olanları)
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -331,6 +340,7 @@ export default function QualityControlPage() {
           reviewed_at: new Date().toISOString()
         })
         .eq('id', transferId)
+        .eq('status', 'pending') // Sadece pending olanları güncelle
 
       if (error) throw error
 
@@ -339,21 +349,32 @@ export default function QualityControlPage() {
     } catch (error: any) {
       console.error('Error approving transfer:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingTransfer(false)
     }
   }
 
   const handleRejectIncoming = async (transferId: string) => {
     if (!confirm('Bu transferi reddetmek istediğinizden emin misiniz? Ürün üretim deposuna geri dönecek.')) return
+    if (submittingTransfer) return // Çift tıklama engelle
 
     try {
-      // 1. Transfer bilgilerini al
+      setSubmittingTransfer(true)
+
+      // 1. Transfer bilgilerini al ve durumunu kontrol et
       const { data: transfer, error: transferError } = await supabase
         .from('production_to_qc_transfers')
-        .select('item_id, quantity')
+        .select('item_id, quantity, status')
         .eq('id', transferId)
         .single()
 
       if (transferError) throw transferError
+
+      // Eğer transfer zaten işlenmişse işlem yapma
+      if (transfer.status !== 'pending') {
+        alert('⚠️ Bu transfer zaten işlenmiş!')
+        return
+      }
 
       // 2. Üretim deposuna geri ekle
       const { data: existingStock, error: checkError } = await supabase
@@ -394,7 +415,7 @@ export default function QualityControlPage() {
         if (insertError) throw insertError
       }
 
-      // 3. Transfer durumunu güncelle
+      // 3. Transfer durumunu güncelle (sadece pending olanları)
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -403,6 +424,7 @@ export default function QualityControlPage() {
           reviewed_at: new Date().toISOString()
         })
         .eq('id', transferId)
+        .eq('status', 'pending') // Sadece pending olanları güncelle
 
       if (error) throw error
 
@@ -411,6 +433,8 @@ export default function QualityControlPage() {
     } catch (error: any) {
       console.error('Error rejecting transfer:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingTransfer(false)
     }
   }
 

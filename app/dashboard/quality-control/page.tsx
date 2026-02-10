@@ -295,7 +295,28 @@ export default function QualityControlPage() {
         return
       }
 
-      // 2. Kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
+      // 2. ÖNCE transfer durumunu güncelle (sadece pending olanları)
+      // Bu şekilde eğer 2 kez çağrılırsa, ikincisi hata verir veya hiçbir satır güncellenmez
+      const { data: updatedTransfer, error: updateTransferError } = await supabase
+        .from('production_to_qc_transfers')
+        .update({
+          status: 'approved',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+        .eq('status', 'pending') // Sadece pending olanları güncelle
+        .select()
+
+      if (updateTransferError) throw updateTransferError
+
+      // Eğer hiçbir satır güncellenmediysede (başka biri önce onaylamış), işlemi durdur
+      if (!updatedTransfer || updatedTransfer.length === 0) {
+        alert('⚠️ Bu transfer zaten işlenmiş veya bulunamadı!')
+        return
+      }
+
+      // 3. SONRA kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
       const { data: existingStock, error: checkError } = await supabase
         .from('quality_control_inventory')
         .select('current_stock')
@@ -331,19 +352,6 @@ export default function QualityControlPage() {
         if (insertError) throw insertError
       }
 
-      // 3. Transfer durumunu güncelle (sadece pending olanları)
-      const { error } = await supabase
-        .from('production_to_qc_transfers')
-        .update({
-          status: 'approved',
-          reviewed_by: currentUserId,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', transferId)
-        .eq('status', 'pending') // Sadece pending olanları güncelle
-
-      if (error) throw error
-
       alert('✅ Transfer onaylandı! Stok kalite kontrol deposuna eklendi.')
       loadData()
     } catch (error: any) {
@@ -376,7 +384,27 @@ export default function QualityControlPage() {
         return
       }
 
-      // 2. Üretim deposuna geri ekle
+      // 2. ÖNCE transfer durumunu güncelle (sadece pending olanları)
+      const { data: updatedTransfer, error: updateTransferError } = await supabase
+        .from('production_to_qc_transfers')
+        .update({
+          status: 'rejected',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', transferId)
+        .eq('status', 'pending') // Sadece pending olanları güncelle
+        .select()
+
+      if (updateTransferError) throw updateTransferError
+
+      // Eğer hiçbir satır güncellenmediysede, işlemi durdur
+      if (!updatedTransfer || updatedTransfer.length === 0) {
+        alert('⚠️ Bu transfer zaten işlenmiş veya bulunamadı!')
+        return
+      }
+
+      // 3. SONRA üretim deposuna geri ekle
       const { data: existingStock, error: checkError } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -414,19 +442,6 @@ export default function QualityControlPage() {
 
         if (insertError) throw insertError
       }
-
-      // 3. Transfer durumunu güncelle (sadece pending olanları)
-      const { error } = await supabase
-        .from('production_to_qc_transfers')
-        .update({
-          status: 'rejected',
-          reviewed_by: currentUserId,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', transferId)
-        .eq('status', 'pending') // Sadece pending olanları güncelle
-
-      if (error) throw error
 
       alert('✅ Transfer reddedildi. Ürün üretim deposuna geri döndü.')
       loadData()

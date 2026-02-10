@@ -74,6 +74,12 @@ SELECT
     'Depo islem gecmisi' as aciklama
 FROM warehouse_transactions;
 
+SELECT
+    'production_to_qc_transfers' as tablo,
+    COUNT(*) as kayit_sayisi,
+    'Uretim->Kalite Kontrol transferleri' as aciklama
+FROM production_to_qc_transfers;
+
 -- ============================================================
 -- 2. VERILERI TEMIZLE (GERI ALINAMAZ!)
 -- ============================================================
@@ -107,6 +113,9 @@ DELETE FROM qc_to_warehouse_transfers;
 
 -- Depo islem gecmisi
 DELETE FROM warehouse_transactions;
+
+-- Uretim->Kalite Kontrol transferleri
+DELETE FROM production_to_qc_transfers;
 
 -- Ana depo stoklarini sifirla (warehouse_items tablosunda)
 UPDATE warehouse_items
@@ -178,6 +187,12 @@ SELECT
     COUNT(*) as kalan_kayit,
     CASE WHEN COUNT(*) = 0 THEN 'Temizlendi' ELSE 'Hala kayit var!' END as durum
 FROM warehouse_transactions;
+
+SELECT
+    'production_to_qc_transfers' as tablo,
+    COUNT(*) as kalan_kayit,
+    CASE WHEN COUNT(*) = 0 THEN 'Temizlendi' ELSE 'Hala kayit var!' END as durum
+FROM production_to_qc_transfers;
 
 SELECT
     'warehouse_items' as tablo,

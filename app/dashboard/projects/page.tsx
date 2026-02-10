@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
-import { FolderKanban, Plus, Eye } from 'lucide-react'
+import { FolderKanban, Plus, Eye, Trash2 } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 
 interface Project {
@@ -121,6 +121,27 @@ export default function ProjectsPage() {
     }
   }
 
+  const handleDeleteProject = async (projectId: string, projectName: string) => {
+    if (!confirm(`"${projectName}" projesini silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz ve projeye ait tüm parçalar da silinecektir!`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId)
+
+      if (error) throw error
+
+      alert('✅ Proje başarıyla silindi!')
+      await loadProjects()
+    } catch (error: any) {
+      console.error('Error deleting project:', error)
+      alert(`❌ Proje silinirken hata oluştu!\n${error?.message || 'Bilinmeyen hata'}`)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -177,6 +198,13 @@ export default function ProjectsPage() {
                 <Eye className="w-4 h-4" />
                 Detay
               </Link>
+              <button
+                onClick={() => handleDeleteProject(project.id, project.project_name)}
+                className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Kaldır
+              </button>
             </div>
           </div>
         ))}

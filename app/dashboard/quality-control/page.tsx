@@ -295,8 +295,8 @@ export default function QualityControlPage() {
         return
       }
 
-      // 2. Transfer durumunu güncelle (sadece pending olanları)
-      // Database trigger otomatik olarak stok işlemlerini yapacak
+      // 2. ÖNCE transfer durumunu güncelle (sadece pending olanları)
+      // Bu şekilde eğer 2 kez çağrılırsa, ikincisi hata verir veya hiçbir satır güncellenmez
       const { data: updatedTransfer, error: updateTransferError } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -316,10 +316,41 @@ export default function QualityControlPage() {
         return
       }
 
-      // NOT: Stok işlemleri database trigger tarafından otomatik yapılıyor
-      // approve_production_to_qc_transfer() trigger fonksiyonu:
-      // - Üretim deposundan quantity kadar düşüyor
-      // - Kalite kontrol deposuna quantity kadar ekliyor
+      // 3. SONRA kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
+      const { data: existingStock, error: checkError } = await supabase
+        .from('quality_control_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transfer.item_id)
+        .maybeSingle()
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError
+
+      if (existingStock) {
+        // Varsa güncelle
+        const { error: updateError } = await supabase
+          .from('quality_control_inventory')
+          .update({
+            current_stock: existingStock.current_stock + transfer.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', transfer.item_id)
+
+        if (updateError) throw updateError
+      } else {
+        // Yoksa yeni kayıt oluştur
+        const { error: insertError } = await supabase
+          .from('quality_control_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: transfer.item_id,
+            current_stock: transfer.quantity,
+            notes: 'Üretimden gelen ürün'
+          })
+
+        if (insertError) throw insertError
+      }
 
       alert('✅ Transfer onaylandı! Stok kalite kontrol deposuna eklendi.')
       loadData()
@@ -757,15 +788,13 @@ export default function QualityControlPage() {
                       <div className="flex gap-2 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => handleApproveIncoming(transfer.id)}
-                          disabled={submittingTransfer}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
                         >
                           ✅ Kabul Et
                         </button>
                         <button
                           onClick={() => handleRejectIncoming(transfer.id)}
-                          disabled={submittingTransfer}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
                         >
                           ❌ Reddet
                         </button>

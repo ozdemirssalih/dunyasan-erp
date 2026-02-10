@@ -90,6 +90,7 @@ export default function WarehousePage() {
   const [productionRequests, setProductionRequests] = useState<ProductionRequest[]>([])
   const [productionTransfers, setProductionTransfers] = useState<any[]>([])
   const [qcTransfers, setQCTransfers] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -222,6 +223,16 @@ export default function WarehousePage() {
         .order('name')
 
       setCategories(categoriesData || [])
+
+      // Load suppliers
+      const { data: suppliersData } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('company_id', finalCompanyId)
+        .eq('is_active', true)
+        .order('company_name')
+
+      setSuppliers(suppliersData || [])
 
       // Load warehouse items
       await loadItems(finalCompanyId)
@@ -1125,12 +1136,18 @@ export default function WarehousePage() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Tedarikçi</label>
-                  <input
-                    type="text"
+                  <select
                     value={entryForm.supplier}
                     onChange={(e) => setEntryForm({ ...entryForm, supplier: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  />
+                  >
+                    <option value="">Seçin...</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.company_name}>
+                        {supplier.company_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

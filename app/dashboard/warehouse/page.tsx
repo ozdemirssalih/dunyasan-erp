@@ -561,17 +561,17 @@ export default function WarehousePage() {
 
       if (requestError) throw requestError
 
-      // 2. Ana depoda yeterli stok var mı kontrol et
-      const { data: warehouseStock, error: stockError } = await supabase
-        .from('warehouse_inventory')
+      // 2. Ana depoda yeterli stok var mı kontrol et (warehouse_items tablosundan)
+      const { data: warehouseItem, error: stockError } = await supabase
+        .from('warehouse_items')
         .select('current_stock')
         .eq('company_id', companyId)
-        .eq('item_id', request.item_id)
-        .maybeSingle()
+        .eq('id', request.item_id)
+        .single()
 
       if (stockError) throw stockError
 
-      const availableStock = warehouseStock?.current_stock || 0
+      const availableStock = warehouseItem?.current_stock || 0
 
       if (availableStock < request.quantity) {
         alert(`❌ Yetersiz stok!\n\nAna depoda: ${availableStock} birim\nTalep edilen: ${request.quantity} birim\n\nEksik: ${request.quantity - availableStock} birim`)

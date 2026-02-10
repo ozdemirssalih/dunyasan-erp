@@ -44,10 +44,11 @@ SELECT
 FROM quality_control_inventory;
 
 SELECT
-    'warehouse_inventory' as tablo,
-    COUNT(*) as kayit_sayisi,
+    'warehouse_items' as tablo,
+    COUNT(*) as toplam_urun,
+    SUM(current_stock) as toplam_stok,
     'Ana depo stok kayitlari' as aciklama
-FROM warehouse_inventory;
+FROM warehouse_items;
 
 SELECT
     'production_material_requests' as tablo,
@@ -95,9 +96,6 @@ DELETE FROM production_inventory;
 -- Kalite kontrol deposu
 DELETE FROM quality_control_inventory;
 
--- Ana depo stogu
-DELETE FROM warehouse_inventory;
-
 -- Uretim malzeme talepleri
 DELETE FROM production_material_requests;
 
@@ -109,6 +107,11 @@ DELETE FROM qc_to_warehouse_transfers;
 
 -- Depo islem gecmisi
 DELETE FROM warehouse_transactions;
+
+-- Ana depo stoklarini sifirla (warehouse_items tablosunda)
+UPDATE warehouse_items
+SET current_stock = 0
+WHERE current_stock IS NOT NULL;
 
 -- ============================================================
 -- 3. KONTROL: Veriler silindi mi?
@@ -153,12 +156,6 @@ SELECT
 FROM quality_control_inventory;
 
 SELECT
-    'warehouse_inventory' as tablo,
-    COUNT(*) as kalan_kayit,
-    CASE WHEN COUNT(*) = 0 THEN 'Temizlendi' ELSE 'Hala kayit var!' END as durum
-FROM warehouse_inventory;
-
-SELECT
     'production_material_requests' as tablo,
     COUNT(*) as kalan_kayit,
     CASE WHEN COUNT(*) = 0 THEN 'Temizlendi' ELSE 'Hala kayit var!' END as durum
@@ -182,10 +179,16 @@ SELECT
     CASE WHEN COUNT(*) = 0 THEN 'Temizlendi' ELSE 'Hala kayit var!' END as durum
 FROM warehouse_transactions;
 
+SELECT
+    'warehouse_items' as tablo,
+    SUM(current_stock) as toplam_stok,
+    CASE WHEN SUM(current_stock) = 0 OR SUM(current_stock) IS NULL THEN 'Stoklar sifirlandi' ELSE 'Hala stok var!' END as durum
+FROM warehouse_items;
+
 -- ============================================================
 -- 4. BASARI MESAJI
 -- ============================================================
 
 SELECT 'TUM URETIM, KALITE VE DEPO VERILERI TEMIZLENDI!' as mesaj;
-SELECT 'Tum stoklar sifirlandi, islem gecmisi silindi.' as bilgi;
+SELECT 'Ana depo stoklari sifirlandi (warehouse_items.current_stock = 0).' as bilgi;
 SELECT 'Bu islem geri alinamaz - tum gecmis veriler silindi.' as uyari;

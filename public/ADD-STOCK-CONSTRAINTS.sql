@@ -78,6 +78,14 @@ ALTER TABLE quality_control_inventory
 ADD CONSTRAINT quality_control_inventory_stock_non_negative
 CHECK (current_stock >= 0);
 
+-- Warehouse Items - stok negatif olamaz
+ALTER TABLE warehouse_items
+DROP CONSTRAINT IF EXISTS warehouse_items_stock_non_negative;
+
+ALTER TABLE warehouse_items
+ADD CONSTRAINT warehouse_items_stock_non_negative
+CHECK (current_stock >= 0);
+
 -- ============================================================
 -- 4. CONSTRAINTLERIN EKLENME KONTROLU
 -- ============================================================

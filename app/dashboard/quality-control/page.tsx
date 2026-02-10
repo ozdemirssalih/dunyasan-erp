@@ -788,13 +788,15 @@ export default function QualityControlPage() {
                       <div className="flex gap-2 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => handleApproveIncoming(transfer.id)}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
+                          disabled={submittingTransfer}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           ✅ Kabul Et
                         </button>
                         <button
                           onClick={() => handleRejectIncoming(transfer.id)}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
+                          disabled={submittingTransfer}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           ❌ Reddet
                         </button>

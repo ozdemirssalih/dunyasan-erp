@@ -1258,7 +1258,7 @@ export default function ProductionPage() {
     try {
       setSubmittingQCTransfer(true)
 
-      // 1. Üretim deposunda yeterli stok var mı kontrol et
+      // 1. Üretim deposunda yeterli stok var mı kontrol et (sadece validation)
       const { data: productionStock, error: stockError } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -1278,20 +1278,11 @@ export default function ProductionPage() {
         return
       }
 
-      // 2. Üretim deposundan stoğu düş
-      const { error: updateError } = await supabase
-        .from('production_inventory')
-        .update({
-          current_stock: availableStock - qcTransferForm.quantity,
-          updated_at: new Date().toISOString()
-        })
-        .eq('company_id', companyId)
-        .eq('item_id', qcTransferForm.item_id)
-        .eq('item_type', 'finished_product')
-
-      if (updateError) throw updateError
-
-      // 3. Kalite kontrole transfer talebi oluştur (pending)
+      // 2. Kalite kontrole transfer talebi oluştur (pending)
+      // NOT: Stok düşme işlemi YAPILMIYOR - Trigger onaylandığında halledecek
+      // approve_production_to_qc_transfer() trigger fonksiyonu status 'approved' olunca:
+      // - Üretim deposundan quantity kadar düşecek
+      // - Kalite kontrol deposuna quantity kadar ekleyecek
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .insert({
@@ -1309,7 +1300,7 @@ export default function ProductionPage() {
       resetQCTransferForm()
       await loadData()
 
-      alert('✅ Üretim deposundan düşüldü ve kalite kontrole transfer talebi gönderildi!')
+      alert('✅ Kalite kontrole transfer talebi gönderildi! Onay sonrası stok işlemi yapılacak.')
     } catch (error: any) {
       console.error('Error creating QC transfer:', error)
       alert('❌ Hata: ' + error.message)

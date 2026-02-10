@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { Building2, Plus, Phone, Mail, User, MapPin } from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Customer {
   id: string
@@ -119,9 +120,10 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <PermissionGuard module="customers" permission="view">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-800">Müşteri Yönetimi</h2>
           <p className="text-gray-600">Müşterilerinizi yönetin ve takip edin</p>
@@ -358,6 +360,7 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

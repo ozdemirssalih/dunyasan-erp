@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dünyasan - Ortalama Maliyet Raporu</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 15mm;
+            width: 210mm;
+            min-height: 297mm;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 15px;
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+        }
+
+        .title {
+            flex: 1;
+            text-align: center;
+            color: #0066cc;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 26px;
+            color: #0066cc;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #0066cc 0%, #004c99 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .metric-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: normal;
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+
+        .metric-unit {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .section-title {
+            color: #0066cc;
+            font-size: 18px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0066cc;
+            padding-left: 10px;
+        }
+
+        .cost-breakdown {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .cost-breakdown h4 {
+            margin: 0 0 15px 0;
+            color: #0066cc;
+            font-size: 15px;
+        }
+
+        .cost-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #ddd;
+            font-size: 13px;
+        }
+
+        .cost-item:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 16px;
+            color: #0066cc;
+            padding-top: 15px;
+            border-top: 2px solid #0066cc;
+        }
+
+        .cost-label {
+            color: #333;
+        }
+
+        .cost-formula {
+            color: #666;
+            font-size: 11px;
+            font-style: italic;
+            display: block;
+            margin-top: 3px;
+        }
+
+        .cost-value {
+            font-weight: 600;
+            color: #0066cc;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .summary-card {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #0066cc;
+        }
+
+        .summary-card h4 {
+            margin: 0 0 12px 0;
+            color: #0066cc;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #0066cc;
+        }
+
+        .summary-card .detail {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .info-card {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #0066cc;
+            margin-bottom: 20px;
+        }
+
+        .info-card h4 {
+            margin: 0 0 10px 0;
+            color: #0066cc;
+            font-size: 14px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            font-size: 12px;
+        }
+
+        .info-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+
+        .info-item strong {
+            display: block;
+            font-size: 18px;
+            color: #0066cc;
+            margin-top: 5px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+        }
+
+        .footer p {
+            margin: 5px 0;
+        }
+
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .metric-card {
+                background: linear-gradient(135deg, #0066cc 0%, #004c99 100%) !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .header {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .logo {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .summary-card, .cost-breakdown, .info-card {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="dunyalogopng.png" alt="Dünyasan Logo" class="logo">
+        <div class="title">
+            <h1>ORTALAMA MALİYET RAPORU</h1>
+            <div class="subtitle" id="reportDate"></div>
+        </div>
+    </div>
+
+    <!-- Özet Kartlar -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <h3>Ortalama Maliyet (TL)</h3>
+            <div class="metric-value">₺420</div>
+            <div class="metric-unit">Parça Başı</div>
+        </div>
+
+        <div class="metric-card">
+            <h3>Ortalama Maliyet (€)</h3>
+            <div class="metric-value">€8.24</div>
+            <div class="metric-unit">Kur: ₺51.00</div>
+        </div>
+
+        <div class="metric-card">
+            <h3>Ortalama Maliyet ($)</h3>
+            <div class="metric-value">$9.55</div>
+            <div class="metric-unit">Kur: ₺44.00</div>
+        </div>
+    </div>
+
+    <!-- Detaylı Maliyet Bilgileri -->
+    <div class="info-card">
+        <h4>İşlem Parametreleri</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <div>Elektrik + Boryağ</div>
+                <strong>0.6 TL/dk</strong>
+            </div>
+            <div class="info-item">
+                <div>İşçilik Maliyeti</div>
+                <strong>6 TL/dk</strong>
+            </div>
+            <div class="info-item">
+                <div>Takım Sayısı</div>
+                <strong>6 adet</strong>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Parça Başı Ortalama Maliyet Detayı</h2>
+
+    <!-- Maliyet Dökümü -->
+    <div class="cost-breakdown">
+        <h4>TL Bazlı Ortalama Maliyetler</h4>
+        <div class="cost-item">
+            <div class="cost-label">
+                Elektrik + Boryağ
+                <span class="cost-formula">0.6 TL/dk × 25 dakika</span>
+            </div>
+            <div class="cost-value">₺15.00</div>
+        </div>
+        <div class="cost-item">
+            <div class="cost-label">
+                İşçilik
+                <span class="cost-formula">6 TL/dk × 25 dakika</span>
+            </div>
+            <div class="cost-value">₺150.00</div>
+        </div>
+        <div class="cost-item">
+            <div class="cost-label">TOPLAM (TL)</div>
+            <div class="cost-value">₺165.00</div>
+        </div>
+    </div>
+
+    <div class="cost-breakdown">
+        <h4>Euro Bazlı Ortalama Maliyetler</h4>
+        <div class="cost-item">
+            <div class="cost-label">
+                Takım Maliyeti (Parça Başı - Ortalama)
+                <span class="cost-formula">6 farklı takım kullanılıyor</span>
+            </div>
+            <div class="cost-value">€5.00</div>
+        </div>
+        <div class="cost-item">
+            <div class="cost-label">TOPLAM (€)</div>
+            <div class="cost-value">€5.00</div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Döviz Kuru Bilgileri</h2>
+
+    <div class="info-card">
+        <h4>Güncel Kurlar</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <div>Euro Kuru</div>
+                <strong>₺51.00</strong>
+            </div>
+            <div class="info-item">
+                <div>Dolar Kuru</div>
+                <strong>₺44.00</strong>
+            </div>
+            <div class="info-item">
+                <div>Takım Maliyeti (TL)</div>
+                <strong>₺255.00</strong>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Ortalama Maliyet - TL Bazlı Toplam</h2>
+
+    <div class="cost-breakdown">
+        <h4>Detaylı Ortalama Maliyet Dökümü</h4>
+        <div class="cost-item">
+            <div class="cost-label">
+                Elektrik + Boryağ + İşçilik
+                <span class="cost-formula">₺15.00 + ₺150.00</span>
+            </div>
+            <div class="cost-value">₺165.00</div>
+        </div>
+        <div class="cost-item">
+            <div class="cost-label">
+                Takım Maliyeti (TL)
+                <span class="cost-formula">€5.00 × 51 (kur)</span>
+            </div>
+            <div class="cost-value">₺255.00</div>
+        </div>
+        <div class="cost-item">
+            <div class="cost-label">GENEL TOPLAM (TL)</div>
+            <div class="cost-value">₺420.00</div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Ortalama Maliyet - Döviz Bazlı Toplam</h2>
+
+    <!-- Toplam Özet -->
+    <div class="summary-grid">
+        <div class="summary-card" style="border-left-color: #4CAF50;">
+            <h4>Ortalama Euro Maliyeti</h4>
+            <div class="value">€8.24</div>
+            <div class="detail">₺420.00 ÷ 51 (Euro Kuru) = €8.24</div>
+        </div>
+
+        <div class="summary-card" style="border-left-color: #4CAF50;">
+            <h4>Ortalama Dolar Maliyeti</h4>
+            <div class="value">$9.55</div>
+            <div class="detail">₺420.00 ÷ 44 (Dolar Kuru) = $9.55</div>
+        </div>
+    </div>
+
+    <!-- Not Bölümü -->
+    <div class="info-card" style="background: #fff3cd; border-left-color: #FFA726;">
+        <h4 style="color: #856404;">📌 Önemli Notlar</h4>
+        <ul style="margin: 10px 0 0 20px; font-size: 12px; color: #856404; line-height: 1.6;">
+            <li><strong>Bu maliyet hesaplaması ortalama değerleri içermektedir.</strong></li>
+            <li>İşlem süresi: 25 dakika (tek parça)</li>
+            <li>İşçilik ve Elektrik Toplamı: ₺15.00 + ₺150.00 = <strong>₺165.00</strong></li>
+            <li>Takım maliyeti: €5.00 × 51 (kur) = <strong>₺255.00</strong></li>
+            <li>Toplam Maliyet: <strong>₺420.00</strong> | <strong>€8.24</strong> | <strong>$9.55</strong></li>
+            <li>Kullanılan döviz kurları: Euro = ₺51.00 | Dolar = ₺44.00</li>
+            <li>6 farklı takım türü kullanılmaktadır.</li>
+            <li>Amortisman, bakım, finansman gibi genel giderler bu hesaba dahil değildir.</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p><strong>DÜNYASAN SAVUNMA SİSTEMLERİ A.Ş.</strong></p>
+        <p>Bu rapor gerçek veriler kullanılarak otomatik olarak hazırlanmıştır.</p>
+    </div>
+
+    <script>
+        // Tarihi otomatik ekle
+        document.getElementById('reportDate').textContent = new Date().toLocaleDateString('tr-TR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    </script>
+</body>
+</html>

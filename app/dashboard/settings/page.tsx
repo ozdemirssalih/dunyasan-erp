@@ -1477,94 +1477,375 @@ export default function SettingsPage() {
               {/* Permissions Matrix */}
               <div>
                 <h4 className="text-lg font-bold text-gray-800 mb-4">İzinler</h4>
-                <div className="bg-gray-50 rounded-lg p-6 space-y-4 max-h-[500px] overflow-y-auto">
-                  {Object.entries(roleForm.permissions).map(([module, perms]: [string, any]) => (
-                    <div key={module} className="bg-white rounded-lg p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
-                        <div className="flex space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectAllPermissions(module)}
-                            className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span>Tümünü Seç</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleClearAllPermissions(module)}
-                            className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors flex items-center space-x-1"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            <span>Temizle</span>
-                          </button>
+                <div className="bg-gray-50 rounded-lg p-6 space-y-6 max-h-[500px] overflow-y-auto">
+                  {/* Genel Modüller */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-1 bg-gray-200 rounded">
+                      📊 Genel
+                    </div>
+                    {['dashboard'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-gray-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
                         </div>
                       </div>
+                    ))}
+                  </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {['view', 'create', 'edit', 'delete'].map((permission) => {
-                          const hasPermission = (roleForm.permissions as any)[module]?.[permission]
-                          return (
-                            <label
-                              key={permission}
-                              className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-                                hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={hasPermission || false}
-                                onChange={(e) =>
-                                  handlePermissionChange(module, permission, e.target.checked)
-                                }
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                              />
-                              <span className="text-sm font-medium text-gray-700 flex items-center space-x-1">
-                                {permission === 'view' && (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    <span>Görüntüle</span>
-                                  </>
-                                )}
-                                {permission === 'create' && (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    <span>Oluştur</span>
-                                  </>
-                                )}
-                                {permission === 'edit' && (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    <span>Düzenle</span>
-                                  </>
-                                )}
-                                {permission === 'delete' && (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    <span>Sil</span>
-                                  </>
-                                )}
-                              </span>
-                            </label>
-                          )
-                        })}
-                      </div>
+                  {/* Üretim Modülleri */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-blue-600 uppercase tracking-wider px-2 py-1 bg-blue-100 rounded">
+                      🏭 Üretim Modülleri
                     </div>
-                  ))}
+                    {['production', 'machines'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-blue-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Kalite Kontrol */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-orange-600 uppercase tracking-wider px-2 py-1 bg-orange-100 rounded">
+                      ✅ Kalite Kontrol
+                    </div>
+                    {['quality_control'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-orange-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Depo Modülleri */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-green-600 uppercase tracking-wider px-2 py-1 bg-green-100 rounded">
+                      📦 Depo & Envanter
+                    </div>
+                    {['warehouse', 'inventory', 'toolroom'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-green-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* İş Yönetimi */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-purple-600 uppercase tracking-wider px-2 py-1 bg-purple-100 rounded">
+                      📋 İş Yönetimi
+                    </div>
+                    {['projects', 'customers', 'planning'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-purple-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Muhasebe Modülleri */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-yellow-600 uppercase tracking-wider px-2 py-1 bg-yellow-100 rounded">
+                      💰 Muhasebe & Finans
+                    </div>
+                    {['accounting', 'invoices', 'accounts', 'costs'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-yellow-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Sistem Modülleri */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-red-600 uppercase tracking-wider px-2 py-1 bg-red-100 rounded">
+                      ⚙️ Sistem & Yönetim
+                    </div>
+                    {['reports', 'settings', 'users'].filter(m => (roleForm.permissions as any)[m]).map((module) => (
+                      <div key={module} className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-red-400">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-bold text-gray-800">{MODULE_NAMES[module] || module}</h5>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllPermissions(module)}
+                              className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                            >
+                              Tümünü Seç
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAllPermissions(module)}
+                              className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Temizle
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {['view', 'create', 'edit', 'delete'].map((permission) => {
+                            const hasPermission = (roleForm.permissions as any)[module]?.[permission]
+                            return (
+                              <label
+                                key={permission}
+                                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                                  hasPermission ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={hasPermission || false}
+                                  onChange={(e) =>
+                                    handlePermissionChange(module, permission, e.target.checked)
+                                  }
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {permission === 'view' ? 'Görüntüle' : permission === 'create' ? 'Oluştur' : permission === 'edit' ? 'Düzenle' : 'Sil'}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

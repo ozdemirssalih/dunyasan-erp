@@ -433,7 +433,7 @@ export default function QualityControlPage() {
   }
 
   return (
-    <PermissionGuard module="production" permission="view">
+    <PermissionGuard module="quality_control" permission="view">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

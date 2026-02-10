@@ -18,6 +18,9 @@ export interface Permissions {
   planning?: Permission
   warehouse?: Permission
   toolroom?: Permission
+  quality_control?: Permission
+  projects?: Permission
+  customers?: Permission
   accounting?: Permission
   invoices?: Permission
   accounts?: Permission

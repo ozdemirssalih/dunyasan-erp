@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { FolderKanban, Plus, Eye } from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Project {
   id: string
@@ -129,9 +130,10 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <PermissionGuard module="projects" permission="view">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-800">Proje Yönetimi</h2>
           <p className="text-gray-600">Projelerinizi yönetin ve takip edin</p>
@@ -345,6 +347,7 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

@@ -119,9 +119,7 @@ export default function WarehousePage() {
   const [entryForm, setEntryForm] = useState({
     item_id: '',
     quantity: 0,
-    unit_price: 0,
     supplier: '',
-    invoice_number: '',
     reference_number: '',
     notes: '',
   })
@@ -681,10 +679,7 @@ export default function WarehousePage() {
           item_id: entryForm.item_id,
           type: 'entry',
           quantity: entryForm.quantity,
-          unit_price: entryForm.unit_price,
-          total_price: entryForm.quantity * entryForm.unit_price,
           supplier: entryForm.supplier,
-          invoice_number: entryForm.invoice_number,
           reference_number: entryForm.reference_number,
           notes: entryForm.notes,
           created_by: currentUserId,
@@ -781,9 +776,7 @@ export default function WarehousePage() {
     setEntryForm({
       item_id: '',
       quantity: 0,
-      unit_price: 0,
       supplier: '',
-      invoice_number: '',
       reference_number: '',
       notes: '',
     })
@@ -1131,32 +1124,11 @@ export default function WarehousePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Birim Fiyat</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={entryForm.unit_price}
-                    onChange={(e) => setEntryForm({ ...entryForm, unit_price: parseFloat(e.target.value) })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Tedarikçi</label>
                   <input
                     type="text"
                     value={entryForm.supplier}
                     onChange={(e) => setEntryForm({ ...entryForm, supplier: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Fatura No</label>
-                  <input
-                    type="text"
-                    value={entryForm.invoice_number}
-                    onChange={(e) => setEntryForm({ ...entryForm, invoice_number: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                   />
                 </div>

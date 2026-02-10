@@ -295,7 +295,8 @@ export default function QualityControlPage() {
         return
       }
 
-      // 2. ÖNCE transfer durumunu güncelle (sadece pending olanları)
+      // 2. Transfer durumunu güncelle (sadece pending olanları)
+      // Database trigger otomatik olarak kaliteye ekleme yapacak
       const { data: updatedTransfer, error: updateTransferError } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -318,55 +319,13 @@ export default function QualityControlPage() {
         return
       }
 
-      console.log('📦 Kalite deposuna ekleme başlıyor...', { item_id: transfer.item_id, quantity: transfer.quantity })
+      console.log('🎉 Transfer onaylandı! Trigger otomatik olarak kaliteye ekleyecek.')
 
-      // 3. SONRA kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
-      const { data: existingStock, error: checkError } = await supabase
-        .from('quality_control_inventory')
-        .select('current_stock')
-        .eq('company_id', companyId)
-        .eq('item_id', transfer.item_id)
-        .maybeSingle()
+      // NOT: Kaliteye ekleme işlemi database trigger tarafından yapılıyor
+      // approve_production_to_qc_transfer() trigger fonksiyonu:
+      // - Sadece kalite kontrol deposuna quantity kadar ekliyor
+      // - Üretimden düşme JavaScript tarafında zaten yapılmış durumda
 
-      if (checkError && checkError.code !== 'PGRST116') throw checkError
-
-      if (existingStock) {
-        console.log('📝 Mevcut stok bulundu, güncelleniyor...', existingStock)
-        // Varsa güncelle
-        const { error: updateError } = await supabase
-          .from('quality_control_inventory')
-          .update({
-            current_stock: existingStock.current_stock + transfer.quantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('company_id', companyId)
-          .eq('item_id', transfer.item_id)
-
-        if (updateError) {
-          console.error('❌ Stok güncelleme hatası:', updateError)
-          throw updateError
-        }
-        console.log('✅ Stok güncellendi:', existingStock.current_stock, '+', transfer.quantity, '=', existingStock.current_stock + transfer.quantity)
-      } else {
-        console.log('➕ Yeni stok kaydı oluşturuluyor...')
-        // Yoksa yeni kayıt oluştur
-        const { error: insertError } = await supabase
-          .from('quality_control_inventory')
-          .insert({
-            company_id: companyId,
-            item_id: transfer.item_id,
-            current_stock: transfer.quantity,
-            notes: 'Üretimden gelen ürün'
-          })
-
-        if (insertError) {
-          console.error('❌ Stok ekleme hatası:', insertError)
-          throw insertError
-        }
-        console.log('✅ Yeni stok kaydı oluşturuldu:', transfer.quantity)
-      }
-
-      console.log('🎉 İşlem tamamlandı!')
       alert('✅ Transfer onaylandı! Stok kalite kontrol deposuna eklendi.')
       loadData()
     } catch (error: any) {

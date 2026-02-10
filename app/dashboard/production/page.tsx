@@ -873,36 +873,43 @@ export default function ProductionPage() {
 
     try {
       setSubmittingOutput(true)
-      // 1. Tezgaha verilen son hammaddeyi bul
-      const { data: lastTransfer, error: transferError } = await supabase
-        .from('production_to_machine_transfers')
-        .select('item_id, quantity')
+
+      // 1. Tezgahtaki MEVCUT hammadde stoğunu kontrol et (machine_inventory'den)
+      const { data: machineStock, error: stockError } = await supabase
+        .from('machine_inventory')
+        .select('item_id, current_stock')
         .eq('machine_id', outputForm.machine_id)
         .eq('company_id', companyId)
-        .order('id', { ascending: false })
-        .limit(1)
+        .gt('current_stock', 0)
         .maybeSingle()
 
-      if (transferError) {
-        console.error('Transfer sorgu hatası:', transferError)
-        alert('❌ Hata: ' + transferError.message)
+      if (stockError) {
+        console.error('Tezgah stok sorgu hatası:', stockError)
+        alert('❌ Hata: ' + stockError.message)
         return
       }
 
-      if (!lastTransfer) {
-        alert('❌ Bu tezgaha henüz hammadde atanmamış!')
+      if (!machineStock) {
+        alert('❌ Bu tezgahta kullanılabilir hammadde yok!')
         return
       }
 
-      const rawMaterialId = lastTransfer.item_id
-      const givenQuantity = lastTransfer.quantity
+      const rawMaterialId = machineStock.item_id
+      const availableStock = machineStock.current_stock
       const usedQuantity = outputForm.quantity + outputForm.fire_quantity
-      const remainingQuantity = givenQuantity - usedQuantity
 
-      if (usedQuantity > givenQuantity) {
-        alert(`❌ Kullanılan miktar tezgaha verilenden fazla olamaz!\nVerilen: ${givenQuantity}\nKullanılan: ${usedQuantity}`)
+      // Kullanılacak miktar mevcut stoktan fazla olamaz
+      if (usedQuantity > availableStock) {
+        alert(`❌ Kullanılan miktar tezgahtaki stoğu aşıyor!\n\n` +
+              `Tezgahtaki Mevcut Stok: ${availableStock} birim\n` +
+              `Kullanmak İstediğiniz: ${usedQuantity} birim\n` +
+              `  → Mamül: ${outputForm.quantity}\n` +
+              `  → Fire: ${outputForm.fire_quantity}\n\n` +
+              `Lütfen miktarı azaltın veya tezgaha daha fazla hammadde verin.`)
         return
       }
+
+      const remainingQuantity = availableStock - usedQuantity
 
       // 2. Üretim kaydını oluştur
       const { error: outputError } = await supabase
@@ -940,7 +947,27 @@ export default function ProductionPage() {
         if (fireError) throw fireError
       }
 
-      // 4. Bitmiş ürünü stoğa ekle
+      // 4. Tezgah stoğundan kullanılan hammaddeyi düş
+      const { error: machineStockError } = await supabase
+        .from('machine_inventory')
+        .update({
+          current_stock: remainingQuantity, // Kalan miktar
+          updated_at: new Date().toISOString()
+        })
+        .eq('machine_id', outputForm.machine_id)
+        .eq('company_id', companyId)
+        .eq('item_id', rawMaterialId)
+
+      if (machineStockError) {
+        console.error('❌ [PRODUCTION] Tezgah stoğu güncelleme hatası:', machineStockError)
+        throw machineStockError
+      }
+      console.log('✅ [PRODUCTION] Tezgah stoğu güncellendi:', {
+        used: usedQuantity,
+        remaining: remainingQuantity
+      })
+
+      // 5. Bitmiş ürünü stoğa ekle
       console.log('✨ [PRODUCTION] Bitmiş ürün stoğa ekleniyor:', {
         item_id: outputForm.output_item_id,
         quantity: outputForm.quantity
@@ -992,7 +1019,7 @@ export default function ProductionPage() {
         console.log('✅ [PRODUCTION] Yeni bitmiş ürün kaydı oluşturuldu')
       }
 
-      // 5. Kalan hammaddeyi stoğa geri ekle
+      // 6. Kalan hammaddeyi üretim deposuna geri ekle
       if (remainingQuantity > 0) {
         console.log('↩️ [PRODUCTION] Geri dönen hammadde ekleniyor:', {
           rawMaterialId,
@@ -1053,12 +1080,17 @@ export default function ProductionPage() {
 
       // Başarı mesajı oluştur
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
-      successMsg += `\n✨ Üretilen: ${outputForm.quantity} birim bitmiş ürün`
+      successMsg += `\n\n📊 Tezgahtaki Durum:`
+      successMsg += `\n  • Başlangıç: ${availableStock} birim`
+      successMsg += `\n  • Kullanılan: ${usedQuantity} birim`
+      successMsg += `\n  • Kalan: ${remainingQuantity} birim`
+      successMsg += `\n\n✨ Üretim Sonucu:`
+      successMsg += `\n  • Mamül: ${outputForm.quantity} birim`
       if (outputForm.fire_quantity > 0) {
-        successMsg += `\n🔥 Fire: ${outputForm.fire_quantity} birim`
+        successMsg += `\n  • Fire: ${outputForm.fire_quantity} birim`
       }
       if (remainingQuantity > 0) {
-        successMsg += `\n↩️ Stoğa dönen: ${remainingQuantity} birim hammadde`
+        successMsg += `\n\n↩️ ${remainingQuantity} birim hammadde üretim deposuna döndü`
       }
       // Başarı mesajını göster ve verileri yenile
       setShowOutputModal(false)

@@ -5,6 +5,7 @@
 DO $$
 DECLARE
     v_company_id UUID;
+    v_deleted_count INTEGER;
 BEGIN
     -- Mevcut kullanıcının company_id'sini al
     SELECT company_id INTO v_company_id
@@ -16,6 +17,11 @@ BEGIN
     IF v_company_id IS NULL THEN
         SELECT id INTO v_company_id FROM companies LIMIT 1;
     END IF;
+
+    -- Önce mevcut tüm tedarikçileri sil
+    DELETE FROM suppliers WHERE company_id = v_company_id;
+    GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
+    RAISE NOTICE '🗑️ % eski tedarikçi kaydı silindi', v_deleted_count;
 
     -- Tedarikçileri ekle
     INSERT INTO suppliers (company_id, company_name, contact_person, phone, email, tax_number, address, category) VALUES
@@ -107,5 +113,5 @@ BEGIN
     (v_company_id, 'ÖMER MAKİNA', 'ÖMER YILMAZ', '0535 620 60 21', 'omeryilmaz@omermakina.com', '9290583175', 'KAYSERİ', 'KAPLAMA'),
     (v_company_id, 'ÖZKAN PLASTİK', 'BURAK ÖZKAN', '0532 766 33 33', 'burakozkan@ozkanplastik.com', '9490764033', 'İSTANBUL', 'HAMMADDE');
 
-    RAISE NOTICE 'Tedarikçiler başarıyla eklendi!';
+    RAISE NOTICE '✅ Toplam 89 tedarikçi başarıyla eklendi!';
 END $$;

@@ -146,6 +146,12 @@ export default function ProductionPage() {
   const [submittingManualStock, setSubmittingManualStock] = useState(false)
   const [submittingQCTransfer, setSubmittingQCTransfer] = useState(false)
 
+  // Son tezgaha verilen hammaddeyi takip et (ürün kaydında otomatik seçilmesi için)
+  const [lastAssignedMaterial, setLastAssignedMaterial] = useState<{
+    machine_id: string
+    item_id: string
+  } | null>(null)
+
   // Form states
   const [requestForm, setRequestForm] = useState({
     item_id: '',
@@ -198,6 +204,17 @@ export default function ProductionPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // Ürün çıktısı formunda tezgah seçildiğinde, son verilen hammaddeyi otomatik seç
+  useEffect(() => {
+    if (outputForm.machine_id && lastAssignedMaterial && lastAssignedMaterial.machine_id === outputForm.machine_id) {
+      // Eğer bu tezgaha son atanan hammadde varsa, otomatik seç
+      setOutputForm(prev => ({
+        ...prev,
+        output_item_id: lastAssignedMaterial.item_id
+      }))
+    }
+  }, [outputForm.machine_id, lastAssignedMaterial])
 
   const loadData = async () => {
     try {
@@ -829,6 +846,12 @@ export default function ProductionPage() {
         })
 
       if (error) throw error
+
+      // Son atanan hammaddeyi kaydet (ürün kaydında otomatik seçilmesi için)
+      setLastAssignedMaterial({
+        machine_id: assignmentForm.machine_id,
+        item_id: assignmentForm.item_id
+      })
 
       setShowAssignmentModal(false)
       resetAssignmentForm()

@@ -45,6 +45,14 @@ export default function QualityControlPage() {
 
   useEffect(() => {
     loadData()
+
+    // Her 5 dakikada bir otomatik yenile
+    const interval = setInterval(() => {
+      console.log('🔄 [AUTO-REFRESH] Kalite kontrol verileri yenileniyor...')
+      loadData()
+    }, 5 * 60 * 1000) // 5 dakika
+
+    return () => clearInterval(interval)
   }, [])
 
   const loadData = async () => {

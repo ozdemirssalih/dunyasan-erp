@@ -203,6 +203,14 @@ export default function ProductionPage() {
 
   useEffect(() => {
     loadData()
+
+    // Her 5 dakikada bir otomatik yenile
+    const interval = setInterval(() => {
+      console.log('🔄 [AUTO-REFRESH] Veriler yenileniyor...')
+      loadData()
+    }, 5 * 60 * 1000) // 5 dakika
+
+    return () => clearInterval(interval)
   }, [])
 
   // Ürün çıktısı formunda tezgah seçildiğinde, son verilen hammaddeyi otomatik seç

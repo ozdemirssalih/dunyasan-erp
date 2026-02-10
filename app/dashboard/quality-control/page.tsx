@@ -266,9 +266,55 @@ export default function QualityControlPage() {
   }
 
   const handleApproveIncoming = async (transferId: string) => {
-    if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Üretim deposu azalacak, kalite kontrol deposu artacak.')) return
+    if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Kalite kontrol deposuna eklenecek.')) return
 
     try {
+      // 1. Transfer bilgilerini al
+      const { data: transfer, error: transferError } = await supabase
+        .from('production_to_qc_transfers')
+        .select('item_id, quantity')
+        .eq('id', transferId)
+        .single()
+
+      if (transferError) throw transferError
+
+      // 2. Kalite kontrol deposuna ekle (varsa güncelle, yoksa oluştur)
+      const { data: existingStock, error: checkError } = await supabase
+        .from('quality_control_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transfer.item_id)
+        .maybeSingle()
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError
+
+      if (existingStock) {
+        // Varsa güncelle
+        const { error: updateError } = await supabase
+          .from('quality_control_inventory')
+          .update({
+            current_stock: existingStock.current_stock + transfer.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', transfer.item_id)
+
+        if (updateError) throw updateError
+      } else {
+        // Yoksa yeni kayıt oluştur
+        const { error: insertError } = await supabase
+          .from('quality_control_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: transfer.item_id,
+            current_stock: transfer.quantity,
+            notes: 'Üretimden gelen ürün'
+          })
+
+        if (insertError) throw insertError
+      }
+
+      // 3. Transfer durumunu güncelle
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -289,9 +335,58 @@ export default function QualityControlPage() {
   }
 
   const handleRejectIncoming = async (transferId: string) => {
-    if (!confirm('Bu transferi reddetmek istediğinizden emin misiniz?')) return
+    if (!confirm('Bu transferi reddetmek istediğinizden emin misiniz? Ürün üretim deposuna geri dönecek.')) return
 
     try {
+      // 1. Transfer bilgilerini al
+      const { data: transfer, error: transferError } = await supabase
+        .from('production_to_qc_transfers')
+        .select('item_id, quantity')
+        .eq('id', transferId)
+        .single()
+
+      if (transferError) throw transferError
+
+      // 2. Üretim deposuna geri ekle
+      const { data: existingStock, error: checkError } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', transfer.item_id)
+        .eq('item_type', 'finished_product')
+        .maybeSingle()
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError
+
+      if (existingStock) {
+        // Varsa güncelle
+        const { error: updateError } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existingStock.current_stock + transfer.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', transfer.item_id)
+          .eq('item_type', 'finished_product')
+
+        if (updateError) throw updateError
+      } else {
+        // Yoksa yeni kayıt oluştur
+        const { error: insertError } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: transfer.item_id,
+            current_stock: transfer.quantity,
+            item_type: 'finished_product',
+            notes: 'Kalite kontrolden reddedilen ürün'
+          })
+
+        if (insertError) throw insertError
+      }
+
+      // 3. Transfer durumunu güncelle
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .update({
@@ -303,7 +398,7 @@ export default function QualityControlPage() {
 
       if (error) throw error
 
-      alert('Transfer reddedildi.')
+      alert('✅ Transfer reddedildi. Ürün üretim deposuna geri döndü.')
       loadData()
     } catch (error: any) {
       console.error('Error rejecting transfer:', error)

@@ -205,7 +205,7 @@ export default function SuppliersPage() {
     setEditingSupplier(null)
   }
 
-  const categories = [...new Set(suppliers.map(s => s.category).filter(Boolean))]
+  const categories = Array.from(new Set(suppliers.map(s => s.category).filter(Boolean)))
 
   if (loading) {
     return (

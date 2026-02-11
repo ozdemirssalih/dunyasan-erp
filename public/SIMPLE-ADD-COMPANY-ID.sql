@@ -60,6 +60,10 @@ END $$;
 -- Adım 5: Index ekle
 CREATE INDEX IF NOT EXISTS idx_machines_company_id ON machines(company_id);
 
-RAISE NOTICE '==============================================';
-RAISE NOTICE '✅ İŞLEM TAMAMLANDI';
-RAISE NOTICE '==============================================';
+-- Son mesaj
+DO $$
+BEGIN
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE '✅ İŞLEM TAMAMLANDI';
+    RAISE NOTICE '==============================================';
+END $$;

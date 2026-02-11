@@ -62,24 +62,42 @@ export default function ProjectDetailPage() {
 
       setCompanyId(finalCompanyId)
 
-      // Load project with entry/exit machines
-      const { data: projectData } = await supabase
+      // Load project
+      const { data: projectData, error: projectError } = await supabase
         .from('projects')
-        .select(`
-          *,
-          customer_company:customer_companies(id, customer_name, contact_person, phone, email),
-          entry_machine:machines!entry_machine_id(id, machine_code, machine_name, machine_type, status),
-          exit_machine:machines!exit_machine_id(id, machine_code, machine_name, machine_type, status)
-        `)
+        .select('*, customer_company:customer_companies(id, customer_name, contact_person, phone, email)')
         .eq('id', projectId)
         .eq('company_id', finalCompanyId)
         .single()
 
+      if (projectError) {
+        console.error('❌ Project load error:', projectError)
+        return
+      }
+
       console.log('✅ Project loaded:', projectData?.project_name)
       setProject(projectData)
       setCustomer(projectData?.customer_company)
-      setEntryMachine(projectData?.entry_machine)
-      setExitMachine(projectData?.exit_machine)
+
+      // Load entry machine (if exists)
+      if (projectData?.entry_machine_id) {
+        const { data: entryMachineData } = await supabase
+          .from('machines')
+          .select('*')
+          .eq('id', projectData.entry_machine_id)
+          .single()
+        setEntryMachine(entryMachineData)
+      }
+
+      // Load exit machine (if exists)
+      if (projectData?.exit_machine_id) {
+        const { data: exitMachineData } = await supabase
+          .from('machines')
+          .select('*')
+          .eq('id', projectData.exit_machine_id)
+          .single()
+        setExitMachine(exitMachineData)
+      }
 
       // Load process machines (ara tezgahlar)
       const { data: processMachinesData } = await supabase

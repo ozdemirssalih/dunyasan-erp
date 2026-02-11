@@ -1,21 +1,48 @@
--- Proje-Tezgah İlişkisi ve Günlük Üretim Takibi
--- 1. Projects tablosuna giriş/çıkış tezgahı sütunları ekle
--- 2. Ara tezgahlar için yeni tablo
--- 3. Günlük üretim takibi tablosu
+-- ====================================
+-- PROJE-TEZGAH İLİŞKİSİ VE GÜNLÜK ÜRETİM TAKİBİ
+-- ====================================
+-- 1. Projects tablosuna giriş/çıkış tezgahı sütunları
+-- 2. Ara tezgahlar için project_machines tablosu
+-- 3. Günlük üretim takibi için machine_daily_production tablosu
+-- ====================================
 
 -- ====================================
 -- 1. PROJECTS TABLOSUNU GÜNCELLE
 -- ====================================
 
-ALTER TABLE projects
-ADD COLUMN IF NOT EXISTS entry_machine_id UUID REFERENCES machines(id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS exit_machine_id UUID REFERENCES machines(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+    -- entry_machine_id ekle (eğer yoksa)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'projects' AND column_name = 'entry_machine_id'
+    ) THEN
+        ALTER TABLE projects
+        ADD COLUMN entry_machine_id UUID REFERENCES machines(id) ON DELETE SET NULL;
+        RAISE NOTICE '✅ entry_machine_id sütunu eklendi';
+    ELSE
+        RAISE NOTICE 'ℹ️ entry_machine_id sütunu zaten var';
+    END IF;
 
-COMMENT ON COLUMN projects.entry_machine_id IS 'Hammadde giriş tezgahı (A1)';
-COMMENT ON COLUMN projects.exit_machine_id IS 'Mamül çıkış tezgahı (A7)';
+    -- exit_machine_id ekle (eğer yoksa)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'projects' AND column_name = 'exit_machine_id'
+    ) THEN
+        ALTER TABLE projects
+        ADD COLUMN exit_machine_id UUID REFERENCES machines(id) ON DELETE SET NULL;
+        RAISE NOTICE '✅ exit_machine_id sütunu eklendi';
+    ELSE
+        RAISE NOTICE 'ℹ️ exit_machine_id sütunu zaten var';
+    END IF;
+END $$;
+
+-- Sütunlara yorum ekle
+COMMENT ON COLUMN projects.entry_machine_id IS 'Hammadde giriş tezgahı (örn: A1)';
+COMMENT ON COLUMN projects.exit_machine_id IS 'Mamül çıkış tezgahı (örn: A7)';
 
 -- ====================================
--- 2. ARA TEZGAHLAR TABLOSU
+-- 2. ARA TEZGAHLAR TABLOSU (project_machines)
 -- ====================================
 
 CREATE TABLE IF NOT EXISTS project_machines (
@@ -25,8 +52,8 @@ CREATE TABLE IF NOT EXISTS project_machines (
     machine_id UUID NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 
     -- Sıralama ve kapasite
-    sequence_order INTEGER NOT NULL DEFAULT 0, -- İşlem sırası (1, 2, 3...)
-    daily_capacity_target INTEGER, -- Günlük kapasite hedefi
+    sequence_order INTEGER NOT NULL DEFAULT 0,
+    daily_capacity_target INTEGER,
 
     -- Notlar
     notes TEXT,
@@ -44,7 +71,13 @@ CREATE INDEX IF NOT EXISTS idx_project_machines_project ON project_machines(proj
 CREATE INDEX IF NOT EXISTS idx_project_machines_machine ON project_machines(machine_id);
 CREATE INDEX IF NOT EXISTS idx_project_machines_company ON project_machines(company_id);
 
--- RLS politikaları
+-- Yorum
+COMMENT ON TABLE project_machines IS 'Projelerin ara işlem tezgahları (sadece verimlilik takibi için)';
+
+-- ====================================
+-- 3. RLS POLİTİKALARI (project_machines)
+-- ====================================
+
 ALTER TABLE project_machines ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view project machines of their company" ON project_machines;
@@ -84,7 +117,7 @@ CREATE POLICY "Users can delete project machines of their company"
     );
 
 -- ====================================
--- 3. GÜNLÜK ÜRETİM TAKİBİ TABLOSU
+-- 4. GÜNLÜK ÜRETİM TAKİBİ TABLOSU (machine_daily_production)
 -- ====================================
 
 CREATE TABLE IF NOT EXISTS machine_daily_production (
@@ -97,9 +130,9 @@ CREATE TABLE IF NOT EXISTS machine_daily_production (
     production_date DATE NOT NULL DEFAULT CURRENT_DATE,
 
     -- Kapasite ve Üretim
-    capacity_target INTEGER NOT NULL DEFAULT 0, -- Günlük kapasite hedefi
-    actual_production INTEGER NOT NULL DEFAULT 0, -- Gerçekleşen üretim
-    defect_count INTEGER NOT NULL DEFAULT 0, -- Fire/hatalı ürün sayısı
+    capacity_target INTEGER NOT NULL DEFAULT 0,
+    actual_production INTEGER NOT NULL DEFAULT 0,
+    defect_count INTEGER NOT NULL DEFAULT 0,
 
     -- Otomatik hesaplanan verimlilik
     efficiency_rate DECIMAL(5,2) GENERATED ALWAYS AS (
@@ -110,7 +143,7 @@ CREATE TABLE IF NOT EXISTS machine_daily_production (
     ) STORED,
 
     -- Ek bilgiler
-    shift TEXT, -- Vardiya (Gündüz/Gece)
+    shift TEXT,
     notes TEXT,
 
     -- Kayıt bilgileri
@@ -118,7 +151,7 @@ CREATE TABLE IF NOT EXISTS machine_daily_production (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-    -- Benzersiz kısıt: Bir tezgah için günde bir kayıt
+    -- Benzersiz kısıt: Bir tezgah için proje bazında günde bir kayıt
     UNIQUE(machine_id, project_id, production_date)
 );
 
@@ -128,7 +161,14 @@ CREATE INDEX IF NOT EXISTS idx_machine_daily_production_machine ON machine_daily
 CREATE INDEX IF NOT EXISTS idx_machine_daily_production_project ON machine_daily_production(project_id);
 CREATE INDEX IF NOT EXISTS idx_machine_daily_production_company ON machine_daily_production(company_id);
 
--- RLS politikaları
+-- Yorum
+COMMENT ON TABLE machine_daily_production IS 'Tezgah bazlı günlük üretim performans takibi';
+COMMENT ON COLUMN machine_daily_production.efficiency_rate IS 'Otomatik hesaplanan verimlilik yüzdesi';
+
+-- ====================================
+-- 5. RLS POLİTİKALARI (machine_daily_production)
+-- ====================================
+
 ALTER TABLE machine_daily_production ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view production records of their company" ON machine_daily_production;
@@ -168,7 +208,7 @@ CREATE POLICY "Users can delete production records of their company"
     );
 
 -- ====================================
--- 4. YARDIMCI FONKSIYONLAR
+-- 6. YARDIMCI FONKSİYONLAR
 -- ====================================
 
 -- Proje için toplam fire hesaplama
@@ -192,6 +232,8 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION calculate_project_total_defects IS 'Proje için belirtilen tarih aralığındaki toplam fire sayısını hesaplar';
+
 -- Tezgah için ortalama verimlilik hesaplama
 CREATE OR REPLACE FUNCTION calculate_machine_avg_efficiency(
     p_machine_id UUID,
@@ -211,18 +253,41 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION calculate_machine_avg_efficiency IS 'Tezgahın son N gündeki ortalama verimlilik oranını hesaplar';
+
 -- ====================================
--- BAŞARILI MESAJI
+-- 7. BAŞARI MESAJI
 -- ====================================
 
 DO $$
+DECLARE
+    projects_count INTEGER;
+    project_machines_count INTEGER;
+    daily_production_count INTEGER;
 BEGIN
-    RAISE NOTICE '✅ Proje-Tezgah ilişkisi tabloları oluşturuldu!';
+    SELECT COUNT(*) INTO projects_count FROM projects;
+    SELECT COUNT(*) INTO project_machines_count FROM project_machines;
+    SELECT COUNT(*) INTO daily_production_count FROM machine_daily_production;
+
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE '✅ PROJE-TEZGAH SİSTEMİ HAZIR!';
+    RAISE NOTICE '==============================================';
     RAISE NOTICE '📋 Tablolar:';
-    RAISE NOTICE '  - projects: entry_machine_id, exit_machine_id eklendi';
-    RAISE NOTICE '  - project_machines: Ara tezgahlar tablosu';
-    RAISE NOTICE '  - machine_daily_production: Günlük üretim takibi';
+    RAISE NOTICE '  ✓ projects: entry_machine_id, exit_machine_id eklendi';
+    RAISE NOTICE '  ✓ project_machines: Ara tezgahlar tablosu oluşturuldu';
+    RAISE NOTICE '  ✓ machine_daily_production: Günlük üretim tablosu oluşturuldu';
+    RAISE NOTICE '';
+    RAISE NOTICE '📊 Mevcut Veriler:';
+    RAISE NOTICE '  - Toplam Proje: %', projects_count;
+    RAISE NOTICE '  - Ara Tezgah İlişkisi: %', project_machines_count;
+    RAISE NOTICE '  - Günlük Üretim Kaydı: %', daily_production_count;
+    RAISE NOTICE '';
     RAISE NOTICE '🔧 Fonksiyonlar:';
-    RAISE NOTICE '  - calculate_project_total_defects()';
-    RAISE NOTICE '  - calculate_machine_avg_efficiency()';
+    RAISE NOTICE '  ✓ calculate_project_total_defects(project_id, start_date, end_date)';
+    RAISE NOTICE '  ✓ calculate_machine_avg_efficiency(machine_id, days)';
+    RAISE NOTICE '';
+    RAISE NOTICE '🔒 RLS Politikaları: Aktif (company bazlı erişim)';
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE '🚀 SİSTEM KULLANIMA HAZIR!';
+    RAISE NOTICE '==============================================';
 END $$;

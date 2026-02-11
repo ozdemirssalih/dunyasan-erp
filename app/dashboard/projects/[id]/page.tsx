@@ -19,6 +19,12 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
+  // Yeni: Tezgah konfigürasyonu ve üretim takibi
+  const [entryMachine, setEntryMachine] = useState<any>(null)
+  const [exitMachine, setExitMachine] = useState<any>(null)
+  const [processMachines, setProcessMachines] = useState<any[]>([])
+  const [dailyProduction, setDailyProduction] = useState<any[]>([])
+
   // Modals
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
@@ -56,10 +62,15 @@ export default function ProjectDetailPage() {
 
       setCompanyId(finalCompanyId)
 
-      // Load project
+      // Load project with entry/exit machines
       const { data: projectData } = await supabase
         .from('projects')
-        .select('*, customer_company:customer_companies(id, customer_name, contact_person, phone, email)')
+        .select(`
+          *,
+          customer_company:customer_companies(id, customer_name, contact_person, phone, email),
+          entry_machine:machines!entry_machine_id(id, machine_code, machine_name, machine_type, status),
+          exit_machine:machines!exit_machine_id(id, machine_code, machine_name, machine_type, status)
+        `)
         .eq('id', projectId)
         .eq('company_id', finalCompanyId)
         .single()
@@ -67,6 +78,29 @@ export default function ProjectDetailPage() {
       console.log('✅ Project loaded:', projectData?.project_name)
       setProject(projectData)
       setCustomer(projectData?.customer_company)
+      setEntryMachine(projectData?.entry_machine)
+      setExitMachine(projectData?.exit_machine)
+
+      // Load process machines (ara tezgahlar)
+      const { data: processMachinesData } = await supabase
+        .from('project_machines')
+        .select('*, machine:machines(id, machine_code, machine_name, machine_type, status)')
+        .eq('project_id', projectId)
+        .order('sequence_order')
+
+      console.log('✅ Process machines loaded:', processMachinesData?.length || 0)
+      setProcessMachines(processMachinesData || [])
+
+      // Load daily production data (last 30 days)
+      const { data: dailyProductionData } = await supabase
+        .from('machine_daily_production')
+        .select('*, machine:machines(id, machine_code, machine_name)')
+        .eq('project_id', projectId)
+        .order('production_date', { ascending: false })
+        .limit(30)
+
+      console.log('✅ Daily production loaded:', dailyProductionData?.length || 0)
+      setDailyProduction(dailyProductionData || [])
 
       // Load productions (for progress calculation)
       const { data: productionsData } = await supabase
@@ -489,6 +523,153 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Machine Configuration Section */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="flex items-center space-x-2 mb-6">
+          <Factory className="w-6 h-6 text-purple-600" />
+          <h2 className="text-xl font-bold text-gray-800">Tezgah Konfigürasyonu</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Entry Machine */}
+          <div className="border-2 border-green-200 rounded-lg p-4 bg-green-50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-700">Giriş Tezgahı (Hammadde)</h3>
+              <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">ENTRY</span>
+            </div>
+            {entryMachine ? (
+              <div>
+                <div className="font-bold text-gray-900">{entryMachine.machine_name}</div>
+                <div className="text-sm text-gray-600">{entryMachine.machine_code}</div>
+                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                  entryMachine.status === 'active' ? 'bg-green-100 text-green-800' :
+                  entryMachine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {entryMachine.status === 'active' ? 'Çalışıyor' :
+                   entryMachine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                </span>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Giriş tezgahı atanmamış</p>
+            )}
+          </div>
+
+          {/* Exit Machine */}
+          <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-700">Çıkış Tezgahı (Mamül)</h3>
+              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">EXIT</span>
+            </div>
+            {exitMachine ? (
+              <div>
+                <div className="font-bold text-gray-900">{exitMachine.machine_name}</div>
+                <div className="text-sm text-gray-600">{exitMachine.machine_code}</div>
+                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                  exitMachine.status === 'active' ? 'bg-green-100 text-green-800' :
+                  exitMachine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {exitMachine.status === 'active' ? 'Çalışıyor' :
+                   exitMachine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                </span>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Çıkış tezgahı atanmamış</p>
+            )}
+          </div>
+        </div>
+
+        {/* Process Machines */}
+        {processMachines.length > 0 && (
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-sm font-bold text-gray-700 mb-4">Ara İşlem Tezgahları</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {processMachines.map((pm) => (
+                <div key={pm.id} className="border border-orange-200 rounded-lg p-3 bg-orange-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-orange-700">Sıra: {pm.sequence_order}</span>
+                    <span className="text-xs bg-orange-600 text-white px-2 py-0.5 rounded">PROCESS</span>
+                  </div>
+                  <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
+                  <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
+                  {pm.daily_capacity_target && (
+                    <div className="mt-2 text-xs text-gray-700">
+                      <span className="font-semibold">Kapasite:</span> {pm.daily_capacity_target}/gün
+                    </div>
+                  )}
+                  {pm.notes && (
+                    <div className="mt-1 text-xs text-gray-600 italic">{pm.notes}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Daily Production Tracking */}
+      {dailyProduction.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <TrendingUp className="w-6 h-6 text-green-600" />
+            <h2 className="text-xl font-bold text-gray-800">Günlük Üretim Takibi</h2>
+          </div>
+
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            {dailyProduction.map((dp) => (
+              <div key={dp.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-900">{dp.machine?.machine_name}</div>
+                    <div className="text-xs text-gray-600">{dp.machine?.machine_code}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {new Date(dp.production_date).toLocaleDateString('tr-TR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                      {dp.shift && ` - ${dp.shift}`}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-lg font-bold ${
+                      dp.efficiency_rate >= 80 ? 'text-green-600' :
+                      dp.efficiency_rate >= 60 ? 'text-yellow-600' :
+                      'text-red-600'
+                    }`}>
+                      {dp.efficiency_rate?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-600">Verimlilik</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-200">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-600 mb-1">Hedef</div>
+                    <div className="text-sm font-bold text-gray-900">{dp.capacity_target}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-600 mb-1">Üretilen</div>
+                    <div className="text-sm font-bold text-blue-600">{dp.actual_production}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-600 mb-1">Fire</div>
+                    <div className="text-sm font-bold text-red-600">{dp.defect_count}</div>
+                  </div>
+                </div>
+
+                {dp.notes && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-600 italic">{dp.notes}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

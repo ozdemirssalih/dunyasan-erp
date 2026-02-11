@@ -163,6 +163,7 @@ export default function ProductionPage() {
   const [assignmentForm, setAssignmentForm] = useState({
     machine_id: '',
     item_id: '',
+    item_type: '', // raw_material veya tashih
     quantity: 0,
     shift: 'sabah',
     notes: '',
@@ -819,38 +820,37 @@ export default function ProductionPage() {
     try {
       setSubmittingAssignment(true)
 
-      // 1. Üretim deposundan hammadde/tashih stoğunu kontrol et
-      // Aynı item_id ile birden fazla kayıt olabilir (raw_material, tashih, vs)
-      const { data: stockRecords } = await supabase
+      // 1. Üretim deposundan seçilen item_type stoğunu kontrol et
+      const { data: stockRecord } = await supabase
         .from('production_inventory')
         .select('current_stock, item_type')
         .eq('company_id', companyId)
         .eq('item_id', assignmentForm.item_id)
+        .eq('item_type', assignmentForm.item_type)
+        .maybeSingle()
 
-      console.log('📦 Bulunan stok kayıtları:', stockRecords)
+      console.log('📦 Seçilen stok:', stockRecord)
 
-      if (!stockRecords || stockRecords.length === 0) {
-        alert(`❌ Üretim deposunda bu ürün bulunamadı!`)
+      if (!stockRecord) {
+        alert(`❌ Seçilen ürün bulunamadı!\n\nitem_id: ${assignmentForm.item_id}\nitem_type: ${assignmentForm.item_type}`)
         return
       }
 
-      // Tüm kayıtların toplam stoğunu hesapla
-      const totalStock = stockRecords.reduce((sum, record) => sum + (record.current_stock || 0), 0)
+      console.log(`✅ ${stockRecord.item_type} stoğu: ${stockRecord.current_stock}, İstenen: ${assignmentForm.quantity}`)
 
-      console.log('✅ Toplam stok:', totalStock, 'İstenen:', assignmentForm.quantity)
-
-      if (totalStock < assignmentForm.quantity) {
-        alert(`❌ Yetersiz stok!\n\nToplam Mevcut: ${totalStock}\nİstenen: ${assignmentForm.quantity}\n\nDetay:\n${stockRecords.map(r => `- ${r.item_type}: ${r.current_stock}`).join('\n')}`)
+      if (stockRecord.current_stock < assignmentForm.quantity) {
+        alert(`❌ Yetersiz stok!\n\nMevcut: ${stockRecord.current_stock}\nİstenen: ${assignmentForm.quantity}\nTip: ${stockRecord.item_type === 'raw_material' ? 'Hammadde' : 'Taşıh'}`)
         return
       }
 
-      // 2. Transfer kaydını oluştur (trigger otomatik: production_inventory'den düşer, machine_inventory'ye ekler)
+      // 2. Transfer kaydını oluştur (trigger otomatik: seçilen item_type'dan düşer, machine_inventory'ye ekler)
       const { error } = await supabase
         .from('production_to_machine_transfers')
         .insert({
           company_id: companyId,
           machine_id: assignmentForm.machine_id,
           item_id: assignmentForm.item_id,
+          item_type: assignmentForm.item_type, // Kullanıcının seçtiği tip (raw_material veya tashih)
           quantity: assignmentForm.quantity,
           shift: assignmentForm.shift,
           notes: assignmentForm.notes,
@@ -2390,20 +2390,25 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Hammadde <span className="text-red-500">*</span>
+                      Hammadde/Taşıh <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={assignmentForm.item_id}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, item_id: e.target.value })}
+                      value={`${assignmentForm.item_id}|${assignmentForm.item_type}`}
+                      onChange={(e) => {
+                        const [itemId, itemType] = e.target.value.split('|')
+                        setAssignmentForm({ ...assignmentForm, item_id: itemId, item_type: itemType })
+                      }}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
-                      <option value="">Seçin...</option>
-                      {productionInventory.map(item => (
-                        <option key={item.id} value={item.item_id}>
-                          {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})
-                        </option>
-                      ))}
+                      <option value="|">Seçin...</option>
+                      {productionInventory
+                        .filter(item => item.item_type === 'raw_material' || item.item_type === 'tashih')
+                        .map(item => (
+                          <option key={item.id} value={`${item.item_id}|${item.item_type}`}>
+                            {item.item_code} - {item.item_name} ({item.item_type === 'raw_material' ? 'Hammadde' : 'Taşıh'}) - Stok: {item.current_stock} {item.unit}
+                          </option>
+                        ))}
                     </select>
                   </div>
 

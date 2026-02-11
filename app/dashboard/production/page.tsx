@@ -1136,6 +1136,7 @@ export default function ProductionPage() {
     setAssignmentForm({
       machine_id: '',
       item_id: '',
+      item_type: '',
       quantity: 0,
       shift: 'sabah',
       notes: '',

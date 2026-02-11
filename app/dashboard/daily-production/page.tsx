@@ -125,26 +125,29 @@ export default function DailyProductionPage() {
     }
 
     try {
-      // Proje için ara tezgahları yükle (project_machines)
+      // Önce project_machines'den machine_id'leri al
       const { data: projectMachinesData } = await supabase
         .from('project_machines')
-        .select('machine_id, machine:machines(id, machine_code, machine_name)')
+        .select('machine_id')
         .eq('project_id', projectId)
         .order('sequence_order')
 
-      console.log('✅ Project machines loaded:', projectMachinesData)
-
-      // machine bilgilerini çıkar
-      const projectMachines: Machine[] = []
-      if (projectMachinesData) {
-        for (const pm of projectMachinesData) {
-          if (pm.machine) {
-            projectMachines.push(pm.machine as Machine)
-          }
-        }
+      if (!projectMachinesData || projectMachinesData.length === 0) {
+        setMachines([])
+        return
       }
 
-      setMachines(projectMachines)
+      // machine_id'leri topla
+      const machineIds = projectMachinesData.map(pm => pm.machine_id)
+
+      // Sonra machines tablosundan bilgileri getir
+      const { data: machinesData } = await supabase
+        .from('machines')
+        .select('id, machine_code, machine_name')
+        .in('id', machineIds)
+
+      console.log('✅ Project machines loaded:', machinesData)
+      setMachines(machinesData || [])
     } catch (error) {
       console.error('Error loading project machines:', error)
       setMachines([])

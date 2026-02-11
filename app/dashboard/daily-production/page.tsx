@@ -42,11 +42,17 @@ interface Machine {
   machine_name: string
 }
 
+interface ProjectMachineWithCapacity {
+  machine_id: string
+  daily_capacity_target: number | null
+}
+
 export default function DailyProductionPage() {
   const [productions, setProductions] = useState<DailyProduction[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
   const [allMachines, setAllMachines] = useState<Machine[]>([]) // Tüm tezgahlar (filtre için)
+  const [projectMachinesData, setProjectMachinesData] = useState<ProjectMachineWithCapacity[]>([]) // Kapasite bilgisi için
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -121,24 +127,29 @@ export default function DailyProductionPage() {
   const loadProjectMachines = async (projectId: string) => {
     if (!projectId) {
       setMachines([])
+      setProjectMachinesData([])
       return
     }
 
     try {
-      // Önce project_machines'den machine_id'leri al
-      const { data: projectMachinesData } = await supabase
+      // Önce project_machines'den machine_id ve kapasite bilgilerini al
+      const { data: pmData } = await supabase
         .from('project_machines')
-        .select('machine_id')
+        .select('machine_id, daily_capacity_target')
         .eq('project_id', projectId)
         .order('sequence_order')
 
-      if (!projectMachinesData || projectMachinesData.length === 0) {
+      if (!pmData || pmData.length === 0) {
         setMachines([])
+        setProjectMachinesData([])
         return
       }
 
+      // Kapasite bilgilerini sakla
+      setProjectMachinesData(pmData)
+
       // machine_id'leri topla
-      const machineIds = projectMachinesData.map(pm => pm.machine_id)
+      const machineIds = pmData.map(pm => pm.machine_id)
 
       // Sonra machines tablosundan bilgileri getir
       const { data: machinesData } = await supabase
@@ -151,6 +162,7 @@ export default function DailyProductionPage() {
     } catch (error) {
       console.error('Error loading project machines:', error)
       setMachines([])
+      setProjectMachinesData([])
     }
   }
 
@@ -558,7 +570,16 @@ export default function DailyProductionPage() {
                     </label>
                     <select
                       value={formData.machine_id}
-                      onChange={(e) => setFormData({ ...formData, machine_id: e.target.value })}
+                      onChange={(e) => {
+                        const selectedMachineId = e.target.value
+                        // Seçilen tezgahın kapasite hedefini bul
+                        const machineCapacity = projectMachinesData.find(pm => pm.machine_id === selectedMachineId)
+                        setFormData({
+                          ...formData,
+                          machine_id: selectedMachineId,
+                          capacity_target: machineCapacity?.daily_capacity_target?.toString() || ''
+                        })
+                      }}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     >
                       <option value="">Tezgah Seçiniz</option>
@@ -605,14 +626,14 @@ export default function DailyProductionPage() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Kapasite Hedefi <span className="text-red-500">*</span>
+                      Kapasite Hedefi
                     </label>
                     <input
                       type="number"
                       value={formData.capacity_target}
-                      onChange={(e) => setFormData({ ...formData, capacity_target: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Örn: 1000"
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
+                      placeholder="Tezgah seçilince otomatik gelecek"
                     />
                   </div>
 

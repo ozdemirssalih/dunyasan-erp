@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, Plus, Phone, Mail, User, MapPin } from 'lucide-react'
+import { Building2, Plus, Phone, Mail, User, MapPin, Trash2 } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 
 interface Customer {
@@ -111,6 +111,30 @@ export default function CustomersPage() {
     }
   }
 
+  const handleDeleteCustomer = async (customerId: string, customerName: string) => {
+    if (!confirm(`"${customerName}" müşterisini silmek istediğinizden emin misiniz?`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('customer_companies')
+        .delete()
+        .eq('id', customerId)
+
+      if (error) {
+        console.error('❌ Supabase Error:', error)
+        throw error
+      }
+
+      alert('✅ Müşteri başarıyla silindi!')
+      await loadCustomers()
+    } catch (error: any) {
+      console.error('❌ Error deleting customer:', error)
+      alert(`Müşteri silinirken hata oluştu!\n${error?.message || 'Bilinmeyen hata'}`)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -140,12 +164,19 @@ export default function CustomersPage() {
       {/* Customers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {customers.map((customer) => (
-          <div key={customer.id} className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+          <div key={customer.id} className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow relative">
+            <button
+              onClick={() => handleDeleteCustomer(customer.id, customer.customer_name)}
+              className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Müşteriyi Sil"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
             <div className="flex items-start space-x-3 mb-4">
               <div className="p-3 bg-purple-100 rounded-lg">
                 <Building2 className="w-6 h-6 text-purple-600" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 pr-8">
                 <h3 className="text-lg font-bold text-gray-800">{customer.customer_name}</h3>
                 {customer.tax_number && (
                   <p className="text-xs text-gray-500">VKN: {customer.tax_number}</p>

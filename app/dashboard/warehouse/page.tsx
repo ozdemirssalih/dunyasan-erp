@@ -91,6 +91,7 @@ export default function WarehousePage() {
   const [productionTransfers, setProductionTransfers] = useState<any[]>([])
   const [qcTransfers, setQCTransfers] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -233,6 +234,15 @@ export default function WarehousePage() {
         .order('company_name')
 
       setSuppliers(suppliersData || [])
+
+      // Load customers
+      const { data: customersData } = await supabase
+        .from('customer_companies')
+        .select('*')
+        .eq('company_id', finalCompanyId)
+        .order('customer_name')
+
+      setCustomers(customersData || [])
 
       // Load warehouse items
       await loadItems(finalCompanyId)
@@ -1235,13 +1245,18 @@ export default function WarehousePage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Sevkiyat Adresi / Müşteri
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={exitForm.shipment_destination}
                     onChange={(e) => setExitForm({ ...exitForm, shipment_destination: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    placeholder="Örn: ABC Şirketi, İstanbul"
-                  />
+                  >
+                    <option value="">Seçin...</option>
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.customer_name}>
+                        {customer.customer_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

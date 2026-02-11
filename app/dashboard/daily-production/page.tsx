@@ -597,9 +597,6 @@ export default function DailyProductionPage() {
                       <option value="">Vardiya Seçiniz</option>
                       <option value="Gündüz">Gündüz</option>
                       <option value="Gece">Gece</option>
-                      <option value="1. Vardiya">1. Vardiya</option>
-                      <option value="2. Vardiya">2. Vardiya</option>
-                      <option value="3. Vardiya">3. Vardiya</option>
                     </select>
                   </div>
                 </div>

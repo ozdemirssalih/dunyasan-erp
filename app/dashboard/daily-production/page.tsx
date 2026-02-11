@@ -46,6 +46,7 @@ export default function DailyProductionPage() {
   const [productions, setProductions] = useState<DailyProduction[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
+  const [allMachines, setAllMachines] = useState<Machine[]>([]) // Tüm tezgahlar (filtre için)
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -98,14 +99,15 @@ export default function DailyProductionPage() {
 
       setProjects(projectsData || [])
 
-      // Load machines
+      // Load machines (tüm tezgahlar - filtre için)
       const { data: machinesData } = await supabase
         .from('machines')
         .select('id, machine_code, machine_name')
         .eq('company_id', fetchedCompanyId)
         .order('machine_name', { ascending: true })
 
-      setMachines(machinesData || [])
+      setAllMachines(machinesData || [])
+      setMachines([]) // Başlangıçta boş, proje seçilince dolacak
 
       // Load production records
       await loadProductions(fetchedCompanyId)
@@ -113,6 +115,34 @@ export default function DailyProductionPage() {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadProjectMachines = async (projectId: string) => {
+    if (!projectId) {
+      setMachines([])
+      return
+    }
+
+    try {
+      // Proje için ara tezgahları yükle (project_machines)
+      const { data: projectMachinesData } = await supabase
+        .from('project_machines')
+        .select('machine_id, machine:machines(id, machine_code, machine_name)')
+        .eq('project_id', projectId)
+        .order('sequence_order')
+
+      console.log('✅ Project machines loaded:', projectMachinesData)
+
+      // machine bilgilerini çıkar
+      const projectMachines = (projectMachinesData || [])
+        .map(pm => pm.machine)
+        .filter(m => m !== null) as Machine[]
+
+      setMachines(projectMachines)
+    } catch (error) {
+      console.error('Error loading project machines:', error)
+      setMachines([])
     }
   }
 
@@ -332,7 +362,7 @@ export default function DailyProductionPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="">Tüm Tezgahlar</option>
-                {machines.map((machine) => (
+                {allMachines.map((machine) => (
                   <option key={machine.id} value={machine.id}>
                     {machine.machine_name}
                   </option>
@@ -495,7 +525,11 @@ export default function DailyProductionPage() {
                     </label>
                     <select
                       value={formData.project_id}
-                      onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                      onChange={(e) => {
+                        const newProjectId = e.target.value
+                        setFormData({ ...formData, project_id: newProjectId, machine_id: '' })
+                        loadProjectMachines(newProjectId)
+                      }}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     >
                       <option value="">Proje Seçiniz</option>
@@ -505,6 +539,9 @@ export default function DailyProductionPage() {
                         </option>
                       ))}
                     </select>
+                    {formData.project_id && machines.length === 0 && (
+                      <p className="text-xs text-orange-600 mt-1">⚠️ Bu projeye henüz ara tezgah atanmamış</p>
+                    )}
                   </div>
 
                   <div>

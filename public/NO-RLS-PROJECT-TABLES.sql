@@ -52,7 +52,10 @@ CREATE INDEX IF NOT EXISTS idx_project_machines_company ON project_machines(comp
 -- RLS'i şimdilik kapalı tut
 ALTER TABLE project_machines DISABLE ROW LEVEL SECURITY;
 
-RAISE NOTICE '✅ project_machines tablosu oluşturuldu (RLS kapalı)';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ project_machines tablosu oluşturuldu (RLS kapalı)';
+END $$;
 
 -- ====================================
 -- 3. MACHINE_DAILY_PRODUCTION TABLOSU (RLS YOK)
@@ -89,7 +92,10 @@ CREATE INDEX IF NOT EXISTS idx_machine_daily_production_company ON machine_daily
 -- RLS'i şimdilik kapalı tut
 ALTER TABLE machine_daily_production DISABLE ROW LEVEL SECURITY;
 
-RAISE NOTICE '✅ machine_daily_production tablosu oluşturuldu (RLS kapalı)';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ machine_daily_production tablosu oluşturuldu (RLS kapalı)';
+END $$;
 
 -- ====================================
 -- 4. FONKSIYONLAR

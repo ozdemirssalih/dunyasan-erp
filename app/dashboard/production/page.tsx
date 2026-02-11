@@ -819,36 +819,28 @@ export default function ProductionPage() {
     try {
       setSubmittingAssignment(true)
 
-      // 1. Üretim deposundan hammadde/tashih stoğunu kontrol et (trigger düşürecek, sadece kontrol)
-      console.log('🔍 Stok kontrolü yapılıyor:', {
-        company_id: companyId,
-        item_id: assignmentForm.item_id
-      })
-
-      // Önce tüm production_inventory kayıtlarını görelim (debug)
-      const { data: allStocks } = await supabase
-        .from('production_inventory')
-        .select('id, item_id, item_type, current_stock')
-        .eq('company_id', companyId)
-
-      console.log('📦 Tüm üretim deposu stokları:', allStocks)
-
-      const { data: existingStock } = await supabase
+      // 1. Üretim deposundan hammadde/tashih stoğunu kontrol et
+      // Aynı item_id ile birden fazla kayıt olabilir (raw_material, tashih, vs)
+      const { data: stockRecords } = await supabase
         .from('production_inventory')
         .select('current_stock, item_type')
         .eq('company_id', companyId)
         .eq('item_id', assignmentForm.item_id)
-        .maybeSingle()
 
-      console.log('✅ Aranan ürün stoğu:', existingStock)
+      console.log('📦 Bulunan stok kayıtları:', stockRecords)
 
-      if (!existingStock) {
-        alert(`❌ Üretim deposunda bu ürün bulunamadı!\n\nAranan item_id: ${assignmentForm.item_id}\ncompany_id: ${companyId}\n\nTarayıcı konsoluna bakın - tüm stoklar orada listelenmiş.`)
+      if (!stockRecords || stockRecords.length === 0) {
+        alert(`❌ Üretim deposunda bu ürün bulunamadı!`)
         return
       }
 
-      if (existingStock.current_stock < assignmentForm.quantity) {
-        alert(`❌ Yetersiz stok!\nMevcut: ${existingStock.current_stock}\nİstenen: ${assignmentForm.quantity}`)
+      // Tüm kayıtların toplam stoğunu hesapla
+      const totalStock = stockRecords.reduce((sum, record) => sum + (record.current_stock || 0), 0)
+
+      console.log('✅ Toplam stok:', totalStock, 'İstenen:', assignmentForm.quantity)
+
+      if (totalStock < assignmentForm.quantity) {
+        alert(`❌ Yetersiz stok!\n\nToplam Mevcut: ${totalStock}\nİstenen: ${assignmentForm.quantity}\n\nDetay:\n${stockRecords.map(r => `- ${r.item_type}: ${r.current_stock}`).join('\n')}`)
         return
       }
 

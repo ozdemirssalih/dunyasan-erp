@@ -825,11 +825,10 @@ export default function ProductionPage() {
         .select('current_stock, item_type')
         .eq('company_id', companyId)
         .eq('item_id', assignmentForm.item_id)
-        .in('item_type', ['raw_material', 'tashih'])
         .maybeSingle()
 
       if (!existingStock) {
-        alert('❌ Üretim deposunda bu hammadde/tashih ürünü bulunamadı!')
+        alert('❌ Üretim deposunda bu ürün bulunamadı!')
         return
       }
 

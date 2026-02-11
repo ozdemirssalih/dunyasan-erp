@@ -135,9 +135,14 @@ export default function DailyProductionPage() {
       console.log('✅ Project machines loaded:', projectMachinesData)
 
       // machine bilgilerini çıkar
-      const projectMachines = (projectMachinesData || [])
-        .map(pm => pm.machine)
-        .filter(m => m !== null) as Machine[]
+      const projectMachines: Machine[] = []
+      if (projectMachinesData) {
+        for (const pm of projectMachinesData) {
+          if (pm.machine) {
+            projectMachines.push(pm.machine as Machine)
+          }
+        }
+      }
 
       setMachines(projectMachines)
     } catch (error) {

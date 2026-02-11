@@ -158,7 +158,10 @@ CREATE POLICY "Users can delete machines of their company"
     ON machines FOR DELETE
     USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
-RAISE NOTICE '✅ Machines RLS politikaları eklendi';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Machines RLS politikaları eklendi';
+END $$;
 
 -- ====================================
 -- ADIM 2: PROJECTS TABLOSUNU GÜNCELLE
@@ -230,7 +233,10 @@ CREATE POLICY "Users can delete project machines of their company"
     ON project_machines FOR DELETE
     USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
-RAISE NOTICE '✅ project_machines tablosu hazır';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ project_machines tablosu hazır';
+END $$;
 
 -- ====================================
 -- ADIM 4: MACHINE_DAILY_PRODUCTION TABLOSU
@@ -286,7 +292,10 @@ CREATE POLICY "Users can delete production records of their company"
     ON machine_daily_production FOR DELETE
     USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
-RAISE NOTICE '✅ machine_daily_production tablosu hazır';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ machine_daily_production tablosu hazır';
+END $$;
 
 -- ====================================
 -- ADIM 5: FONKSIYONLAR
@@ -328,7 +337,10 @@ BEGIN
 END;
 $$;
 
-RAISE NOTICE '✅ Fonksiyonlar oluşturuldu';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Fonksiyonlar oluşturuldu';
+END $$;
 
 -- ====================================
 -- BAŞARI MESAJI

@@ -820,6 +820,19 @@ export default function ProductionPage() {
       setSubmittingAssignment(true)
 
       // 1. Üretim deposundan hammadde/tashih stoğunu kontrol et (trigger düşürecek, sadece kontrol)
+      console.log('🔍 Stok kontrolü yapılıyor:', {
+        company_id: companyId,
+        item_id: assignmentForm.item_id
+      })
+
+      // Önce tüm production_inventory kayıtlarını görelim (debug)
+      const { data: allStocks } = await supabase
+        .from('production_inventory')
+        .select('id, item_id, item_type, current_stock')
+        .eq('company_id', companyId)
+
+      console.log('📦 Tüm üretim deposu stokları:', allStocks)
+
       const { data: existingStock } = await supabase
         .from('production_inventory')
         .select('current_stock, item_type')
@@ -827,8 +840,10 @@ export default function ProductionPage() {
         .eq('item_id', assignmentForm.item_id)
         .maybeSingle()
 
+      console.log('✅ Aranan ürün stoğu:', existingStock)
+
       if (!existingStock) {
-        alert('❌ Üretim deposunda bu ürün bulunamadı!')
+        alert(`❌ Üretim deposunda bu ürün bulunamadı!\n\nAranan item_id: ${assignmentForm.item_id}\ncompany_id: ${companyId}\n\nTarayıcı konsoluna bakın - tüm stoklar orada listelenmiş.`)
         return
       }
 

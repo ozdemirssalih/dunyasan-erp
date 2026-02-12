@@ -75,24 +75,26 @@ export default function DashboardPage() {
 
           const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-          // Üretilen ürün ve fire
-          const { data: producedItems } = await supabase
-            .from('production_outputs')
-            .select('quantity, fire_quantity')
+          // Günlük üretim kayıtlarından veri çek
+          const { data: dailyProduction } = await supabase
+            .from('machine_daily_production')
+            .select('actual_production, defect_count, efficiency_rate')
             .eq('machine_id', machine.id)
 
-          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
-          const totalScrap = producedItems?.reduce((sum, item) => sum + (item.fire_quantity || 0), 0) || 0
+          const totalProduced = dailyProduction?.reduce((sum, item) => sum + item.actual_production, 0) || 0
+          const totalScrap = dailyProduction?.reduce((sum, item) => sum + (item.defect_count || 0), 0) || 0
 
-          // Verimlilik hesaplama (fire hariç)
-          const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
+          // Ortalama verimlilik
+          const avgEfficiency = dailyProduction && dailyProduction.length > 0
+            ? dailyProduction.reduce((sum, item) => sum + item.efficiency_rate, 0) / dailyProduction.length
+            : 0
 
           return {
             ...machine,
             totalGiven,
             totalProduced,
             totalScrap,
-            efficiency
+            efficiency: avgEfficiency
           }
         })
       )

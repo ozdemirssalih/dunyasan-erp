@@ -30,18 +30,19 @@ interface Transfer {
   }
 }
 
-interface Output {
+interface DailyProduction {
   id: string
-  quantity: number
-  fire_quantity: number
-  fire_reason: string
+  production_date: string
+  capacity_target: number
+  actual_production: number
+  defect_count: number
+  efficiency_rate: number
   shift: string
   notes: string
   created_at: string
-  warehouse_item: {
-    item_code: string
-    item_name: string
-    unit: string
+  project?: {
+    project_code: string
+    project_name: string
   }
 }
 
@@ -52,7 +53,7 @@ export default function MachineDetailPage() {
 
   const [machine, setMachine] = useState<Machine | null>(null)
   const [transfers, setTransfers] = useState<Transfer[]>([])
-  const [outputs, setOutputs] = useState<Output[]>([])
+  const [dailyProductions, setDailyProductions] = useState<DailyProduction[]>([])
   const [loading, setLoading] = useState(true)
 
   const [stats, setStats] = useState({
@@ -101,22 +102,22 @@ export default function MachineDetailPage() {
 
       setTransfers(transfersData || [])
 
-      // Load outputs (üretilen)
-      const { data: outputsData } = await supabase
-        .from('production_outputs')
+      // Load daily production records (günlük üretim kayıtları)
+      const { data: dailyProductionData } = await supabase
+        .from('machine_daily_production')
         .select(`
           *,
-          warehouse_item:warehouse_items!production_outputs_output_item_id_fkey(item_code, item_name, unit)
+          project:projects(project_code, project_name)
         `)
         .eq('machine_id', machineId)
-        .order('created_at', { ascending: false })
+        .order('production_date', { ascending: false })
 
-      setOutputs(outputsData || [])
+      setDailyProductions(dailyProductionData || [])
 
       // Calculate stats
       const totalGiven = transfersData?.reduce((sum, t) => sum + t.quantity, 0) || 0
-      const totalProduced = outputsData?.reduce((sum, o) => sum + o.quantity, 0) || 0
-      const totalScrap = outputsData?.reduce((sum, o) => sum + (o.fire_quantity || 0), 0) || 0
+      const totalProduced = dailyProductionData?.reduce((sum, d) => sum + d.actual_production, 0) || 0
+      const totalScrap = dailyProductionData?.reduce((sum, d) => sum + (d.defect_count || 0), 0) || 0
       const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
 
       setStats({ totalGiven, totalProduced, totalScrap, efficiency })
@@ -281,58 +282,71 @@ export default function MachineDetailPage() {
           </div>
         </div>
 
-        {/* Outputs */}
+        {/* Daily Production Records */}
         <div className="bg-white rounded-xl shadow-md p-6">
           <div className="flex items-center space-x-2 mb-4">
-            <TrendingUp className="w-6 h-6 text-green-600" />
-            <h2 className="text-xl font-bold text-gray-800">Üretim Çıktıları</h2>
+            <Calendar className="w-6 h-6 text-green-600" />
+            <h2 className="text-xl font-bold text-gray-800">Günlük Üretim Kayıtları</h2>
             <span className="bg-green-100 text-green-600 px-2 py-1 rounded-full text-xs font-semibold">
-              {outputs.length}
+              {dailyProductions.length}
             </span>
           </div>
 
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {outputs.length > 0 ? (
-              outputs.map(output => (
-                <div key={output.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-2">
+            {dailyProductions.length > 0 ? (
+              dailyProductions.map(record => (
+                <div key={record.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
                       <div className="font-bold text-gray-900">
-                        {output.warehouse_item?.item_name}
+                        {new Date(record.production_date).toLocaleDateString('tr-TR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {output.warehouse_item?.item_code}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">
-                        {output.quantity} {output.warehouse_item?.unit}
-                      </div>
-                      {output.fire_quantity > 0 && (
-                        <div className="text-xs text-red-600">
-                          Fire: {output.fire_quantity} {output.warehouse_item?.unit}
+                      {record.project && (
+                        <div className="text-sm text-blue-600">
+                          {record.project.project_name} ({record.project.project_code})
                         </div>
                       )}
+                      <div className="text-xs text-gray-500 mt-1">
+                        Vardiya: {record.shift || 'Belirtilmemiş'}
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      record.efficiency_rate >= 80 ? 'bg-green-100 text-green-700' :
+                      record.efficiency_rate >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      %{record.efficiency_rate.toFixed(1)}
                     </div>
                   </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500 mt-2 pt-2 border-t">
-                    <span>{output.shift}</span>
-                    <span>{new Date(output.created_at).toLocaleDateString('tr-TR')}</span>
-                  </div>
-                  {output.fire_reason && output.fire_quantity > 0 && (
-                    <div className="text-xs text-red-600 mt-1">
-                      Fire Nedeni: {output.fire_reason}
+
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="bg-gray-50 rounded p-2">
+                      <div className="text-xs text-gray-600">Hedef</div>
+                      <div className="text-sm font-bold text-gray-900">{record.capacity_target}</div>
                     </div>
-                  )}
-                  {output.notes && (
-                    <div className="text-xs text-gray-600 mt-1 italic">
-                      Not: {output.notes}
+                    <div className="bg-green-50 rounded p-2">
+                      <div className="text-xs text-gray-600">Üretilen</div>
+                      <div className="text-sm font-bold text-green-700">{record.actual_production}</div>
+                    </div>
+                    <div className="bg-red-50 rounded p-2">
+                      <div className="text-xs text-gray-600">Fire</div>
+                      <div className="text-sm font-bold text-red-700">{record.defect_count || 0}</div>
+                    </div>
+                  </div>
+
+                  {record.notes && (
+                    <div className="text-xs text-gray-600 mt-2 pt-2 border-t italic">
+                      Not: {record.notes}
                     </div>
                   )}
                 </div>
               ))
             ) : (
-              <p className="text-center text-gray-500 py-8">Henüz üretim kaydı yok</p>
+              <p className="text-center text-gray-500 py-8">Henüz günlük üretim kaydı yok</p>
             )}
           </div>
         </div>

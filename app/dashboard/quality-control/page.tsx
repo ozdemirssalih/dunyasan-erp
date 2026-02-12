@@ -6,7 +6,7 @@ import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import { Package, Factory, ClipboardCheck } from 'lucide-react'
 
-type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history'
+type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history' | 'warehouse-qc'
 
 export default function QualityControlPage() {
   const { canCreate } = usePermissions()
@@ -22,6 +22,7 @@ export default function QualityControlPage() {
   const [outgoingTransfers, setOutgoingTransfers] = useState<any[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
+  const [warehouseQCRequests, setWarehouseQCRequests] = useState<any[]>([])
 
   // Stats states
   const [stats, setStats] = useState({

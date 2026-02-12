@@ -75,21 +75,23 @@ export default function DashboardPage() {
 
           const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-          // Üretilen ürün
+          // Üretilen ürün ve fire
           const { data: producedItems } = await supabase
             .from('production_outputs')
-            .select('quantity')
+            .select('quantity, fire_quantity')
             .eq('machine_id', machine.id)
 
           const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
+          const totalScrap = producedItems?.reduce((sum, item) => sum + (item.fire_quantity || 0), 0) || 0
 
-          // Verimlilik hesaplama
+          // Verimlilik hesaplama (fire hariç)
           const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
 
           return {
             ...machine,
             totalGiven,
             totalProduced,
+            totalScrap,
             efficiency
           }
         })
@@ -375,16 +377,20 @@ export default function DashboardPage() {
                 <div className="space-y-2 mb-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">Verilen:</span>
-                    <span className="font-semibold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'} kg</span>
+                    <span className="font-semibold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">Üretilen:</span>
-                    <span className="font-semibold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'} kg</span>
+                    <span className="font-semibold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Fire:</span>
+                    <span className="font-semibold text-red-600">{machine.totalScrap?.toFixed(2) || '0.00'}</span>
                   </div>
                 </div>
 
                 {/* Efficiency Bar */}
-                <div>
+                <div className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-600 font-medium">Verimlilik</span>
                     <span className={`font-bold ${
@@ -406,6 +412,14 @@ export default function DashboardPage() {
                     ></div>
                   </div>
                 </div>
+
+                {/* Detail Button */}
+                <a
+                  href={`/dashboard/machines/${machine.id}`}
+                  className="block w-full text-center px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 rounded-lg text-xs font-semibold transition-colors"
+                >
+                  📊 Detaylı Geçmiş
+                </a>
               </div>
             ))}
           </div>

@@ -103,7 +103,7 @@ export default function MachineDetailPage() {
       setTransfers(transfersData || [])
 
       // Load daily production records (günlük üretim kayıtları)
-      const { data: dailyProductionData } = await supabase
+      const { data: dailyProductionData, error: dailyError } = await supabase
         .from('machine_daily_production')
         .select(`
           *,
@@ -112,15 +112,25 @@ export default function MachineDetailPage() {
         .eq('machine_id', machineId)
         .order('production_date', { ascending: false })
 
+      console.log('🔍 Machine ID:', machineId)
+      console.log('📊 Daily Production Data:', dailyProductionData)
+      console.log('❌ Daily Production Error:', dailyError)
+
       setDailyProductions(dailyProductionData || [])
 
       // Calculate stats
       const totalGiven = transfersData?.reduce((sum, t) => sum + t.quantity, 0) || 0
       const totalProduced = dailyProductionData?.reduce((sum, d) => sum + d.actual_production, 0) || 0
       const totalScrap = dailyProductionData?.reduce((sum, d) => sum + (d.defect_count || 0), 0) || 0
-      const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
 
-      setStats({ totalGiven, totalProduced, totalScrap, efficiency })
+      // Verimlilik hesabı - günlük kayıtların ortalaması
+      const avgEfficiency = dailyProductionData && dailyProductionData.length > 0
+        ? dailyProductionData.reduce((sum, d) => sum + (d.efficiency_rate || 0), 0) / dailyProductionData.length
+        : 0
+
+      console.log('📈 Stats:', { totalGiven, totalProduced, totalScrap, avgEfficiency })
+
+      setStats({ totalGiven, totalProduced, totalScrap, efficiency: avgEfficiency })
 
     } catch (error) {
       console.error('Error loading machine data:', error)

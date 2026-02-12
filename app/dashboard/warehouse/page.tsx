@@ -124,6 +124,7 @@ export default function WarehousePage() {
     supplier: '',
     reference_number: '',
     notes: '',
+    requiresQC: false, // Kalite kontrol gerekli mi?
   })
 
   const [exitForm, setExitForm] = useState({
@@ -693,22 +694,44 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
-      const { error } = await supabase
-        .from('warehouse_transactions')
-        .insert({
-          company_id: companyId,
-          item_id: entryForm.item_id,
-          type: 'entry',
-          quantity: entryForm.quantity,
-          supplier: entryForm.supplier,
-          reference_number: entryForm.reference_number,
-          notes: entryForm.notes,
-          created_by: currentUserId,
-        })
+      // Kalite kontrol gerekiyorsa warehouse_qc_requests'e kaydet
+      if (entryForm.requiresQC) {
+        const { error } = await supabase
+          .from('warehouse_qc_requests')
+          .insert({
+            company_id: companyId,
+            item_id: entryForm.item_id,
+            quantity: entryForm.quantity,
+            supplier: entryForm.supplier,
+            reference_number: entryForm.reference_number,
+            notes: entryForm.notes,
+            requested_by: currentUserId,
+            status: 'pending',
+          })
 
-      if (error) throw error
+        if (error) throw error
 
-      alert('✅ Stok girişi başarılı!')
+        alert('✅ Kalite kontrol talebi oluşturuldu! Onay bekleniyor.')
+      } else {
+        // Direkt depoya kaydet
+        const { error } = await supabase
+          .from('warehouse_transactions')
+          .insert({
+            company_id: companyId,
+            item_id: entryForm.item_id,
+            type: 'entry',
+            quantity: entryForm.quantity,
+            supplier: entryForm.supplier,
+            reference_number: entryForm.reference_number,
+            notes: entryForm.notes,
+            created_by: currentUserId,
+          })
+
+        if (error) throw error
+
+        alert('✅ Stok girişi başarılı!')
+      }
+
       setShowEntryModal(false)
       resetEntryForm()
       loadData()
@@ -1179,6 +1202,23 @@ export default function WarehousePage() {
                   rows={3}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                 />
+              </div>
+
+              {/* Kalite Kontrol Checkbox */}
+              <div className="flex items-center space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="requiresQC"
+                  checked={entryForm.requiresQC}
+                  onChange={(e) => setEntryForm({ ...entryForm, requiresQC: e.target.checked })}
+                  className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                />
+                <label htmlFor="requiresQC" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                  🔍 Kalite Kontrol Gerekli
+                  <span className="block text-xs text-gray-600 font-normal mt-1">
+                    Bu ürün kalite kontrol onayından sonra depoya girecek
+                  </span>
+                </label>
               </div>
 
               <div className="flex space-x-4">

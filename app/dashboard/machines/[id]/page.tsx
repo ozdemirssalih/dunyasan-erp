@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, TrendingUp, Package, AlertTriangle, Calendar } from 'lucide-react'
+import { ArrowLeft, TrendingUp, AlertTriangle, Calendar } from 'lucide-react'
 
 interface Machine {
   id: string
@@ -13,21 +13,6 @@ interface Machine {
   status: string
   capacity: number
   location: string
-}
-
-interface Transfer {
-  id: string
-  quantity: number
-  item_type: string
-  shift: string
-  notes: string
-  created_at: string
-  transferred_by: string
-  warehouse_item: {
-    item_code: string
-    item_name: string
-    unit: string
-  }
 }
 
 interface DailyProduction {
@@ -52,12 +37,10 @@ export default function MachineDetailPage() {
   const machineId = params.id as string
 
   const [machine, setMachine] = useState<Machine | null>(null)
-  const [transfers, setTransfers] = useState<Transfer[]>([])
   const [dailyProductions, setDailyProductions] = useState<DailyProduction[]>([])
   const [loading, setLoading] = useState(true)
 
   const [stats, setStats] = useState({
-    totalGiven: 0,
     totalProduced: 0,
     totalScrap: 0,
     efficiency: 0
@@ -90,18 +73,6 @@ export default function MachineDetailPage() {
 
       setMachine(machineData)
 
-      // Load transfers (hammadde verilen)
-      const { data: transfersData } = await supabase
-        .from('production_to_machine_transfers')
-        .select(`
-          *,
-          warehouse_item:warehouse_items!production_to_machine_transfers_item_id_fkey(item_code, item_name, unit)
-        `)
-        .eq('machine_id', machineId)
-        .order('created_at', { ascending: false })
-
-      setTransfers(transfersData || [])
-
       // Load daily production records (günlük üretim kayıtları)
       const { data: dailyProductionData, error: dailyError } = await supabase
         .from('machine_daily_production')
@@ -119,7 +90,6 @@ export default function MachineDetailPage() {
       setDailyProductions(dailyProductionData || [])
 
       // Calculate stats
-      const totalGiven = transfersData?.reduce((sum, t) => sum + t.quantity, 0) || 0
       const totalProduced = dailyProductionData?.reduce((sum, d) => sum + d.actual_production, 0) || 0
       const totalScrap = dailyProductionData?.reduce((sum, d) => sum + (d.defect_count || 0), 0) || 0
 
@@ -128,9 +98,9 @@ export default function MachineDetailPage() {
         ? dailyProductionData.reduce((sum, d) => sum + (d.efficiency_rate || 0), 0) / dailyProductionData.length
         : 0
 
-      console.log('📈 Stats:', { totalGiven, totalProduced, totalScrap, avgEfficiency })
+      console.log('📈 Stats:', { totalProduced, totalScrap, avgEfficiency })
 
-      setStats({ totalGiven, totalProduced, totalScrap, efficiency: avgEfficiency })
+      setStats({ totalProduced, totalScrap, efficiency: avgEfficiency })
 
     } catch (error) {
       console.error('Error loading machine data:', error)
@@ -186,17 +156,7 @@ export default function MachineDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Verilen Hammadde</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalGiven.toFixed(2)}</p>
-            </div>
-            <Package className="w-10 h-10 text-blue-500" />
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-md p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -241,59 +201,8 @@ export default function MachineDetailPage() {
         </div>
       </div>
 
-      {/* Transfers and Outputs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Transfers */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Package className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-800">Verilen Hammaddeler</h2>
-            <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-semibold">
-              {transfers.length}
-            </span>
-          </div>
-
-          <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {transfers.length > 0 ? (
-              transfers.map(transfer => (
-                <div key={transfer.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="font-bold text-gray-900">
-                        {transfer.warehouse_item?.item_name}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {transfer.warehouse_item?.item_code}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-blue-600">
-                        {transfer.quantity} {transfer.warehouse_item?.unit}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {transfer.item_type === 'raw_material' ? 'Hammadde' : 'Taşıh'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500 mt-2 pt-2 border-t">
-                    <span>{transfer.shift}</span>
-                    <span>{new Date(transfer.created_at).toLocaleDateString('tr-TR')}</span>
-                  </div>
-                  {transfer.notes && (
-                    <div className="text-xs text-gray-600 mt-1 italic">
-                      Not: {transfer.notes}
-                    </div>
-                  )}
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-gray-500 py-8">Henüz transfer kaydı yok</p>
-            )}
-          </div>
-        </div>
-
-        {/* Daily Production Records */}
-        <div className="bg-white rounded-xl shadow-md p-6">
+      {/* Daily Production Records */}
+      <div className="bg-white rounded-xl shadow-md p-6">
           <div className="flex items-center space-x-2 mb-4">
             <Calendar className="w-6 h-6 text-green-600" />
             <h2 className="text-xl font-bold text-gray-800">Günlük Üretim Kayıtları</h2>
@@ -360,7 +269,6 @@ export default function MachineDetailPage() {
             )}
           </div>
         </div>
-      </div>
     </div>
   )
 }

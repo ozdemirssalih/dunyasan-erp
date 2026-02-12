@@ -823,6 +823,7 @@ export default function WarehousePage() {
       supplier: '',
       reference_number: '',
       notes: '',
+      requiresQC: false,
     })
   }
 

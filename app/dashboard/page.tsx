@@ -67,20 +67,13 @@ export default function DashboardPage() {
       // Calculate stats for each machine
       const machinesWithStats = await Promise.all(
         (machinesData || []).map(async (machine) => {
-          // Verilen hammadde
-          const { data: givenMaterials } = await supabase
-            .from('production_to_machine_transfers')
-            .select('quantity')
-            .eq('machine_id', machine.id)
-
-          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
           // Günlük üretim kayıtlarından veri çek
           const { data: dailyProduction } = await supabase
             .from('machine_daily_production')
-            .select('actual_production, defect_count, efficiency_rate')
+            .select('capacity_target, actual_production, defect_count, efficiency_rate')
             .eq('machine_id', machine.id)
 
+          const totalCapacity = dailyProduction?.reduce((sum, item) => sum + item.capacity_target, 0) || 0
           const totalProduced = dailyProduction?.reduce((sum, item) => sum + item.actual_production, 0) || 0
           const totalScrap = dailyProduction?.reduce((sum, item) => sum + (item.defect_count || 0), 0) || 0
 
@@ -91,7 +84,7 @@ export default function DashboardPage() {
 
           return {
             ...machine,
-            totalGiven,
+            totalCapacity,
             totalProduced,
             totalScrap,
             efficiency: avgEfficiency
@@ -378,12 +371,12 @@ export default function DashboardPage() {
                 {/* Stats */}
                 <div className="space-y-2 mb-3">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Verilen:</span>
-                    <span className="font-semibold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'}</span>
+                    <span className="text-gray-600">Kapasite:</span>
+                    <span className="font-semibold text-blue-600">{machine.totalCapacity?.toFixed(2) || '0.00'}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">Üretilen:</span>
-                    <span className="font-semibold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'}</span>
+                    <span className="font-semibold text-green-600">{machine.totalProduced?.toFixed(2) || '0.00'}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">Fire:</span>

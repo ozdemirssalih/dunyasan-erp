@@ -123,6 +123,7 @@ export default function QualityControlPage() {
         loadWarehouseItems(finalCompanyId),
         loadStats(finalCompanyId),
         loadHistory(finalCompanyId),
+        loadWarehouseQCRequests(finalCompanyId),
       ])
 
     } catch (error) {
@@ -272,6 +273,128 @@ export default function QualityControlPage() {
     ].sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime())
 
     setHistory(allHistory)
+  }
+
+  const loadWarehouseQCRequests = async (companyId: string) => {
+    const { data } = await supabase
+      .from('warehouse_qc_requests')
+      .select(`
+        *,
+        item:warehouse_items(id, code, name, unit),
+        requested_by_user:profiles!warehouse_qc_requests_requested_by_fkey(full_name),
+        reviewed_by_user:profiles!warehouse_qc_requests_reviewed_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .order('requested_at', { ascending: false })
+
+    setWarehouseQCRequests(data || [])
+  }
+
+  const handleApproveWarehouseQC = async (requestId: string, notes: string) => {
+    if (!confirm('Bu depo giriş talebini onaylamak istediğinizden emin misiniz? Stok depoya eklenecek.')) return
+    if (submittingTransfer) return
+
+    try {
+      setSubmittingTransfer(true)
+
+      // Check current status
+      const { data: request, error: requestError } = await supabase
+        .from('warehouse_qc_requests')
+        .select('status')
+        .eq('id', requestId)
+        .single()
+
+      if (requestError) throw requestError
+
+      if (request.status !== 'pending') {
+        alert('⚠️ Bu talep zaten işlenmiş!')
+        return
+      }
+
+      // Update status - database trigger will handle adding to warehouse_transactions
+      const { data: updatedRequest, error: updateError } = await supabase
+        .from('warehouse_qc_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString(),
+          review_notes: notes || 'Onaylandı'
+        })
+        .eq('id', requestId)
+        .eq('status', 'pending')
+        .select()
+
+      if (updateError) throw updateError
+
+      if (!updatedRequest || updatedRequest.length === 0) {
+        alert('⚠️ Bu talep zaten işlenmiş veya bulunamadı!')
+        return
+      }
+
+      alert('✅ Talep onaylandı! Stok depoya eklendi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error approving warehouse QC:', error)
+      alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingTransfer(false)
+    }
+  }
+
+  const handleRejectWarehouseQC = async (requestId: string, notes: string) => {
+    if (!notes) {
+      alert('⚠️ Red nedeni gerekli!')
+      return
+    }
+
+    if (!confirm('Bu depo giriş talebini reddetmek istediğinizden emin misiniz?')) return
+    if (submittingTransfer) return
+
+    try {
+      setSubmittingTransfer(true)
+
+      // Check current status
+      const { data: request, error: requestError } = await supabase
+        .from('warehouse_qc_requests')
+        .select('status')
+        .eq('id', requestId)
+        .single()
+
+      if (requestError) throw requestError
+
+      if (request.status !== 'pending') {
+        alert('⚠️ Bu talep zaten işlenmiş!')
+        return
+      }
+
+      // Update status to rejected
+      const { data: updatedRequest, error: updateError } = await supabase
+        .from('warehouse_qc_requests')
+        .update({
+          status: 'rejected',
+          reviewed_by: currentUserId,
+          reviewed_at: new Date().toISOString(),
+          review_notes: notes
+        })
+        .eq('id', requestId)
+        .eq('status', 'pending')
+        .select()
+
+      if (updateError) throw updateError
+
+      if (!updatedRequest || updatedRequest.length === 0) {
+        alert('⚠️ Bu talep zaten işlenmiş veya bulunamadı!')
+        return
+      }
+
+      alert('❌ Talep reddedildi.')
+      loadData()
+    } catch (error: any) {
+      console.error('Error rejecting warehouse QC:', error)
+      alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingTransfer(false)
+    }
   }
 
   const handleApproveIncoming = async (transferId: string) => {
@@ -629,6 +752,7 @@ export default function QualityControlPage() {
               { id: 'inventory', label: 'KK Deposu', count: qcInventory.length },
               { id: 'incoming', label: 'Gelen Ürünler', count: incomingTransfers.filter((t: any) => t.status === 'pending').length },
               { id: 'outgoing', label: 'Test Sonuçları', count: outgoingTransfers.filter((t: any) => t.status === 'pending').length },
+              { id: 'warehouse-qc', label: 'Depo Kontrol Talepleri', count: warehouseQCRequests.filter((r: any) => r.status === 'pending').length },
               { id: 'history', label: 'Geçmiş', count: history.length },
             ].map((tab) => (
               <button
@@ -863,6 +987,109 @@ export default function QualityControlPage() {
             {outgoingTransfers.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz test sonucu yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* WAREHOUSE QC TAB */}
+        {activeTab === 'warehouse-qc' && (
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-gray-900 mb-2">📦 Depo Giriş Kontrol Talepleri</h3>
+              <p className="text-sm text-gray-700">
+                Depoya kalite kontrol gerektiren ürün giriş talepleri. Onaylandığında otomatik olarak depoya eklenecek.
+              </p>
+            </div>
+
+            {warehouseQCRequests.length > 0 ? (
+              <div className="space-y-3">
+                {warehouseQCRequests.map((request: any) => (
+                  <div key={request.id} className={`border rounded-lg p-4 ${
+                    request.status === 'pending' ? 'bg-yellow-50 border-yellow-300' :
+                    request.status === 'approved' ? 'bg-green-50 border-green-300' :
+                    'bg-red-50 border-red-300'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">
+                          {request.item?.name || 'Ürün Bilgisi Yok'}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Kod: {request.item?.code} | Miktar: {request.quantity} {request.item?.unit}
+                        </div>
+                        {request.supplier && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Tedarikçi: {request.supplier}
+                          </div>
+                        )}
+                        {request.reference_number && (
+                          <div className="text-xs text-gray-500">
+                            İrsaliye: {request.reference_number}
+                          </div>
+                        )}
+                        {request.notes && (
+                          <div className="text-xs text-gray-600 mt-2 italic">
+                            Not: {request.notes}
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500 mt-2">
+                          Talep Eden: {request.requested_by_user?.full_name} • {new Date(request.requested_at).toLocaleString('tr-TR')}
+                        </div>
+                        {request.status !== 'pending' && request.reviewed_by_user && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            {request.status === 'approved' ? '✅ Onaylayan' : '❌ Reddeden'}: {request.reviewed_by_user?.full_name} • {new Date(request.reviewed_at).toLocaleString('tr-TR')}
+                          </div>
+                        )}
+                        {request.review_notes && (
+                          <div className="text-xs text-gray-700 mt-1 font-semibold">
+                            Kontrol Notu: {request.review_notes}
+                          </div>
+                        )}
+                      </div>
+
+                      {request.status === 'pending' && (
+                        <div className="flex space-x-2 ml-4">
+                          <button
+                            onClick={() => {
+                              const notes = prompt('Onay notu (opsiyonel):')
+                              if (notes !== null) {
+                                handleApproveWarehouseQC(request.id, notes)
+                              }
+                            }}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold"
+                          >
+                            ✅ Onayla
+                          </button>
+                          <button
+                            onClick={() => {
+                              const notes = prompt('Red nedeni:')
+                              if (notes) {
+                                handleRejectWarehouseQC(request.id, notes)
+                              }
+                            }}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold"
+                          >
+                            ❌ Reddet
+                          </button>
+                        </div>
+                      )}
+
+                      {request.status !== 'pending' && (
+                        <div className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+                          request.status === 'approved' ? 'bg-green-200 text-green-800' :
+                          'bg-red-200 text-red-800'
+                        }`}>
+                          {request.status === 'approved' ? '✅ Onaylandı' : '❌ Reddedildi'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <p className="text-gray-500">Henüz kalite kontrol talebi yok</p>
               </div>
             )}
           </div>

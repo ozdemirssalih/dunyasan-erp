@@ -69,9 +69,6 @@ BEGIN
     DELETE FROM warehouse_transactions WHERE TRUE;
     RAISE NOTICE '   ✓ warehouse_transactions';
 
-    DELETE FROM material_transfers WHERE TRUE;
-    RAISE NOTICE '   ✓ material_transfers';
-
     -- Proje bağımlı veriler
     DELETE FROM project_machines WHERE TRUE;
     RAISE NOTICE '   ✓ project_machines';

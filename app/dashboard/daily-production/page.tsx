@@ -10,6 +10,7 @@ interface DailyProduction {
   company_id: string
   project_id: string
   machine_id: string
+  employee_id?: string
   production_date: string
   capacity_target: number
   actual_production: number
@@ -27,6 +28,11 @@ interface DailyProduction {
     id: string
     project_code: string
     project_name: string
+  }
+  employee?: {
+    id: string
+    employee_code: string
+    full_name: string
   }
 }
 
@@ -47,11 +53,18 @@ interface ProjectMachineWithCapacity {
   daily_capacity_target: number | null
 }
 
+interface Employee {
+  id: string
+  employee_code: string
+  full_name: string
+}
+
 export default function DailyProductionPage() {
   const [productions, setProductions] = useState<DailyProduction[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
   const [allMachines, setAllMachines] = useState<Machine[]>([]) // Tüm tezgahlar (filtre için)
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [projectMachinesData, setProjectMachinesData] = useState<ProjectMachineWithCapacity[]>([]) // Kapasite bilgisi için
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -68,6 +81,7 @@ export default function DailyProductionPage() {
   const [formData, setFormData] = useState({
     project_id: '',
     machine_id: '',
+    employee_id: '',
     production_date: new Date().toISOString().split('T')[0],
     capacity_target: '',
     actual_production: '',
@@ -114,6 +128,16 @@ export default function DailyProductionPage() {
 
       setAllMachines(machinesData || [])
       setMachines([]) // Başlangıçta boş, proje seçilince dolacak
+
+      // Load employees (aktif personeller)
+      const { data: employeesData } = await supabase
+        .from('employees')
+        .select('id, employee_code, full_name')
+        .eq('company_id', fetchedCompanyId)
+        .eq('status', 'active')
+        .order('full_name', { ascending: true })
+
+      setEmployees(employeesData || [])
 
       // Load production records
       await loadProductions(fetchedCompanyId)
@@ -176,7 +200,8 @@ export default function DailyProductionPage() {
         .select(`
           *,
           machine:machines(id, machine_code, machine_name),
-          project:projects(id, project_code, project_name)
+          project:projects(id, project_code, project_name),
+          employee:employees(id, employee_code, full_name)
         `)
         .eq('company_id', finalCompanyId)
 
@@ -213,6 +238,7 @@ export default function DailyProductionPage() {
         company_id: companyId,
         project_id: formData.project_id,
         machine_id: formData.machine_id,
+        employee_id: formData.employee_id || null,
         production_date: formData.production_date,
         capacity_target: parseInt(formData.capacity_target),
         actual_production: parseInt(formData.actual_production),
@@ -247,11 +273,18 @@ export default function DailyProductionPage() {
     }
   }
 
-  const handleEdit = (production: DailyProduction) => {
+  const handleEdit = async (production: DailyProduction) => {
     setEditingId(production.id)
+
+    // Proje seçildiğinde o projeye ait tezgahları yükle
+    if (production.project_id) {
+      await loadProjectMachines(production.project_id)
+    }
+
     setFormData({
       project_id: production.project_id,
       machine_id: production.machine_id,
+      employee_id: production.employee_id || '',
       production_date: production.production_date,
       capacity_target: production.capacity_target.toString(),
       actual_production: production.actual_production.toString(),
@@ -284,6 +317,7 @@ export default function DailyProductionPage() {
     setFormData({
       project_id: '',
       machine_id: '',
+      employee_id: '',
       production_date: new Date().toISOString().split('T')[0],
       capacity_target: '',
       actual_production: '',
@@ -447,6 +481,11 @@ export default function DailyProductionPage() {
                         })}
                         {production.shift && ` - ${production.shift}`}
                       </div>
+                      {production.employee && (
+                        <div className="text-xs text-green-700 font-medium mt-1">
+                          👤 {production.employee.full_name}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="text-right">
@@ -591,6 +630,27 @@ export default function DailyProductionPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* Employee Selection */}
+                {formData.machine_id && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Çalışan Personel
+                    </label>
+                    <select
+                      value={formData.employee_id}
+                      onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Personel Seçiniz (Opsiyonel)</option>
+                      {employees.map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.full_name} ({employee.employee_code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Production Date and Shift */}
                 <div className="grid grid-cols-2 gap-4">

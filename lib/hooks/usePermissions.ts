@@ -21,6 +21,7 @@ export interface Permissions {
   quality_control?: Permission
   projects?: Permission
   customers?: Permission
+  employees?: Permission
   accounting?: Permission
   invoices?: Permission
   accounts?: Permission

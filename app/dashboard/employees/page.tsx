@@ -20,6 +20,8 @@ interface Employee {
   status: string
   notes?: string
   created_at: string
+  efficiency_rate?: number
+  total_productions?: number
 }
 
 export default function EmployeesPage() {
@@ -69,7 +71,28 @@ export default function EmployeesPage() {
         .eq('company_id', fetchedCompanyId)
         .order('employee_code', { ascending: true })
 
-      setEmployees(data || [])
+      // Her personel için verimlilik hesapla
+      const employeesWithEfficiency = await Promise.all(
+        (data || []).map(async (employee) => {
+          const { data: productions } = await supabase
+            .from('machine_daily_production')
+            .select('efficiency_rate')
+            .eq('employee_id', employee.id)
+
+          const totalProductions = productions?.length || 0
+          const avgEfficiency = productions && productions.length > 0
+            ? productions.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / productions.length
+            : 0
+
+          return {
+            ...employee,
+            efficiency_rate: avgEfficiency,
+            total_productions: totalProductions
+          }
+        })
+      )
+
+      setEmployees(employeesWithEfficiency)
     } catch (error) {
       console.error('Error loading employees:', error)
     } finally {
@@ -344,6 +367,39 @@ export default function EmployeesPage() {
                   </div>
                 )}
               </div>
+
+              {/* Verimlilik Barı */}
+              {employee.status === 'active' && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-700">Verimlilik</span>
+                    <span className={`text-sm font-bold ${
+                      (employee.efficiency_rate || 0) >= 80 ? 'text-green-600' :
+                      (employee.efficiency_rate || 0) >= 60 ? 'text-yellow-600' :
+                      (employee.efficiency_rate || 0) > 0 ? 'text-red-600' :
+                      'text-gray-400'
+                    }`}>
+                      {employee.efficiency_rate ? `%${employee.efficiency_rate.toFixed(1)}` : 'Veri Yok'}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-500 ${
+                        (employee.efficiency_rate || 0) >= 80 ? 'bg-green-500' :
+                        (employee.efficiency_rate || 0) >= 60 ? 'bg-yellow-500' :
+                        (employee.efficiency_rate || 0) > 0 ? 'bg-red-500' :
+                        'bg-gray-300'
+                      }`}
+                      style={{ width: `${Math.min(employee.efficiency_rate || 0, 100)}%` }}
+                    />
+                  </div>
+                  {employee.total_productions !== undefined && employee.total_productions > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {employee.total_productions} üretim kaydı
+                    </p>
+                  )}
+                </div>
+              )}
 
               {employee.notes && (
                 <div className="mt-4 pt-4 border-t border-gray-200">

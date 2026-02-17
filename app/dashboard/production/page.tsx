@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
-import { Package, FlaskConical, Factory, ClipboardList, TestTube2, Send } from 'lucide-react'
+import { Package, FlaskConical, ClipboardList, TestTube2, Send, Factory } from 'lucide-react'
 
-type Tab = 'inventory' | 'requests' | 'assignments' | 'outputs' | 'transfers' | 'qc-transfers' | 'history'
+type Tab = 'inventory' | 'requests' | 'outputs' | 'transfers' | 'qc-transfers' | 'history'
 
 interface ProductionInventoryItem {
   id: string
@@ -61,27 +61,6 @@ interface MaterialRequest {
   requested_at: string
 }
 
-interface Machine {
-  id: string
-  machine_name: string
-  machine_code: string
-  status: string
-  project_id?: string | null
-}
-
-interface MaterialAssignment {
-  id: string
-  machine_name: string
-  machine_code: string
-  item_name: string
-  item_code: string
-  quantity: number
-  unit: string
-  assigned_by_name: string
-  assigned_date: string
-  shift: string
-}
-
 interface ProductionOutput {
   id: string
   machine_name: string
@@ -109,8 +88,6 @@ export default function ProductionPage() {
   // Data states
   const [productionInventory, setProductionInventory] = useState<ProductionInventoryItem[]>([])
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([])
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [assignments, setAssignments] = useState<MaterialAssignment[]>([])
   const [outputs, setOutputs] = useState<ProductionOutput[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([])
@@ -132,7 +109,6 @@ export default function ProductionPage() {
 
   // Modal states
   const [showRequestModal, setShowRequestModal] = useState(false)
-  const [showAssignmentModal, setShowAssignmentModal] = useState(false)
   const [showOutputModal, setShowOutputModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showManualStockModal, setShowManualStockModal] = useState(false)
@@ -140,17 +116,10 @@ export default function ProductionPage() {
 
   // Submitting states (çift tıklama engellemek için)
   const [submittingRequest, setSubmittingRequest] = useState(false)
-  const [submittingAssignment, setSubmittingAssignment] = useState(false)
   const [submittingOutput, setSubmittingOutput] = useState(false)
   const [submittingTransfer, setSubmittingTransfer] = useState(false)
   const [submittingManualStock, setSubmittingManualStock] = useState(false)
   const [submittingQCTransfer, setSubmittingQCTransfer] = useState(false)
-
-  // Son tezgaha verilen hammaddeyi takip et (ürün kaydında otomatik seçilmesi için)
-  const [lastAssignedMaterial, setLastAssignedMaterial] = useState<{
-    machine_id: string
-    item_id: string
-  } | null>(null)
 
   // Form states
   const [requestForm, setRequestForm] = useState({
@@ -160,19 +129,8 @@ export default function ProductionPage() {
     reason: '',
   })
 
-  const [assignmentForm, setAssignmentForm] = useState({
-    machine_id: '',
-    item_id: '',
-    item_type: '', // raw_material veya tashih
-    quantity: 0,
-    shift: 'sabah',
-    notes: '',
-    project_id: '',
-    project_part_id: '',
-  })
-
   const [outputForm, setOutputForm] = useState({
-    machine_id: '',
+    input_item_id: '',
     output_item_id: '',
     quantity: 0,
     fire_quantity: 0,
@@ -213,17 +171,6 @@ export default function ProductionPage() {
 
     return () => clearInterval(interval)
   }, [])
-
-  // Ürün çıktısı formunda tezgah seçildiğinde, son verilen hammaddeyi otomatik seç
-  useEffect(() => {
-    if (outputForm.machine_id && lastAssignedMaterial && lastAssignedMaterial.machine_id === outputForm.machine_id) {
-      // Eğer bu tezgaha son atanan hammadde varsa, otomatik seç
-      setOutputForm(prev => ({
-        ...prev,
-        output_item_id: lastAssignedMaterial.item_id
-      }))
-    }
-  }, [outputForm.machine_id, lastAssignedMaterial])
 
   const loadData = async (silent = false) => {
     try {
@@ -301,8 +248,6 @@ export default function ProductionPage() {
       await Promise.all([
         loadProductionInventory(finalCompanyId),
         loadMaterialRequests(finalCompanyId),
-        loadMachines(finalCompanyId),
-        loadAssignments(finalCompanyId),
         loadOutputs(finalCompanyId),
         loadWarehouseItems(finalCompanyId),
         loadWarehouseTransfers(finalCompanyId),
@@ -405,96 +350,6 @@ export default function ProductionPage() {
     })) || []
 
     setMaterialRequests(requestsData)
-  }
-
-  const loadMachines = async (companyId: string) => {
-    console.log('🔍 [PRODUCTION] loadMachines çağrıldı, companyId:', companyId)
-
-    const { data, error } = await supabase
-      .from('machines')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('machine_code')
-
-    console.log('🏭 [PRODUCTION] machines sorgu sonucu:', { data, error, count: data?.length })
-
-    if (error) {
-      console.error('❌ [PRODUCTION] Machines yükleme hatası:', error)
-    }
-
-    console.log('✅ [PRODUCTION] Machines state güncelleniyor:', data?.length || 0, 'tezgah')
-    setMachines(data || [])
-  }
-
-  const loadAssignments = async (companyId: string) => {
-    console.log('🔍 [ASSIGNMENTS] loadAssignments çağrıldı, companyId:', companyId)
-
-    // Önce basit sorgu ile kayıtları çek
-    const { data: transfers, error: transferError } = await supabase
-      .from('production_to_machine_transfers')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('id', { ascending: false })
-      .limit(100)
-
-    if (transferError) {
-      console.error('❌ [ASSIGNMENTS] Sorgu hatası:', transferError)
-      setAssignments([])
-      return
-    }
-
-    console.log('✅ [ASSIGNMENTS] Transfer kayıtları:', transfers?.length)
-
-    if (!transfers || transfers.length === 0) {
-      console.log('⚠️ [ASSIGNMENTS] Hiç transfer kaydı bulunamadı')
-      setAssignments([])
-      return
-    }
-
-    // Machine ID'lerini topla
-    const machineIds = Array.from(new Set(transfers.map(t => t.machine_id).filter(Boolean)))
-    const itemIds = Array.from(new Set(transfers.map(t => t.item_id).filter(Boolean)))
-
-    console.log('📊 [ASSIGNMENTS] Machine IDs:', machineIds.length, 'Item IDs:', itemIds.length)
-
-    // Tezgahları çek
-    const { data: machines } = await supabase
-      .from('machines')
-      .select('id, machine_name, machine_code')
-      .in('id', machineIds)
-
-    // Ürünleri çek
-    const { data: items } = await supabase
-      .from('warehouse_items')
-      .select('id, code, name, unit')
-      .in('id', itemIds)
-
-    console.log('✅ [ASSIGNMENTS] Machines:', machines?.length, 'Items:', items?.length)
-
-    // Map oluştur
-    const machineMap = new Map(machines?.map(m => [m.id, m]) || [])
-    const itemMap = new Map(items?.map(i => [i.id, i]) || [])
-
-    const assignmentsData = transfers.map((a: any) => {
-      const machine = machineMap.get(a.machine_id)
-      const item = itemMap.get(a.item_id)
-
-      return {
-        id: a.id,
-        machine_name: machine?.machine_name || 'Bilinmeyen Tezgah',
-        machine_code: machine?.machine_code || '-',
-        item_name: item?.name || 'Bilinmeyen Ürün',
-        item_code: item?.code || '-',
-        quantity: a.quantity,
-        unit: item?.unit || 'adet',
-        assigned_by_name: '',
-        assigned_date: a.created_at || new Date().toISOString(),
-        shift: a.shift || '-'
-      }
-    })
-
-    console.log('✅ [ASSIGNMENTS] State güncelleniyor:', assignmentsData.length, 'kayıt')
-    setAssignments(assignmentsData)
   }
 
   const loadOutputs = async (companyId: string) => {
@@ -812,74 +667,6 @@ export default function ProductionPage() {
     }
   }
 
-  const handleCreateAssignment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!companyId) return
-    if (submittingAssignment) return // Çift tıklama engelle
-
-    try {
-      setSubmittingAssignment(true)
-
-      // 1. Üretim deposundan seçilen item_type stoğunu kontrol et
-      const { data: stockRecord } = await supabase
-        .from('production_inventory')
-        .select('current_stock, item_type')
-        .eq('company_id', companyId)
-        .eq('item_id', assignmentForm.item_id)
-        .eq('item_type', assignmentForm.item_type)
-        .maybeSingle()
-
-      console.log('📦 Seçilen stok:', stockRecord)
-
-      if (!stockRecord) {
-        alert(`❌ Seçilen ürün bulunamadı!\n\nitem_id: ${assignmentForm.item_id}\nitem_type: ${assignmentForm.item_type}`)
-        return
-      }
-
-      console.log(`✅ ${stockRecord.item_type} stoğu: ${stockRecord.current_stock}, İstenen: ${assignmentForm.quantity}`)
-
-      if (stockRecord.current_stock < assignmentForm.quantity) {
-        alert(`❌ Yetersiz stok!\n\nMevcut: ${stockRecord.current_stock}\nİstenen: ${assignmentForm.quantity}\nTip: ${stockRecord.item_type === 'raw_material' ? 'Hammadde' : 'Taşıh'}`)
-        return
-      }
-
-      // 2. Transfer kaydını oluştur (trigger otomatik: seçilen item_type'dan düşer, machine_inventory'ye ekler)
-      const { error } = await supabase
-        .from('production_to_machine_transfers')
-        .insert({
-          company_id: companyId,
-          machine_id: assignmentForm.machine_id,
-          item_id: assignmentForm.item_id,
-          item_type: assignmentForm.item_type, // Kullanıcının seçtiği tip (raw_material veya tashih)
-          quantity: assignmentForm.quantity,
-          shift: assignmentForm.shift,
-          notes: assignmentForm.notes,
-          transferred_by: currentUserId,
-          project_id: assignmentForm.project_id || null,
-          project_part_id: assignmentForm.project_part_id || null,
-        })
-
-      if (error) throw error
-
-      // Son atanan hammaddeyi kaydet (ürün kaydında otomatik seçilmesi için)
-      setLastAssignedMaterial({
-        machine_id: assignmentForm.machine_id,
-        item_id: assignmentForm.item_id
-      })
-
-      setShowAssignmentModal(false)
-      resetAssignmentForm()
-      await loadData()
-
-      alert('✅ Hammadde tezgaha verildi ve stoktan düşüldü!')
-    } catch (error: any) {
-      console.error('Error creating assignment:', error)
-      alert('❌ Hata: ' + error.message)
-    } finally {
-      setSubmittingAssignment(false)
-    }
-  }
-
   const handleCreateOutput = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
@@ -888,52 +675,44 @@ export default function ProductionPage() {
     try {
       setSubmittingOutput(true)
 
-      // 1. Tezgahtaki MEVCUT hammadde stoğunu kontrol et (machine_inventory'den)
-      // En son güncellenen (son eklenen) hammaddeyi kullan
-      const { data: machineStock, error: stockError } = await supabase
-        .from('machine_inventory')
-        .select('item_id, current_stock')
-        .eq('machine_id', outputForm.machine_id)
+      if (!outputForm.input_item_id) {
+        alert('❌ Lütfen kullanılan hammaddeyi seçin!')
+        return
+      }
+
+      // 1. Üretim deposundaki hammadde stoğunu kontrol et
+      const { data: stockRecord, error: stockError } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
         .eq('company_id', companyId)
-        .gt('current_stock', 0)
-        .order('updated_at', { ascending: false })
-        .limit(1)
+        .eq('item_id', outputForm.input_item_id)
+        .eq('item_type', 'raw_material')
         .maybeSingle()
 
       if (stockError) {
-        console.error('Tezgah stok sorgu hatası:', stockError)
+        console.error('Stok sorgu hatası:', stockError)
         alert('❌ Hata: ' + stockError.message)
         return
       }
 
-      if (!machineStock) {
-        alert('❌ Bu tezgahta kullanılabilir hammadde yok!')
+      if (!stockRecord) {
+        alert('❌ Seçilen hammadde üretim deposunda bulunamadı!')
         return
       }
 
-      const rawMaterialId = machineStock.item_id
-      const availableStock = machineStock.current_stock
+      const availableStock = stockRecord.current_stock
       const usedQuantity = outputForm.quantity + outputForm.fire_quantity
 
-      // Kullanılacak miktar mevcut stoktan fazla olamaz
       if (usedQuantity > availableStock) {
-        alert(`❌ Kullanılan miktar tezgahtaki stoğu aşıyor!\n\n` +
-              `Tezgahtaki Mevcut Stok: ${availableStock} birim\n` +
-              `Kullanmak İstediğiniz: ${usedQuantity} birim\n` +
-              `  → Mamül: ${outputForm.quantity}\n` +
-              `  → Fire: ${outputForm.fire_quantity}\n\n` +
-              `Lütfen miktarı azaltın veya tezgaha daha fazla hammadde verin.`)
+        alert(`❌ Kullanılan miktar mevcut stoğu aşıyor!\n\nMevcut Stok: ${availableStock} birim\nKullanmak İstediğiniz: ${usedQuantity} birim\n  → Mamül: ${outputForm.quantity}\n  → Fire: ${outputForm.fire_quantity}`)
         return
       }
-
-      const remainingQuantity = availableStock - usedQuantity
 
       // 2. Üretim kaydını oluştur
       const { error: outputError } = await supabase
         .from('production_outputs')
         .insert({
           company_id: companyId,
-          machine_id: outputForm.machine_id,
           output_item_id: outputForm.output_item_id,
           quantity: outputForm.quantity,
           shift: outputForm.shift,
@@ -946,61 +725,44 @@ export default function ProductionPage() {
 
       if (outputError) throw outputError
 
-      // 3. Eğer fire varsa fire kaydını oluştur
+      // 3. Hammaddeyi stoktan düş
+      const { error: deductError } = await supabase
+        .from('production_inventory')
+        .update({
+          current_stock: availableStock - usedQuantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('company_id', companyId)
+        .eq('item_id', outputForm.input_item_id)
+        .eq('item_type', 'raw_material')
+
+      if (deductError) throw deductError
+
+      // 4. Eğer fire varsa fire kaydını oluştur
       if (outputForm.fire_quantity > 0) {
         const { error: fireError } = await supabase
           .from('production_scrap_records')
           .insert({
             company_id: companyId,
-            source_type: 'machine',
-            machine_id: outputForm.machine_id,
-            item_id: rawMaterialId,
+            source_type: 'production',
+            item_id: outputForm.input_item_id,
             quantity: outputForm.fire_quantity,
             scrap_reason: outputForm.fire_reason,
             notes: `Üretim sırasında fire - ${outputForm.notes || ''}`,
             recorded_by: currentUserId,
           })
 
-        if (fireError) throw fireError
+        if (fireError) console.error('Fire kaydı hatası:', fireError)
       }
-
-      // 4. Tezgahı tamamen boşalt (kalan hammadde depoya dönecek)
-      const { error: machineStockError } = await supabase
-        .from('machine_inventory')
-        .update({
-          current_stock: 0, // Tezgahı tamamen boşalt
-          updated_at: new Date().toISOString()
-        })
-        .eq('machine_id', outputForm.machine_id)
-        .eq('company_id', companyId)
-        .eq('item_id', rawMaterialId)
-
-      if (machineStockError) {
-        console.error('❌ [PRODUCTION] Tezgah stoğu güncelleme hatası:', machineStockError)
-        throw machineStockError
-      }
-      console.log('✅ [PRODUCTION] Tezgah tamamen boşaltıldı:', {
-        used: usedQuantity,
-        toWarehouse: remainingQuantity
-      })
 
       // 5. Bitmiş ürünü stoğa ekle
-      console.log('✨ [PRODUCTION] Bitmiş ürün stoğa ekleniyor:', {
-        item_id: outputForm.output_item_id,
-        quantity: outputForm.quantity
-      })
-
-      const { data: existingFinished, error: checkFinishedError } = await supabase
+      const { data: existingFinished } = await supabase
         .from('production_inventory')
         .select('current_stock')
         .eq('company_id', companyId)
         .eq('item_id', outputForm.output_item_id)
         .eq('item_type', 'finished_product')
         .maybeSingle()
-
-      if (checkFinishedError) {
-        console.error('❌ [PRODUCTION] Bitmiş ürün kontrolü hatası:', checkFinishedError)
-      }
 
       if (existingFinished) {
         const { error: updateFinishedError } = await supabase
@@ -1013,11 +775,7 @@ export default function ProductionPage() {
           .eq('item_id', outputForm.output_item_id)
           .eq('item_type', 'finished_product')
 
-        if (updateFinishedError) {
-          console.error('❌ [PRODUCTION] Bitmiş ürün güncelleme hatası:', updateFinishedError)
-          throw updateFinishedError
-        }
-        console.log('✅ [PRODUCTION] Bitmiş ürün stoku güncellendi')
+        if (updateFinishedError) throw updateFinishedError
       } else {
         const { error: insertFinishedError } = await supabase
           .from('production_inventory')
@@ -1029,92 +787,23 @@ export default function ProductionPage() {
             notes: 'Üretimden gelen bitmiş ürün'
           })
 
-        if (insertFinishedError) {
-          console.error('❌ [PRODUCTION] Bitmiş ürün ekleme hatası:', insertFinishedError)
-          throw insertFinishedError
-        }
-        console.log('✅ [PRODUCTION] Yeni bitmiş ürün kaydı oluşturuldu')
+        if (insertFinishedError) throw insertFinishedError
       }
 
-      // 6. Kalan hammaddeyi üretim deposuna geri ekle
-      if (remainingQuantity > 0) {
-        console.log('↩️ [PRODUCTION] Geri dönen hammadde ekleniyor:', {
-          rawMaterialId,
-          remainingQuantity,
-          companyId
-        })
-
-        const { data: existingRaw, error: checkError } = await supabase
-          .from('production_inventory')
-          .select('current_stock')
-          .eq('company_id', companyId)
-          .eq('item_id', rawMaterialId)
-          .eq('item_type', 'raw_material')
-          .maybeSingle()
-
-        if (checkError) {
-          console.error('❌ [PRODUCTION] Mevcut stok kontrolü hatası:', checkError)
-        }
-
-        if (existingRaw) {
-          console.log('📝 [PRODUCTION] Mevcut stok bulundu:', existingRaw.current_stock, '+ yeni:', remainingQuantity, '=', existingRaw.current_stock + remainingQuantity)
-
-          const { error: updateError } = await supabase
-            .from('production_inventory')
-            .update({
-              current_stock: existingRaw.current_stock + remainingQuantity,
-              updated_at: new Date().toISOString()
-            })
-            .eq('company_id', companyId)
-            .eq('item_id', rawMaterialId)
-            .eq('item_type', 'raw_material')
-
-          if (updateError) {
-            console.error('❌ [PRODUCTION] Stok güncelleme hatası:', updateError)
-            throw updateError
-          }
-          console.log('✅ [PRODUCTION] Stok güncellendi')
-        } else {
-          console.log('📝 [PRODUCTION] Yeni kayıt oluşturuluyor')
-
-          const { error: insertError } = await supabase
-            .from('production_inventory')
-            .insert({
-              company_id: companyId,
-              item_id: rawMaterialId,
-              current_stock: remainingQuantity,
-              item_type: 'raw_material',
-              notes: 'Tezgahtan kalan hammadde'
-            })
-
-          if (insertError) {
-            console.error('❌ [PRODUCTION] Stok ekleme hatası:', insertError)
-            throw insertError
-          }
-          console.log('✅ [PRODUCTION] Yeni stok kaydı oluşturuldu')
-        }
-      }
-
-      // Başarı mesajı oluştur
+      // Başarı mesajı
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
-      successMsg += `\n\n📊 Tezgah İşlemi:`
-      successMsg += `\n  • Başlangıç: ${availableStock} birim`
-      successMsg += `\n  • Kullanılan: ${usedQuantity} birim`
-      successMsg += `\n  • Tezgah Durumu: BOŞALTILDI ✓`
       successMsg += `\n\n✨ Üretim Sonucu:`
       successMsg += `\n  • Mamül: ${outputForm.quantity} birim`
       if (outputForm.fire_quantity > 0) {
         successMsg += `\n  • Fire: ${outputForm.fire_quantity} birim`
       }
-      if (remainingQuantity > 0) {
-        successMsg += `\n\n↩️ ${remainingQuantity} birim hammadde depoya döndü`
-      }
-      // Başarı mesajını göster ve verileri yenile
+      successMsg += `\n  • Kalan hammadde: ${availableStock - usedQuantity} birim`
+
       setShowOutputModal(false)
       resetOutputForm()
-      await loadData() // ⚠️ await ekledik - stoklar güncellenmeden devam etmesin!
+      await loadData()
 
-      alert(successMsg) // Veriler yenilendikten SONRA mesaj göster
+      alert(successMsg)
     } catch (error: any) {
       console.error('Error creating output:', error)
       alert('❌ Hata: ' + error.message)
@@ -1132,23 +821,9 @@ export default function ProductionPage() {
     })
   }
 
-  const resetAssignmentForm = () => {
-    setAssignmentForm({
-      machine_id: '',
-      item_id: '',
-      item_type: '',
-      quantity: 0,
-      shift: 'sabah',
-      notes: '',
-      project_id: '',
-      project_part_id: '',
-    })
-    setProjectParts([])
-  }
-
   const resetOutputForm = () => {
     setOutputForm({
-      machine_id: '',
+      input_item_id: '',
       output_item_id: '',
       quantity: 0,
       fire_quantity: 0,
@@ -1475,18 +1150,6 @@ export default function ProductionPage() {
                   {materialRequests.filter(r => r.status === 'pending').length}
                 </span>
               )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('assignments')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                activeTab === 'assignments'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Factory className="w-4 h-4" />
-              <span>Tezgaha Hammadde Ver</span>
             </button>
 
             <button
@@ -1825,71 +1488,6 @@ export default function ProductionPage() {
         )}
 
         {/* ASSIGNMENTS TAB */}
-        {activeTab === 'assignments' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <p className="text-gray-600">32 tezgaha hammadde dağıtımı</p>
-              {canCreate('production') && (
-                <button
-                  onClick={() => setShowAssignmentModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold"
-                >
-                  + Tezgaha Hammadde Ver
-                </button>
-              )}
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tezgah</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Hammadde</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Vardiya</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Veren</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {assignments.map(assignment => (
-                    <tr key={assignment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {new Date(assignment.assigned_date).toLocaleDateString('tr-TR')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{assignment.machine_name}</div>
-                        <div className="text-xs text-gray-500">{assignment.machine_code}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{assignment.item_name}</div>
-                        <div className="text-xs text-gray-500">{assignment.item_code}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                        {assignment.quantity} {assignment.unit}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                          {assignment.shift}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {assignment.assigned_by_name}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {assignments.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">Henüz hammadde dağıtımı yapılmamış</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* OUTPUTS TAB */}
         {activeTab === 'outputs' && (
           <div className="space-y-4">
@@ -2349,179 +1947,6 @@ export default function ProductionPage() {
         )}
 
         {/* Assignment Modal */}
-        {showAssignmentModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">Tezgaha Hammadde Ver</h3>
-
-              <form onSubmit={handleCreateAssignment} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Tezgah <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={assignmentForm.machine_id}
-                      onChange={(e) => {
-                        const selectedMachine = machines.find(m => m.id === e.target.value)
-                        setAssignmentForm({
-                          ...assignmentForm,
-                          machine_id: e.target.value,
-                          project_id: selectedMachine?.project_id || '',
-                          project_part_id: ''
-                        })
-                        if (selectedMachine?.project_id) {
-                          loadProjectParts(selectedMachine.project_id)
-                        } else {
-                          setProjectParts([])
-                        }
-                      }}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="">Seçin...</option>
-                      {machines.map(machine => (
-                        <option key={machine.id} value={machine.id}>
-                          {machine.machine_code} - {machine.machine_name}
-                          {machine.project_id && ' (Projeye atanmış)'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Hammadde/Taşıh <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={`${assignmentForm.item_id}|${assignmentForm.item_type}`}
-                      onChange={(e) => {
-                        const [itemId, itemType] = e.target.value.split('|')
-                        setAssignmentForm({ ...assignmentForm, item_id: itemId, item_type: itemType })
-                      }}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="|">Seçin...</option>
-                      {productionInventory
-                        .filter(item => item.item_type === 'raw_material' || item.item_type === 'tashih')
-                        .map(item => (
-                          <option key={item.id} value={`${item.item_id}|${item.item_type}`}>
-                            {item.item_code} - {item.item_name} ({item.item_type === 'raw_material' ? 'Hammadde' : 'Taşıh'}) - Stok: {item.current_stock} {item.unit}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Miktar <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={assignmentForm.quantity}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, quantity: parseFloat(e.target.value) })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Vardiya <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={assignmentForm.shift}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, shift: e.target.value })}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    >
-                      <option value="sabah">Sabah</option>
-                      <option value="oglen">Öğlen</option>
-                      <option value="gece">Gece</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Proje {assignmentForm.machine_id && assignmentForm.project_id && '(Tezgahtan otomatik)'}
-                    </label>
-                    <select
-                      value={assignmentForm.project_id}
-                      onChange={(e) => {
-                        setAssignmentForm({ ...assignmentForm, project_id: e.target.value, project_part_id: '' })
-                        if (e.target.value) {
-                          loadProjectParts(e.target.value)
-                        } else {
-                          setProjectParts([])
-                        }
-                      }}
-                      disabled={!!(assignmentForm.machine_id && assignmentForm.project_id)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Proje Seçilmedi</option>
-                      {projects.map(project => (
-                        <option key={project.id} value={project.id}>
-                          {project.project_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Parça (Opsiyonel)
-                    </label>
-                    <select
-                      value={assignmentForm.project_part_id}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, project_part_id: e.target.value })}
-                      disabled={!assignmentForm.project_id}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
-                    >
-                      <option value="">Parça Seçilmedi</option>
-                      {projectParts.map(part => (
-                        <option key={part.id} value={part.id}>
-                          {part.part_code} - {part.part_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
-                    <textarea
-                      value={assignmentForm.notes}
-                      onChange={(e) => setAssignmentForm({ ...assignmentForm, notes: e.target.value })}
-                      rows={2}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex space-x-4 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
-                  >
-                    Tezgaha Ver
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAssignmentModal(false)
-                      resetAssignmentForm()
-                    }}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
         {/* Output Modal */}
         {showOutputModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -2532,34 +1957,22 @@ export default function ProductionPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Tezgah <span className="text-red-500">*</span>
+                      Kullanılan Hammadde <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={outputForm.machine_id}
-                      onChange={(e) => {
-                        const selectedMachine = machines.find(m => m.id === e.target.value)
-                        setOutputForm({
-                          ...outputForm,
-                          machine_id: e.target.value,
-                          project_id: selectedMachine?.project_id || '',
-                          project_part_id: ''
-                        })
-                        if (selectedMachine?.project_id) {
-                          loadProjectParts(selectedMachine.project_id)
-                        } else {
-                          setProjectParts([])
-                        }
-                      }}
+                      value={outputForm.input_item_id}
+                      onChange={(e) => setOutputForm({ ...outputForm, input_item_id: e.target.value })}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
                       <option value="">Seçin...</option>
-                      {machines.map(machine => (
-                        <option key={machine.id} value={machine.id}>
-                          {machine.machine_code} - {machine.machine_name}
-                          {machine.project_id && ' (Projeye atanmış)'}
-                        </option>
-                      ))}
+                      {productionInventory
+                        .filter(item => item.item_type === 'raw_material')
+                        .map(item => (
+                          <option key={item.id} value={item.item_id}>
+                            {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -2614,7 +2027,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Proje {outputForm.machine_id && outputForm.project_id && '(Tezgahtan otomatik)'}
+                      Proje
                     </label>
                     <select
                       value={outputForm.project_id}
@@ -2626,7 +2039,6 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
-                      disabled={!!(outputForm.machine_id && outputForm.project_id)}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Proje Seçilmedi</option>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 
-type Tab = 'stok' | 'giris' | 'cikis' | 'uretim'
+type Tab = 'stok' | 'giris' | 'cikis'
 
 interface InventoryItem {
   id: string
@@ -19,16 +19,6 @@ interface InventoryItem {
   created_at: string
 }
 
-interface ProductionInventoryItem {
-  id: string
-  item_id: string
-  item_code: string
-  item_name: string
-  item_type: string
-  current_stock: number
-  unit: string
-}
-
 interface Supplier {
   id: string
   company_name: string
@@ -38,7 +28,6 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<Tab>('stok')
   const [items, setItems] = useState<InventoryItem[]>([])
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
-  const [productionInventory, setProductionInventory] = useState<ProductionInventoryItem[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -47,8 +36,6 @@ export default function InventoryPage() {
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-
   const [formData, setFormData] = useState<{
     product_code: string
     product_name: string
@@ -151,15 +138,6 @@ export default function InventoryPage() {
 
       setItems(inventoryData || [])
       setFilteredItems(inventoryData || [])
-
-      // Load production inventory
-      const { data: prodInvData } = await supabase
-        .from('production_inventory')
-        .select('*')
-        .eq('company_id', finalCompanyId)
-        .order('item_code', { ascending: true })
-
-      setProductionInventory(prodInvData || [])
 
       // Load suppliers
       const { data: suppliersData } = await supabase
@@ -352,24 +330,6 @@ export default function InventoryPage() {
     return { label: 'Normal', color: 'text-green-600', bg: 'bg-green-100', bar: 100 }
   }
 
-  const getProductionTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      raw_material: 'Hammadde',
-      finished_product: 'Bitmiş Ürün',
-      semi_product: 'Yarı Mamul',
-    }
-    return labels[type] || type
-  }
-
-  const getProductionTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      raw_material: 'bg-blue-100 text-blue-700',
-      finished_product: 'bg-green-100 text-green-700',
-      semi_product: 'bg-purple-100 text-purple-700',
-    }
-    return colors[type] || 'bg-gray-100 text-gray-700'
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -486,7 +446,6 @@ export default function InventoryPage() {
               { id: 'stok', label: 'Stok Listesi', count: items.length },
               { id: 'giris', label: 'Stok Girişi', icon: '↓' },
               { id: 'cikis', label: 'Stok Çıkışı', icon: '↑' },
-              { id: 'uretim', label: 'Üretim Deposu', count: productionInventory.length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -905,60 +864,6 @@ export default function InventoryPage() {
                 </button>
               </div>
             </form>
-          </div>
-        )}
-
-        {/* TAB: ÜRETİM DEPOSU */}
-        {activeTab === 'uretim' && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm text-blue-800">
-                <span className="font-semibold">Üretim Deposu:</span> Üretime gönderilen hammaddeler ve üretimden çıkan bitmiş ürünler burada takip edilir.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="font-bold text-gray-800">Üretim Deposu Stokları</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Kod</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ürün Adı</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tip</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Mevcut Stok</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {productionInventory.length > 0 ? productionInventory.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-semibold text-gray-800">{item.item_code}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{item.item_name}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getProductionTypeColor(item.item_type)}`}>
-                            {getProductionTypeLabel(item.item_type)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`text-lg font-bold ${item.current_stock <= 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                            {item.current_stock}
-                          </span>
-                          <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                          Üretim deposunda henüz stok yok. Stok Çıkışı → Üretime Gönder işlemi yapın.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         )}
 

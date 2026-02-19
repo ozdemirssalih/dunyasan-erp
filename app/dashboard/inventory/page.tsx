@@ -21,15 +21,11 @@ interface UnifiedItem {
   source: 'inventory' | 'warehouse' | 'production'
 }
 
-interface WarehouseCategory {
-  id: string
-  name: string
-}
 
 export default function InventoryPage() {
   const [allItems, setAllItems] = useState<UnifiedItem[]>([])
   const [filteredItems, setFilteredItems] = useState<UnifiedItem[]>([])
-  const [categories, setCategories] = useState<WarehouseCategory[]>([])
+
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
@@ -42,18 +38,10 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<UnifiedItem | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
 
-  // Form (warehouse_items formatı - primary)
+  // Form: sadece min stok ve birim fiyat düzenlenebilir
   const [form, setForm] = useState({
-    code: '',
-    name: '',
-    category_id: '',
-    unit: 'adet',
-    unit_price: 0,
     min_stock: 0,
-    max_stock: 0,
-    current_stock: 0,
-    location: '',
-    description: '',
+    unit_price: 0,
   })
 
   useEffect(() => { loadData() }, [])
@@ -105,11 +93,6 @@ export default function InventoryPage() {
       const cid = await getCompanyId()
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-
-      // Kategoriler
-      const { data: catData } = await supabase
-        .from('warehouse_categories').select('id, name').order('name')
-      setCategories(catData || [])
 
       // 1. warehouse_items
       const { data: whData } = await supabase
@@ -179,111 +162,29 @@ export default function InventoryPage() {
     }
   }
 
-  const openAddModal = () => {
-    setEditingItem(null)
-    setForm({ code: '', name: '', category_id: '', unit: 'adet', unit_price: 0, min_stock: 0, max_stock: 0, current_stock: 0, location: '', description: '' })
-    setShowModal(true)
-  }
-
+  // Sadece inventory kalemleri düzenlenebilir, sadece min_stock ve unit_price
   const openEditModal = (item: UnifiedItem) => {
+    if (item.source !== 'inventory') return
     setEditingItem(item)
-    if (item.source === 'warehouse') {
-      setForm({
-        code: item.code,
-        name: item.name,
-        category_id: item.categoryId || '',
-        unit: item.unit,
-        unit_price: item.unit_price || 0,
-        min_stock: item.min_stock,
-        max_stock: 0,
-        current_stock: item.quantity,
-        location: item.location || '',
-        description: '',
-      })
-    } else {
-      // inventory veya production için de formu doldur
-      setForm({
-        code: item.code,
-        name: item.name,
-        category_id: '',
-        unit: item.unit,
-        unit_price: item.unit_price || 0,
-        min_stock: item.min_stock,
-        max_stock: 0,
-        current_stock: item.quantity,
-        location: item.location || '',
-        description: '',
-      })
-    }
+    setForm({
+      min_stock: item.min_stock,
+      unit_price: item.unit_price || 0,
+    })
     setShowModal(true)
   }
 
+  // Sadece inventory tablosunda min_stock ve unit_price güncellenir
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!companyId) return
+    if (!editingItem || editingItem.source !== 'inventory') return
     setModalLoading(true)
 
     try {
-      if (!editingItem) {
-        // YENİ ÜRÜN → warehouse_items'a ekle (depo sayfasında da görünsün)
-        const { error } = await supabase.from('warehouse_items').insert({
-          company_id: companyId,
-          created_by: currentUserId,
-          code: form.code,
-          name: form.name,
-          category_id: form.category_id || null,
-          unit: form.unit,
-          unit_price: form.unit_price,
-          min_stock: form.min_stock,
-          max_stock: form.max_stock || form.min_stock * 3,
-          current_stock: form.current_stock,
-          location: form.location,
-          description: form.description,
-          is_active: true,
-        })
-        if (error) throw error
-        alert('✅ Ürün eklendi! Depo sayfasında da görünecek.')
-
-      } else if (editingItem.source === 'warehouse') {
-        // DEPO ürünü güncelle
-        const { error } = await supabase.from('warehouse_items').update({
-          code: form.code,
-          name: form.name,
-          category_id: form.category_id || null,
-          unit: form.unit,
-          unit_price: form.unit_price,
-          min_stock: form.min_stock,
-          location: form.location,
-          description: form.description,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
-        alert('✅ Depo ürünü güncellendi!')
-
-      } else if (editingItem.source === 'inventory') {
-        // ENVANTERDEKİ ürünü güncelle
-        const { error } = await supabase.from('inventory').update({
-          product_code: form.code,
-          product_name: form.name,
-          unit: form.unit,
-          unit_cost: form.unit_price,
-          min_stock_level: form.min_stock,
-          quantity: form.current_stock,
-          location: form.location,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
-        alert('✅ Stok kalemi güncellendi!')
-
-      } else if (editingItem.source === 'production') {
-        // ÜRETİM stoğu güncelle
-        const { error } = await supabase.from('production_inventory').update({
-          item_code: form.code,
-          item_name: form.name,
-          unit: form.unit,
-          current_stock: form.current_stock,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
-        alert('✅ Üretim stoğu güncellendi!')
-      }
+      const { error } = await supabase.from('inventory').update({
+        unit_cost: form.unit_price,
+        min_stock_level: form.min_stock,
+      }).eq('id', editingItem.rawId)
+      if (error) throw error
 
       setShowModal(false)
       setEditingItem(null)
@@ -338,21 +239,10 @@ export default function InventoryPage() {
             <h2 className="text-3xl font-bold text-gray-800">Stok & Hammadde</h2>
             <p className="text-gray-500 text-sm mt-1">Tüm stoklar: Depo · Envanter · Üretim</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-2 text-sm">
-              <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-semibold">{whCount} Depo</span>
-              <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">{invCount} Stok</span>
-              <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">{prodCount} Üretim</span>
-            </div>
-            <button
-              onClick={openAddModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Yeni Ürün Ekle
-            </button>
+          <div className="flex gap-2 text-sm">
+            <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-semibold">{whCount} Depo</span>
+            <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">{invCount} Stok</span>
+            <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">{prodCount} Üretim</span>
           </div>
         </div>
 
@@ -489,15 +379,19 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-500">{item.location || '—'}</td>
                       <td className="px-5 py-3.5">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
-                          title="Düzenle"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
+                        {item.source === 'inventory' ? (
+                          <button
+                            onClick={() => openEditModal(item)}
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
+                            title="Min stok / Fiyat düzenle"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300 px-1.5">—</span>
+                        )}
                       </td>
                     </tr>
                   )
@@ -515,24 +409,14 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Modal: Ekle / Düzenle */}
-        {showModal && (
+        {/* Modal: Sadece Min Stok & Birim Fiyat (inventory kalemleri) */}
+        {showModal && editingItem && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-7 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="bg-white rounded-xl p-7 max-w-sm w-full shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-800">
-                    {editingItem ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}
-                  </h3>
-                  {editingItem && (
-                    <p className="text-xs mt-1 text-gray-400">
-                      {editingItem.source === 'warehouse' ? '📦 Depo kaydı' :
-                       editingItem.source === 'inventory' ? '🗂️ Stok kaydı' : '🏭 Üretim kaydı'}
-                    </p>
-                  )}
-                  {!editingItem && (
-                    <p className="text-xs text-gray-400 mt-1">Depo ve Stok sayfalarında görünecek</p>
-                  )}
+                  <h3 className="text-lg font-bold text-gray-800">Min Stok & Fiyat Güncelle</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{editingItem.code} — {editingItem.name}</p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -541,142 +425,45 @@ export default function InventoryPage() {
                 </button>
               </div>
 
+              {/* Mevcut stok - salt okunur bilgi */}
+              <div className="bg-gray-50 rounded-lg px-4 py-3 mb-4 flex items-center justify-between">
+                <span className="text-sm text-gray-500">Mevcut Stok</span>
+                <span className="font-bold text-gray-800">{editingItem.quantity} {editingItem.unit}</span>
+              </div>
+
               <form onSubmit={handleSave} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ürün Kodu *</label>
-                    <input
-                      type="text"
-                      value={form.code}
-                      onChange={(e) => setForm({ ...form, code: e.target.value })}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="PRD-001"
-                    />
-                  </div>
-                  {(editingItem?.source === 'warehouse' || !editingItem) ? (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori</label>
-                      <select
-                        value={form.category_id}
-                        onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      >
-                        <option value="">Seçin...</option>
-                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori</label>
-                      <input
-                        type="text"
-                        value={editingItem?.category || ''}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-500"
-                      />
-                    </div>
-                  )}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Stok Seviyesi</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.min_stock}
+                    onChange={(e) => setForm({ ...form, min_stock: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Bu seviyenin altına düşünce uyarı verilir</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ürün Adı *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat (₺)</label>
                   <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.unit_price}
+                    onChange={(e) => setForm({ ...form, unit_price: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Ürün adı"
+                    placeholder="0.00"
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mevcut Stok</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.001"
-                      value={form.current_stock}
-                      onChange={(e) => setForm({ ...form, current_stock: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim</label>
-                    <select
-                      value={form.unit}
-                      onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="adet">Adet</option>
-                      <option value="kg">Kg</option>
-                      <option value="lt">Lt</option>
-                      <option value="m">Metre</option>
-                      <option value="m2">m²</option>
-                      <option value="paket">Paket</option>
-                      <option value="kutu">Kutu</option>
-                      <option value="takım">Takım</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Stok</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.min_stock}
-                      onChange={(e) => setForm({ ...form, min_stock: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat (₺)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.unit_price}
-                      onChange={(e) => setForm({ ...form, unit_price: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lokasyon</label>
-                    <input
-                      type="text"
-                      value={form.location}
-                      onChange={(e) => setForm({ ...form, location: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Raf A1"
-                    />
-                  </div>
-                </div>
-
-                {(!editingItem || editingItem.source === 'warehouse') && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Açıklama</label>
-                    <input
-                      type="text"
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Opsiyonel"
-                    />
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-3 pt-1">
                   <button
                     type="submit"
                     disabled={modalLoading}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2.5 rounded-lg font-semibold transition-colors"
                   >
-                    {modalLoading ? 'Kaydediliyor...' : editingItem ? 'Güncelle' : 'Ekle'}
+                    {modalLoading ? 'Kaydediliyor...' : 'Güncelle'}
                   </button>
                   <button
                     type="button"

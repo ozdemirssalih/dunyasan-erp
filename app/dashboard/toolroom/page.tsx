@@ -12,7 +12,6 @@ interface Tool {
   tool_code: string
   tool_name: string
   tool_type: string | null
-  location: string | null
   status: ToolStatus
   notes: string | null
   created_at: string
@@ -56,7 +55,6 @@ export default function ToolroomPage() {
     tool_code: '',
     tool_name: '',
     tool_type: '',
-    location: '',
     status: 'available' as ToolStatus,
     notes: '',
   })
@@ -72,8 +70,7 @@ export default function ToolroomPage() {
       f = f.filter(t =>
         t.tool_code.toLowerCase().includes(q) ||
         t.tool_name.toLowerCase().includes(q) ||
-        (t.tool_type || '').toLowerCase().includes(q) ||
-        (t.location || '').toLowerCase().includes(q)
+        (t.tool_type || '').toLowerCase().includes(q)
       )
     }
     setFiltered(f)
@@ -127,7 +124,7 @@ export default function ToolroomPage() {
 
   const openAddModal = () => {
     setEditingTool(null)
-    setForm({ tool_code: '', tool_name: '', tool_type: '', location: '', status: 'available', notes: '' })
+    setForm({ tool_code: '', tool_name: '', tool_type: '', status: 'available', notes: '' })
     setShowModal(true)
   }
 
@@ -137,7 +134,6 @@ export default function ToolroomPage() {
       tool_code: tool.tool_code,
       tool_name: tool.tool_name,
       tool_type: tool.tool_type || '',
-      location: tool.location || '',
       status: tool.status,
       notes: tool.notes || '',
     })
@@ -158,7 +154,6 @@ export default function ToolroomPage() {
         tool_code: form.tool_code,
         tool_name: form.tool_name,
         tool_type: form.tool_type || null,
-        location: form.location || null,
         status: form.status,
         notes: form.notes || null,
       }
@@ -330,7 +325,6 @@ export default function ToolroomPage() {
                 <tr>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kod / Ad</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tür</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lokasyon</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Durum</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Notlar</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">İşlemler</th>
@@ -347,17 +341,6 @@ export default function ToolroomPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">
                         {tool.tool_type || <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-gray-600">
-                        {tool.location
-                          ? <span className="flex items-center gap-1">
-                              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              {tool.location}
-                            </span>
-                          : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-5 py-3.5">
                         <button
@@ -398,7 +381,7 @@ export default function ToolroomPage() {
                   )
                 }) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
+                    <td colSpan={5} className="px-6 py-16 text-center text-gray-400">
                       {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
                         ? 'Filtreye uygun takım bulunamadı.'
                         : 'Henüz takım kaydı bulunmuyor. "Yeni Takım Ekle" ile başlayın.'}
@@ -469,30 +452,18 @@ export default function ToolroomPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lokasyon</label>
-                  <input
-                    type="text"
-                    value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Raf B3, Dolap 2..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Durum</label>
-                  <select
-                    value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value as ToolStatus })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="available">Müsait</option>
-                    <option value="in_use">Kullanımda</option>
-                    <option value="maintenance">Bakımda</option>
-                    <option value="lost">Kayıp</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Durum</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value as ToolStatus })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="available">Müsait</option>
+                  <option value="in_use">Kullanımda</option>
+                  <option value="maintenance">Bakımda</option>
+                  <option value="lost">Kayıp</option>
+                </select>
               </div>
 
               <div>

@@ -38,12 +38,16 @@ ALTER TABLE tools ADD COLUMN IF NOT EXISTS min_quantity INTEGER NOT NULL DEFAULT
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS unit_price   DECIMAL(10,2);
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS is_active    BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS location     VARCHAR(255);
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS status       VARCHAR(50) NOT NULL DEFAULT 'available';
 
--- Eski status değerlerini yeni şemaya taşı
+-- Status CHECK kısıtını sıfırla (eski 'in_use' kaldırılıp 'checked_out' ekleniyor)
+ALTER TABLE tools DROP CONSTRAINT IF EXISTS tools_status_check;
+ALTER TABLE tools DROP CONSTRAINT IF EXISTS tools_status_check1;
+
+-- Eski 'in_use' değerlerini 'checked_out' olarak güncelle
 UPDATE tools SET status = 'checked_out' WHERE status = 'in_use';
 
--- Status CHECK kısıtını genişlet (eski 'in_use' kaldırıldı)
-ALTER TABLE tools DROP CONSTRAINT IF EXISTS tools_status_check;
+-- Yeni CHECK kısıtını ekle
 ALTER TABLE tools ADD CONSTRAINT tools_status_check
     CHECK (status IN ('available','checked_out','maintenance','broken','lost'));
 

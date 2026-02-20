@@ -23,13 +23,13 @@ interface Tool {
   notes: string | null
   supplier?: {
     id: string
-    name: string
+    company_name: string
   } | null
 }
 
 interface Supplier {
   id: string
-  name: string
+  company_name: string
 }
 
 interface Checkout {
@@ -153,7 +153,7 @@ export default function ToolroomPage() {
         t.tool_code.toLowerCase().includes(q) ||
         t.tool_name.toLowerCase().includes(q) ||
         (t.tool_type || '').toLowerCase().includes(q) ||
-        (t.supplier?.name || '').toLowerCase().includes(q) ||
+        (t.supplier?.company_name || '').toLowerCase().includes(q) ||
         (t.location || '').toLowerCase().includes(q) ||
         (t.notes || '').toLowerCase().includes(q)
       )
@@ -187,7 +187,7 @@ export default function ToolroomPage() {
       setCompanyId(cid)
 
       const [toolsRes, checkoutsRes, maintenanceRes, suppliersRes] = await Promise.all([
-        supabase.from('tools').select('*, supplier:suppliers(id, name)').eq('company_id', cid).eq('is_active', true).order('tool_code'),
+        supabase.from('tools').select('*, supplier:suppliers(id, company_name)').eq('company_id', cid).eq('is_active', true).order('tool_code'),
         supabase.from('tool_checkouts')
           .select('*, tool:tools(tool_code, tool_name, location)')
           .eq('company_id', cid).is('returned_at', null)
@@ -197,7 +197,7 @@ export default function ToolroomPage() {
           .eq('company_id', cid)
           .order('performed_at', { ascending: false })
           .limit(100),
-        supabase.from('suppliers').select('id, name').eq('company_id', cid).order('name'),
+        supabase.from('suppliers').select('id, company_name').eq('company_id', cid).order('company_name'),
       ])
 
       setTools(toolsRes.data || [])
@@ -648,7 +648,7 @@ export default function ToolroomPage() {
                           {/* Tür / Tedarikçi */}
                           <td className="px-4 py-3.5">
                             {tool.tool_type && <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium block w-fit">{tool.tool_type}</span>}
-                            {tool.supplier && <p className="text-xs text-gray-400 mt-0.5">{tool.supplier.name}{tool.model ? ` · ${tool.model}` : ''}</p>}
+                            {tool.supplier && <p className="text-xs text-gray-400 mt-0.5">{tool.supplier.company_name}{tool.model ? ` · ${tool.model}` : ''}</p>}
                           </td>
                           {/* Lokasyon */}
                           <td className="px-4 py-3.5">
@@ -906,7 +906,7 @@ export default function ToolroomPage() {
                   <select value={toolForm.supplier_id} onChange={e => setToolForm({ ...toolForm, supplier_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <option value="">Seçiniz (Opsiyonel)</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}
                   </select>
                 </div>
                 <div>

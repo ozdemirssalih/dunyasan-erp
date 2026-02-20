@@ -1,65 +1,128 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Calculator, TrendingUp } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
+import { supabase } from '@/lib/supabase/client'
 
-// Statik proje verileri - kesici takımlar
-const PROJECTS_DATA: { [key: string]: string[] } = {
-  'Proje A': [
-    'DCMT11T308LF',
-    'TCMT090204FP',
-    'DNMG150608MP',
-    'DNMG150612MP',
-    'VBMT160408LF',
-    'WNMG080408MP',
-    'DCMT070204LF',
-    'VBMT160404LF',
-    'WNMG080404MS',
-  ],
-  'Proje B': [
-    'DCMT11T308LF',
-    'VBMT160408LF',
-    'WNMG080408MP',
-  ],
-  'Proje C': [
-    'TCMT090204FP',
-    'DNMG150608MP',
-    'DNMG150612MP',
-    'DCMT070204LF',
-  ],
+interface Project {
+  id: string
+  project_code: string
+  project_name: string
 }
 
 interface ToolData {
+  id: string
   code: string
-  breakageRate: number // Kaç işte bir kırılıyor
-  unitPrice: number // EUR
+  name: string
+  breakageRate: number
+  unitPrice: number
+  projectToolId?: string
 }
 
 export default function CostCalculationPage() {
-  const [selectedProject, setSelectedProject] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [orderQuantity, setOrderQuantity] = useState(0)
   const [toolsData, setToolsData] = useState<ToolData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [companyId, setCompanyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  // Projeleri yükle
+  const loadProjects = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      const fetchedCompanyId = profile?.company_id
+      if (!fetchedCompanyId) return
+
+      setCompanyId(fetchedCompanyId)
+
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('id, project_code, project_name')
+        .eq('company_id', fetchedCompanyId)
+        .order('project_name', { ascending: true })
+
+      setProjects(projectsData || [])
+    } catch (error) {
+      console.error('Error loading projects:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Proje değiştiğinde takımları yükle
-  const handleProjectChange = (projectName: string) => {
-    setSelectedProject(projectName)
-    if (projectName && PROJECTS_DATA[projectName]) {
-      const tools = PROJECTS_DATA[projectName].map(code => ({
-        code,
-        breakageRate: 0,
-        unitPrice: 0,
-      }))
-      setToolsData(tools)
-    } else {
+  const handleProjectChange = async (projectId: string) => {
+    setSelectedProjectId(projectId)
+    if (!projectId) {
+      setToolsData([])
+      return
+    }
+
+    try {
+      // Projeye atanmış takımları çek
+      const { data: projectToolsData } = await supabase
+        .from('project_tools')
+        .select(`
+          id,
+          breakage_rate,
+          tool:tools(
+            id,
+            tool_code,
+            tool_name,
+            unit_price
+          )
+        `)
+        .eq('project_id', projectId)
+
+      if (projectToolsData && projectToolsData.length > 0) {
+        const tools = projectToolsData.map((pt: any) => ({
+          id: pt.tool.id,
+          code: pt.tool.tool_code,
+          name: pt.tool.tool_name,
+          breakageRate: pt.breakage_rate || 0,
+          unitPrice: pt.tool.unit_price || 0,
+          projectToolId: pt.id
+        }))
+        setToolsData(tools)
+      } else {
+        setToolsData([])
+      }
+    } catch (error) {
+      console.error('Error loading project tools:', error)
       setToolsData([])
     }
   }
 
-  // Takım verisi güncelleme
-  const updateToolData = (index: number, field: 'breakageRate' | 'unitPrice', value: number) => {
+  // Takım verisi güncelleme ve kaydetme
+  const updateToolData = async (index: number, field: 'breakageRate' | 'unitPrice', value: number) => {
     const updated = [...toolsData]
-    updated[index][field] = value
+    updated[index][field] = field === 'breakageRate' ? value : value
+
+    // Kırılma oranı değişirse veritabanına kaydet
+    if (field === 'breakageRate' && updated[index].projectToolId) {
+      try {
+        await supabase
+          .from('project_tools')
+          .update({ breakage_rate: value })
+          .eq('id', updated[index].projectToolId)
+      } catch (error) {
+        console.error('Error updating breakage rate:', error)
+      }
+    }
+
     setToolsData(updated)
   }
 
@@ -104,14 +167,15 @@ export default function CostCalculationPage() {
                 Proje Seçiniz <span className="text-red-500">*</span>
               </label>
               <select
-                value={selectedProject}
+                value={selectedProjectId}
                 onChange={(e) => handleProjectChange(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
               >
                 <option value="">Proje seçiniz</option>
-                {Object.keys(PROJECTS_DATA).map((projectName) => (
-                  <option key={projectName} value={projectName}>
-                    {projectName}
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.project_name} {project.project_code ? `(${project.project_code})` : ''}
                   </option>
                 ))}
               </select>
@@ -135,7 +199,7 @@ export default function CostCalculationPage() {
         </div>
 
         {/* Takım Listesi */}
-        {selectedProject && toolsData.length > 0 && (
+        {selectedProjectId && toolsData.length > 0 && (
           <div className="bg-white rounded-xl shadow-md p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-4">Kesici Takımlar</h3>
 
@@ -205,7 +269,7 @@ export default function CostCalculationPage() {
         )}
 
         {/* Özet Kartlar */}
-        {selectedProject && orderQuantity > 0 && (
+        {selectedProjectId && orderQuantity > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Toplam Kesici Maliyeti */}
             <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border-l-4 border-green-500 shadow-md">
@@ -237,8 +301,19 @@ export default function CostCalculationPage() {
           </div>
         )}
 
+        {/* Uyarı: Proje seçilmiş ama takım yok */}
+        {selectedProjectId && toolsData.length === 0 && (
+          <div className="bg-orange-50 rounded-xl shadow-md p-12 text-center border-2 border-orange-200">
+            <Calculator className="w-24 h-24 text-orange-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-orange-700 mb-2">Bu Projeye Takım Atanmamış</h3>
+            <p className="text-orange-600">
+              Maliyet hesaplayabilmek için önce proje detay sayfasından takım eklemeniz gerekiyor
+            </p>
+          </div>
+        )}
+
         {/* Boş Durum */}
-        {!selectedProject && (
+        {!selectedProjectId && (
           <div className="bg-white rounded-xl shadow-md p-12 text-center">
             <Calculator className="w-24 h-24 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">Hesaplama Başlatın</h3>

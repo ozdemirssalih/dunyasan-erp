@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users } from 'lucide-react'
+import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users, Wrench } from 'lucide-react'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -35,6 +35,13 @@ export default function ProjectDetailPage() {
   const [showMaterialModal, setShowMaterialModal] = useState(false)
   const [selectedMaterialId, setSelectedMaterialId] = useState('')
   const [materialQuantity, setMaterialQuantity] = useState('')
+
+  // Tools modal
+  const [showToolModal, setShowToolModal] = useState(false)
+  const [projectTools, setProjectTools] = useState<any[]>([])
+  const [availableTools, setAvailableTools] = useState<any[]>([])
+  const [selectedToolId, setSelectedToolId] = useState('')
+  const [toolBreakageRate, setToolBreakageRate] = useState('')
 
   useEffect(() => {
     console.log('🟢 PROJECT DETAIL PAGE - Loading project:', projectId)
@@ -185,6 +192,25 @@ export default function ProjectDetailPage() {
       console.log('✅ Available machines loaded:', availableMachinesData?.length || 0)
       setAvailableMachines(availableMachinesData || [])
 
+      // Load project tools
+      const { data: projectToolsData } = await supabase
+        .from('project_tools')
+        .select('*, tool:tools(id, tool_code, tool_name, unit_price)')
+        .eq('project_id', projectId)
+
+      console.log('✅ Project tools loaded:', projectToolsData?.length || 0)
+      setProjectTools(projectToolsData || [])
+
+      // Load available tools
+      const { data: availableToolsData } = await supabase
+        .from('tools')
+        .select('*')
+        .eq('company_id', finalCompanyId)
+        .eq('is_active', true)
+        .order('tool_code', { ascending: true })
+
+      setAvailableTools(availableToolsData || [])
+
     } catch (error) {
       console.error('❌ Error loading data:', error)
     } finally {
@@ -330,6 +356,54 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const handleAddTool = async () => {
+    if (!selectedToolId) return
+
+    try {
+      const { error } = await supabase
+        .from('project_tools')
+        .insert({
+          project_id: projectId,
+          tool_id: selectedToolId,
+          breakage_rate: toolBreakageRate ? parseInt(toolBreakageRate) : 0
+        })
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+      setShowToolModal(false)
+      setSelectedToolId('')
+      setToolBreakageRate('')
+    } catch (error: any) {
+      console.error('❌ Error adding tool:', error)
+      if (error?.code === '23505') {
+        alert('Bu takım zaten projeye eklenmiş!')
+      } else {
+        alert('Takım eklenirken hata oluştu!')
+      }
+    }
+  }
+
+  const handleRemoveTool = async (projectToolId: string) => {
+    if (!confirm('Bu takımı projeden çıkarmak istediğinize emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('project_tools')
+        .delete()
+        .eq('id', projectToolId)
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+    } catch (error) {
+      console.error('❌ Error removing tool:', error)
+      alert('Takım çıkarılırken hata oluştu!')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -453,7 +527,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-green-50 rounded-xl p-6 border-l-4 border-green-500">
           <Factory className="w-8 h-8 text-green-600 mb-2" />
           <div className="text-3xl font-bold text-gray-900">{machines.length}</div>
@@ -463,6 +537,11 @@ export default function ProjectDetailPage() {
           <Package className="w-8 h-8 text-yellow-600 mb-2" />
           <div className="text-3xl font-bold text-gray-900">{projectMaterials.length}</div>
           <div className="text-gray-600">Projede Kullanılan Malzeme</div>
+        </div>
+        <div className="bg-orange-50 rounded-xl p-6 border-l-4 border-orange-500">
+          <Wrench className="w-8 h-8 text-orange-600 mb-2" />
+          <div className="text-3xl font-bold text-gray-900">{projectTools.length}</div>
+          <div className="text-gray-600">Projede Kullanılan Takım</div>
         </div>
         <div className="bg-blue-50 rounded-xl p-6 border-l-4 border-blue-500">
           <TrendingUp className="w-8 h-8 text-blue-600 mb-2" />
@@ -766,6 +845,71 @@ export default function ProjectDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Project Tools */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <Wrench className="w-6 h-6 text-orange-600" />
+              <h2 className="text-xl font-bold text-gray-800">Projede Kullanılan Takımlar</h2>
+            </div>
+            <button
+              onClick={() => setShowToolModal(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Takım Ekle</span>
+            </button>
+          </div>
+
+          {projectTools.length > 0 ? (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {projectTools.map((pt) => (
+                <div key={pt.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 text-sm">{pt.tool?.tool_name}</div>
+                      <div className="text-xs text-gray-600">{pt.tool?.tool_code}</div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveTool(pt.id)}
+                      className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                      title="Projeden Çıkar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-gray-200 grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-gray-600">Birim Fiyat</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {pt.tool?.unit_price?.toFixed(2) || '0.00'} €
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-600">Kırılma Oranı</div>
+                      <div className="text-sm font-bold text-orange-600">
+                        {pt.breakage_rate || 0} iş/takım
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">Bu projeye henüz takım eklenmemiş.</p>
+              <button
+                onClick={() => setShowToolModal(true)}
+                className="mt-4 text-orange-600 hover:text-orange-800 font-semibold"
+              >
+                Takım Ekle
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Customer Assignment Modal */}
@@ -1021,6 +1165,117 @@ export default function ProjectDetailPage() {
                 className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Tezgahı Ekle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tool Assignment Modal */}
+      {showToolModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Takım Ekle</h3>
+              <button
+                onClick={() => {
+                  setShowToolModal(false)
+                  setSelectedToolId('')
+                  setToolBreakageRate('')
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {availableTools.length > 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Projeye eklenecek takımı seçin ve kırılma oranını girin.
+                </p>
+
+                {/* Tool Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Takım Seçin <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedToolId}
+                    onChange={(e) => setSelectedToolId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Takım Seçiniz</option>
+                    {availableTools.map((tool) => (
+                      <option key={tool.id} value={tool.id}>
+                        {tool.tool_name} ({tool.tool_code}) - {tool.unit_price?.toFixed(2) || '0.00'} €
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Breakage Rate */}
+                {selectedToolId && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Kırılma Oranı
+                    </label>
+                    <input
+                      type="number"
+                      value={toolBreakageRate}
+                      onChange={(e) => setToolBreakageRate(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      placeholder="Kaç işte bir kırılıyor? (Örn: 1000)"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Bu takım ortalama kaç iş sonunda değiştirilir?
+                    </p>
+                  </div>
+                )}
+
+                {/* Selected Tool Preview */}
+                {selectedToolId && (
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="text-sm font-semibold text-gray-700 mb-2">Seçilen Takım:</div>
+                    {(() => {
+                      const selected = availableTools.find(t => t.id === selectedToolId)
+                      return selected ? (
+                        <div>
+                          <div className="font-bold text-gray-900">{selected.tool_name}</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Kod: {selected.tool_code} |
+                            Birim Fiyat: {selected.unit_price?.toFixed(2) || '0.00'} €
+                          </div>
+                        </div>
+                      ) : null
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">Takımhanede takım bulunamadı.</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowToolModal(false)
+                  setSelectedToolId('')
+                  setToolBreakageRate('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleAddTool}
+                disabled={!selectedToolId}
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Takımı Ekle
               </button>
             </div>
           </div>

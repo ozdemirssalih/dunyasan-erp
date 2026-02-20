@@ -33,7 +33,7 @@ export default function ProjectsPage() {
   const [machines, setMachines] = useState<any[]>([])
   const [processMachines, setProcessMachines] = useState<{
     machine_id: string
-    sequence_order: number
+    display_order: number
     daily_capacity_target: string
     notes: string
   }[]>([])
@@ -127,7 +127,7 @@ export default function ProjectsPage() {
           company_id: companyId,
           project_id: newProject.id,
           machine_id: pm.machine_id,
-          sequence_order: pm.sequence_order,
+          display_order: pm.display_order,
           daily_capacity_target: pm.daily_capacity_target ? parseInt(pm.daily_capacity_target) : null,
           notes: pm.notes || null
         }))
@@ -168,7 +168,7 @@ export default function ProjectsPage() {
       ...processMachines,
       {
         machine_id: '',
-        sequence_order: processMachines.length + 1,
+        display_order: processMachines.length + 1,
         daily_capacity_target: '',
         notes: ''
       }
@@ -179,7 +179,7 @@ export default function ProjectsPage() {
     const newProcessMachines = processMachines.filter((_, i) => i !== index)
     // Re-sequence
     newProcessMachines.forEach((pm, i) => {
-      pm.sequence_order = i + 1
+      pm.display_order = i + 1
     })
     setProcessMachines(newProcessMachines)
   }
@@ -403,7 +403,7 @@ export default function ProjectsPage() {
                       {processMachines.map((pm, index) => (
                         <div key={index} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
+                            <span className="text-sm font-bold text-blue-700">Sıra: {pm.display_order}</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveProcessMachine(index)}

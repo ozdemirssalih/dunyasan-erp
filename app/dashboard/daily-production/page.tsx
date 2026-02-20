@@ -161,7 +161,7 @@ export default function DailyProductionPage() {
         .from('project_machines')
         .select('machine_id, daily_capacity_target')
         .eq('project_id', projectId)
-        .order('sequence_order')
+        .order('display_order')
 
       if (!pmData || pmData.length === 0) {
         setMachines([])

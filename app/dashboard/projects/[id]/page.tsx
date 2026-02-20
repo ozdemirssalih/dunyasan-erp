@@ -96,7 +96,7 @@ export default function ProjectDetailPage() {
         .from('project_machines')
         .select('*, machine:machines(id, machine_code, machine_name, machine_type, status)')
         .eq('project_id', projectId)
-        .order('sequence_order')
+        .order('display_order')
 
       console.log('✅ Process machines loaded:', processMachinesData?.length || 0)
       setProcessMachines(processMachinesData || [])
@@ -270,7 +270,7 @@ export default function ProjectDetailPage() {
         return
       }
 
-      // Get the next sequence order
+      // Get the next display order
       const nextOrder = processMachines.length + 1
 
       const { error } = await supabase
@@ -278,7 +278,7 @@ export default function ProjectDetailPage() {
         .insert({
           project_id: projectId,
           machine_id: selectedMachineId,
-          sequence_order: nextOrder
+          display_order: nextOrder
         })
 
       if (error) throw error
@@ -724,7 +724,7 @@ export default function ProjectDetailPage() {
             {processMachines.map((pm) => (
               <div key={pm.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
+                  <span className="text-xs font-bold text-blue-700">Sıra: {pm.display_order}</span>
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleEditMachine(pm)}

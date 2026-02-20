@@ -18,6 +18,7 @@ interface UnifiedItem {
   min_stock: number
   unit_price: number | null
   location: string | null
+  supplier: string | null
   source: 'inventory' | 'warehouse' | 'production' | 'toolroom'
 }
 
@@ -97,7 +98,7 @@ export default function InventoryPage() {
       // 1. warehouse_items
       const { data: whData } = await supabase
         .from('warehouse_items')
-        .select('*, category:warehouse_categories(id, name)')
+        .select('*, category:warehouse_categories(id, name), supplier:suppliers(company_name)')
         .eq('company_id', cid)
         .eq('is_active', true)
         .order('code')
@@ -114,12 +115,13 @@ export default function InventoryPage() {
         min_stock: item.min_stock || 0,
         unit_price: item.unit_price,
         location: item.location,
+        supplier: item.supplier?.company_name || null,
         source: 'warehouse',
       }))
 
       // 2. inventory tablosu
       const { data: invData } = await supabase
-        .from('inventory').select('*').eq('company_id', cid).order('product_code')
+        .from('inventory').select('*, supplier:suppliers(company_name)').eq('company_id', cid).order('product_code')
 
       const invItems: UnifiedItem[] = (invData || []).map((item: any) => ({
         id: `inv-${item.id}`,
@@ -132,6 +134,7 @@ export default function InventoryPage() {
         min_stock: item.min_stock_level || 0,
         unit_price: item.unit_cost,
         location: item.location,
+        supplier: item.supplier?.company_name || null,
         source: 'inventory',
       }))
 
@@ -151,12 +154,13 @@ export default function InventoryPage() {
         min_stock: 0,
         unit_price: null,
         location: null,
+        supplier: null,
         source: 'production',
       }))
 
       // 4. tools (takımhane)
       const { data: toolsData } = await supabase
-        .from('tools').select('*').eq('company_id', cid).eq('is_active', true).order('tool_code')
+        .from('tools').select('*, supplier:suppliers(company_name)').eq('company_id', cid).eq('is_active', true).order('tool_code')
 
       const toolItems: UnifiedItem[] = (toolsData || []).map((item: any) => ({
         id: `tool-${item.id}`,
@@ -169,6 +173,7 @@ export default function InventoryPage() {
         min_stock: item.min_quantity || 0,
         unit_price: item.unit_price || 0,
         location: item.location,
+        supplier: item.supplier?.company_name || null,
         source: 'toolroom',
       }))
 
@@ -363,6 +368,7 @@ export default function InventoryPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kaynak</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kod / Ad</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kategori</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tedarikçi</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Miktar</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Durum</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Birim Fiyat</th>
@@ -384,6 +390,7 @@ export default function InventoryPage() {
                         <p className="text-gray-500 text-xs mt-0.5">{item.name}</p>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">{item.category}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600">{item.supplier || '—'}</td>
                       <td className="px-5 py-3.5">
                         <span className={`text-lg font-bold ${item.quantity === 0 ? 'text-red-500' : 'text-gray-800'}`}>{item.quantity}</span>
                         <span className="text-gray-400 text-sm ml-1">{item.unit}</span>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users, Wrench } from 'lucide-react'
+import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users, Wrench, Edit } from 'lucide-react'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -41,6 +41,14 @@ export default function ProjectDetailPage() {
   const [availableTools, setAvailableTools] = useState<any[]>([])
   const [selectedToolId, setSelectedToolId] = useState('')
   const [toolBreakageRate, setToolBreakageRate] = useState('')
+
+  // Machine edit modal
+  const [showMachineEditModal, setShowMachineEditModal] = useState(false)
+  const [editingMachine, setEditingMachine] = useState<any>(null)
+  const [machineEditForm, setMachineEditForm] = useState({
+    daily_capacity_target: '',
+    notes: ''
+  })
 
   useEffect(() => {
     console.log('🟢 PROJECT DETAIL PAGE - Loading project:', projectId)
@@ -404,6 +412,39 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const handleEditMachine = (machine: any) => {
+    setEditingMachine(machine)
+    setMachineEditForm({
+      daily_capacity_target: machine.daily_capacity_target?.toString() || '',
+      notes: machine.notes || ''
+    })
+    setShowMachineEditModal(true)
+  }
+
+  const handleUpdateMachine = async () => {
+    if (!editingMachine) return
+
+    try {
+      const { error } = await supabase
+        .from('project_machines')
+        .update({
+          daily_capacity_target: machineEditForm.daily_capacity_target ? parseInt(machineEditForm.daily_capacity_target) : null,
+          notes: machineEditForm.notes || null
+        })
+        .eq('id', editingMachine.id)
+
+      if (error) throw error
+
+      // Reload data
+      await loadData()
+      setShowMachineEditModal(false)
+      setEditingMachine(null)
+    } catch (error) {
+      console.error('❌ Error updating machine:', error)
+      alert('Tezgah güncellenirken hata oluştu!')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -684,13 +725,22 @@ export default function ProjectDetailPage() {
               <div key={pm.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
-                  <button
-                    onClick={() => handleRemoveMachine(pm.id)}
-                    className="text-red-600 hover:text-red-800 text-sm font-semibold"
-                    title="Projeden Çıkar"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditMachine(pm)}
+                      className="text-blue-600 hover:text-blue-800"
+                      title="Düzenle"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleRemoveMachine(pm.id)}
+                      className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                      title="Projeden Çıkar"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
                 <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
@@ -1236,6 +1286,82 @@ export default function ProjectDetailPage() {
                 className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Takımı Ekle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Machine Edit Modal */}
+      {showMachineEditModal && editingMachine && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Tezgah Bilgilerini Düzenle</h3>
+              <button
+                onClick={() => {
+                  setShowMachineEditModal(false)
+                  setEditingMachine(null)
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="font-bold text-gray-900">{editingMachine.machine?.machine_name}</div>
+                <div className="text-sm text-gray-600">{editingMachine.machine?.machine_code}</div>
+              </div>
+
+              {/* Daily Capacity Target */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Günlük Kapasite Hedefi
+                </label>
+                <input
+                  type="number"
+                  value={machineEditForm.daily_capacity_target}
+                  onChange={(e) => setMachineEditForm({ ...machineEditForm, daily_capacity_target: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Örn: 1000"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Bu tezgahın günlük üretim hedefi (adet/gün)
+                </p>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notlar
+                </label>
+                <textarea
+                  value={machineEditForm.notes}
+                  onChange={(e) => setMachineEditForm({ ...machineEditForm, notes: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Ek notlar veya açıklamalar..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowMachineEditModal(false)
+                  setEditingMachine(null)
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleUpdateMachine}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Güncelle
               </button>
             </div>
           </div>

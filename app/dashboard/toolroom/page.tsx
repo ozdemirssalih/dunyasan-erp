@@ -14,14 +14,22 @@ interface Tool {
   tool_code: string
   tool_name: string
   tool_type: string | null
-  brand: string | null
+  supplier_id: string | null
   model: string | null
   location: string | null
   quantity: number
   min_quantity: number
-  unit_price: number | null
   status: ToolStatus
   notes: string | null
+  supplier?: {
+    id: string
+    name: string
+  } | null
+}
+
+interface Supplier {
+  id: string
+  name: string
 }
 
 interface Checkout {
@@ -51,6 +59,10 @@ interface MaintenanceRecord {
 }
 
 // ── Sabit Konfigürasyonlar ───────────────────────────────────
+const TOOL_TYPES = ['Kesici Takım', 'Ölçüm Aleti', 'Kumpas', 'Mikrometre', 'Matkap', 'Freze', 'Parmak Freze', 'Pafta', 'Diğer']
+const LOCATION_LETTERS = ['A', 'B', 'C', 'D', 'E']
+const LOCATION_NUMBERS = ['1', '2', '3', '4']
+
 const STATUS: Record<ToolStatus, { label: string; bg: string; text: string; dot: string; border: string }> = {
   available:    { label: 'Müsait',     bg: 'bg-green-50',   text: 'text-green-700',  dot: 'bg-green-500',  border: 'border-green-200' },
   checked_out:  { label: 'Zimmette',   bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500',   border: 'border-blue-200' },
@@ -77,6 +89,7 @@ export default function ToolroomPage() {
   const [tools, setTools] = useState<Tool[]>([])
   const [checkouts, setCheckouts] = useState<Checkout[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
@@ -93,8 +106,8 @@ export default function ToolroomPage() {
   const [editingTool, setEditingTool] = useState<Tool | null>(null)
   const [toolModalLoading, setToolModalLoading] = useState(false)
   const [toolForm, setToolForm] = useState({
-    tool_code: '', tool_name: '', tool_type: '', brand: '', model: '',
-    location: '', quantity: 1, min_quantity: 1, unit_price: '', status: 'available' as ToolStatus, notes: '',
+    tool_code: '', tool_name: '', tool_type: '', supplier_id: '', model: '',
+    location_letter: '', location_number: '', quantity: 1, min_quantity: 1, notes: '',
   })
 
   // 2. Zimmetle (checkout)
@@ -140,7 +153,7 @@ export default function ToolroomPage() {
         t.tool_code.toLowerCase().includes(q) ||
         t.tool_name.toLowerCase().includes(q) ||
         (t.tool_type || '').toLowerCase().includes(q) ||
-        (t.brand || '').toLowerCase().includes(q) ||
+        (t.supplier?.name || '').toLowerCase().includes(q) ||
         (t.location || '').toLowerCase().includes(q) ||
         (t.notes || '').toLowerCase().includes(q)
       )
@@ -173,8 +186,8 @@ export default function ToolroomPage() {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
 
-      const [toolsRes, checkoutsRes, maintenanceRes] = await Promise.all([
-        supabase.from('tools').select('*').eq('company_id', cid).eq('is_active', true).order('tool_code'),
+      const [toolsRes, checkoutsRes, maintenanceRes, suppliersRes] = await Promise.all([
+        supabase.from('tools').select('*, supplier:suppliers(id, name)').eq('company_id', cid).eq('is_active', true).order('tool_code'),
         supabase.from('tool_checkouts')
           .select('*, tool:tools(tool_code, tool_name, location)')
           .eq('company_id', cid).is('returned_at', null)
@@ -184,11 +197,13 @@ export default function ToolroomPage() {
           .eq('company_id', cid)
           .order('performed_at', { ascending: false })
           .limit(100),
+        supabase.from('suppliers').select('id, name').eq('company_id', cid).order('name'),
       ])
 
       setTools(toolsRes.data || [])
       setCheckouts(checkoutsRes.data || [])
       setMaintenance(maintenanceRes.data || [])
+      setSuppliers(suppliersRes.data || [])
     } catch (err) {
       console.error('Takımhane yükleme hatası:', err)
     } finally {
@@ -199,17 +214,19 @@ export default function ToolroomPage() {
   // ── Takım Ekle / Düzenle ─────────────────────────────────
   const openAddToolModal = () => {
     setEditingTool(null)
-    setToolForm({ tool_code: '', tool_name: '', tool_type: '', brand: '', model: '', location: '', quantity: 1, min_quantity: 1, unit_price: '', status: 'available', notes: '' })
+    setToolForm({ tool_code: '', tool_name: '', tool_type: '', supplier_id: '', model: '', location_letter: '', location_number: '', quantity: 1, min_quantity: 1, notes: '' })
     setShowToolModal(true)
   }
 
   const openEditToolModal = (tool: Tool) => {
     setEditingTool(tool)
+    // Lokasyonu ayır (örn: "A-2" → letter="A", number="2")
+    const locParts = (tool.location || '').split('-')
     setToolForm({
       tool_code: tool.tool_code, tool_name: tool.tool_name, tool_type: tool.tool_type || '',
-      brand: tool.brand || '', model: tool.model || '', location: tool.location || '',
-      quantity: tool.quantity, min_quantity: tool.min_quantity,
-      unit_price: tool.unit_price?.toString() || '', status: tool.status, notes: tool.notes || '',
+      supplier_id: tool.supplier_id || '', model: tool.model || '',
+      location_letter: locParts[0] || '', location_number: locParts[1] || '',
+      quantity: tool.quantity, min_quantity: tool.min_quantity, notes: tool.notes || '',
     })
     setShowToolModal(true)
   }
@@ -219,17 +236,23 @@ export default function ToolroomPage() {
     if (!companyId) return
     setToolModalLoading(true)
     try {
+      // Lokasyonu birleştir (örn: letter="A", number="2" → "A-2")
+      const location = toolForm.location_letter && toolForm.location_number
+        ? `${toolForm.location_letter}-${toolForm.location_number}`
+        : null
+
       const payload = {
         tool_code: toolForm.tool_code.trim(), tool_name: toolForm.tool_name.trim(),
-        tool_type: toolForm.tool_type.trim() || null, brand: toolForm.brand.trim() || null,
-        model: toolForm.model.trim() || null, location: toolForm.location.trim() || null,
+        tool_type: toolForm.tool_type.trim() || null,
+        supplier_id: toolForm.supplier_id || null,
+        model: toolForm.model.trim() || null,
+        location,
         quantity: toolForm.quantity, min_quantity: toolForm.min_quantity,
-        unit_price: toolForm.unit_price ? parseFloat(toolForm.unit_price) : null,
-        status: toolForm.status, notes: toolForm.notes.trim() || null,
+        notes: toolForm.notes.trim() || null,
         updated_at: new Date().toISOString(),
       }
       if (!editingTool) {
-        const { error } = await supabase.from('tools').insert({ ...payload, company_id: companyId, is_active: true })
+        const { error } = await supabase.from('tools').insert({ ...payload, company_id: companyId, is_active: true, status: 'available' })
         if (error) throw error
       } else {
         const { error } = await supabase.from('tools').update(payload).eq('id', editingTool.id)
@@ -605,11 +628,9 @@ export default function ToolroomPage() {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kod / Takım</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tür / Marka</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tür / Tedarikçi</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lokasyon</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Adet</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Birim Fiyat</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Durum</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">İşlemler</th>
                     </tr>
                   </thead>
@@ -624,10 +645,10 @@ export default function ToolroomPage() {
                             <p className="font-semibold text-gray-800 text-sm">{tool.tool_code}</p>
                             <p className="text-gray-500 text-xs mt-0.5">{tool.tool_name}</p>
                           </td>
-                          {/* Tür / Marka */}
+                          {/* Tür / Tedarikçi */}
                           <td className="px-4 py-3.5">
                             {tool.tool_type && <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium block w-fit">{tool.tool_type}</span>}
-                            {tool.brand && <p className="text-xs text-gray-400 mt-0.5">{tool.brand}{tool.model ? ` · ${tool.model}` : ''}</p>}
+                            {tool.supplier && <p className="text-xs text-gray-400 mt-0.5">{tool.supplier.name}{tool.model ? ` · ${tool.model}` : ''}</p>}
                           </td>
                           {/* Lokasyon */}
                           <td className="px-4 py-3.5">
@@ -647,18 +668,6 @@ export default function ToolroomPage() {
                             <span className={`font-bold text-lg ${lowStock ? 'text-purple-600' : 'text-gray-800'}`}>{tool.quantity}</span>
                             <span className="text-gray-400 text-xs"> / min {tool.min_quantity}</span>
                             {lowStock && <p className="text-xs text-purple-600 font-semibold">Kritik stok!</p>}
-                          </td>
-                          {/* Fiyat */}
-                          <td className="px-4 py-3.5 text-sm text-gray-600">
-                            {tool.unit_price != null ? `${tool.unit_price.toLocaleString('tr-TR')} ₺` : <span className="text-gray-300">—</span>}
-                          </td>
-                          {/* Durum */}
-                          <td className="px-4 py-3.5">
-                            <button onClick={() => { setStatusTarget(tool); setShowStatusModal(true) }}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${sc.bg} ${sc.text} ${sc.border} hover:opacity-80 transition-opacity`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                              {sc.label}
-                            </button>
                           </td>
                           {/* İşlemler */}
                           <td className="px-4 py-3.5">
@@ -697,7 +706,7 @@ export default function ToolroomPage() {
                       )
                     }) : (
                       <tr>
-                        <td colSpan={7} className="px-6 py-16 text-center">
+                        <td colSpan={5} className="px-6 py-16 text-center">
                           <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
                           </svg>
@@ -879,9 +888,11 @@ export default function ToolroomPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tür</label>
-                  <input type="text" value={toolForm.tool_type} onChange={e => setToolForm({ ...toolForm, tool_type: e.target.value })} placeholder="Kesici takım, kumpas..." list="types-list"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                  <datalist id="types-list">{uniqueTypes.map(t => <option key={t} value={t} />)}</datalist>
+                  <select value={toolForm.tool_type} onChange={e => setToolForm({ ...toolForm, tool_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Seçiniz</option>
+                    {TOOL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
               <div>
@@ -891,9 +902,12 @@ export default function ToolroomPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Marka</label>
-                  <input type="text" value={toolForm.brand} onChange={e => setToolForm({ ...toolForm, brand: e.target.value })} placeholder="Sandvik, Mitutoyo..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tedarikçi</label>
+                  <select value={toolForm.supplier_id} onChange={e => setToolForm({ ...toolForm, supplier_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Seçiniz (Opsiyonel)</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Model / Seri</label>
@@ -903,11 +917,20 @@ export default function ToolroomPage() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lokasyon</label>
-                <input type="text" value={toolForm.location} onChange={e => setToolForm({ ...toolForm, location: e.target.value })} placeholder="Dolap A / Raf 2 / Çekmece 3" list="locs-list"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                <datalist id="locs-list">{uniqueLocations.map(l => <option key={l} value={l} />)}</datalist>
+                <div className="grid grid-cols-2 gap-4">
+                  <select value={toolForm.location_letter} onChange={e => setToolForm({ ...toolForm, location_letter: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Harf Seçiniz</option>
+                    {LOCATION_LETTERS.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <select value={toolForm.location_number} onChange={e => setToolForm({ ...toolForm, location_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Sayı Seçiniz</option>
+                    {LOCATION_NUMBERS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Adet</label>
                   <input type="number" min="0" value={toolForm.quantity} onChange={e => setToolForm({ ...toolForm, quantity: parseInt(e.target.value) || 0 })}
@@ -917,24 +940,6 @@ export default function ToolroomPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Adet</label>
                   <input type="number" min="0" value={toolForm.min_quantity} onChange={e => setToolForm({ ...toolForm, min_quantity: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat (₺)</label>
-                  <input type="number" min="0" step="0.01" value={toolForm.unit_price} onChange={e => setToolForm({ ...toolForm, unit_price: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Durum</label>
-                  <select value={toolForm.status} onChange={e => setToolForm({ ...toolForm, status: e.target.value as ToolStatus })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="available">Müsait</option>
-                    <option value="checked_out">Zimmette</option>
-                    <option value="maintenance">Bakımda</option>
-                    <option value="broken">Arızalı</option>
-                    <option value="lost">Kayıp</option>
-                  </select>
                 </div>
               </div>
               <div>

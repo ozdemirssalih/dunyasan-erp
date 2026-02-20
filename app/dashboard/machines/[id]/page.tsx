@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, TrendingUp, AlertTriangle, Calendar } from 'lucide-react'
+import { ArrowLeft, TrendingUp, AlertTriangle, Calendar, Package } from 'lucide-react'
 
 interface Machine {
   id: string
@@ -31,6 +31,19 @@ interface DailyProduction {
   }
 }
 
+interface ToolDelivery {
+  id: string
+  quantity: number
+  delivered_at: string
+  delivered_by: string | null
+  notes: string | null
+  tool: {
+    tool_code: string
+    tool_name: string
+    tool_type: string | null
+  } | null
+}
+
 export default function MachineDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -38,6 +51,7 @@ export default function MachineDetailPage() {
 
   const [machine, setMachine] = useState<Machine | null>(null)
   const [dailyProductions, setDailyProductions] = useState<DailyProduction[]>([])
+  const [toolDeliveries, setToolDeliveries] = useState<ToolDelivery[]>([])
   const [loading, setLoading] = useState(true)
 
   const [stats, setStats] = useState({
@@ -88,6 +102,18 @@ export default function MachineDetailPage() {
       console.log('❌ Daily Production Error:', dailyError)
 
       setDailyProductions(dailyProductionData || [])
+
+      // Load tool deliveries (takım teslim kayıtları)
+      const { data: toolDeliveriesData } = await supabase
+        .from('tool_machine_deliveries')
+        .select(`
+          *,
+          tool:tools(tool_code, tool_name, tool_type)
+        `)
+        .eq('machine_id', machineId)
+        .order('delivered_at', { ascending: false })
+
+      setToolDeliveries(toolDeliveriesData || [])
 
       // Calculate stats
       const totalProduced = dailyProductionData?.reduce((sum, d) => sum + d.actual_production, 0) || 0
@@ -269,6 +295,73 @@ export default function MachineDetailPage() {
             )}
           </div>
         </div>
+
+      {/* Tool Delivery History */}
+      <div className="bg-white rounded-xl shadow-md p-6 mt-6">
+        <div className="flex items-center space-x-2 mb-4">
+          <Package className="w-6 h-6 text-blue-600" />
+          <h2 className="text-xl font-bold text-gray-800">Takım Geçmişi</h2>
+          <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-semibold">
+            {toolDeliveries.length}
+          </span>
+        </div>
+
+        <div className="space-y-3 max-h-[600px] overflow-y-auto">
+          {toolDeliveries.length > 0 ? (
+            toolDeliveries.map(delivery => (
+              <div key={delivery.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="font-bold text-gray-900">
+                      {new Date(delivery.delivered_at).toLocaleDateString('tr-TR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                    {delivery.tool && (
+                      <div className="text-sm text-blue-600 mt-1">
+                        {delivery.tool.tool_code} - {delivery.tool.tool_name}
+                      </div>
+                    )}
+                    {delivery.tool?.tool_type && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Tür: {delivery.tool.tool_type}
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                    {delivery.quantity} Adet
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {delivery.delivered_by && (
+                    <div className="bg-gray-50 rounded p-2">
+                      <div className="text-xs text-gray-600">Teslim Eden</div>
+                      <div className="text-sm font-semibold text-gray-900">{delivery.delivered_by}</div>
+                    </div>
+                  )}
+                  <div className="bg-blue-50 rounded p-2">
+                    <div className="text-xs text-gray-600">Durum</div>
+                    <div className="text-sm font-semibold text-blue-700">Teslim Edildi</div>
+                  </div>
+                </div>
+
+                {delivery.notes && (
+                  <div className="text-xs text-gray-600 mt-2 pt-2 border-t italic">
+                    Not: {delivery.notes}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-gray-500 py-8">Henüz takım teslim kaydı yok</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -24,38 +24,50 @@ ALTER TABLE project_tools ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view project tools for their company" ON project_tools;
 CREATE POLICY "Users can view project tools for their company"
   ON project_tools FOR SELECT
-  USING (project_id IN (
-    SELECT id FROM projects WHERE company_id IN (
-      SELECT company_id FROM profiles WHERE id = auth.uid()
+  USING (
+    EXISTS (
+      SELECT 1 FROM projects p
+      INNER JOIN profiles pr ON pr.company_id = p.company_id
+      WHERE p.id = project_tools.project_id
+      AND pr.id = auth.uid()
     )
-  ));
+  );
 
 DROP POLICY IF EXISTS "Users can insert project tools for their company" ON project_tools;
 CREATE POLICY "Users can insert project tools for their company"
   ON project_tools FOR INSERT
-  WITH CHECK (project_id IN (
-    SELECT id FROM projects WHERE company_id IN (
-      SELECT company_id FROM profiles WHERE id = auth.uid()
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM projects p
+      INNER JOIN profiles pr ON pr.company_id = p.company_id
+      WHERE p.id = project_tools.project_id
+      AND pr.id = auth.uid()
     )
-  ));
+  );
 
 DROP POLICY IF EXISTS "Users can update project tools for their company" ON project_tools;
 CREATE POLICY "Users can update project tools for their company"
   ON project_tools FOR UPDATE
-  USING (project_id IN (
-    SELECT id FROM projects WHERE company_id IN (
-      SELECT company_id FROM profiles WHERE id = auth.uid()
+  USING (
+    EXISTS (
+      SELECT 1 FROM projects p
+      INNER JOIN profiles pr ON pr.company_id = p.company_id
+      WHERE p.id = project_tools.project_id
+      AND pr.id = auth.uid()
     )
-  ));
+  );
 
 DROP POLICY IF EXISTS "Users can delete project tools for their company" ON project_tools;
 CREATE POLICY "Users can delete project tools for their company"
   ON project_tools FOR DELETE
-  USING (project_id IN (
-    SELECT id FROM projects WHERE company_id IN (
-      SELECT company_id FROM profiles WHERE id = auth.uid()
+  USING (
+    EXISTS (
+      SELECT 1 FROM projects p
+      INNER JOIN profiles pr ON pr.company_id = p.company_id
+      WHERE p.id = project_tools.project_id
+      AND pr.id = auth.uid()
     )
-  ));
+  );
 
 -- ============================================================
 -- TAMAMLANDI

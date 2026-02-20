@@ -150,29 +150,27 @@ export default function ProjectDetailPage() {
 
       setCustomers(customersData || [])
 
-      // Load available machines with project assignment info
+      // Load available machines
       const { data: availableMachinesData } = await supabase
         .from('machines')
         .select('*')
         .eq('company_id', finalCompanyId)
         .order('machine_name', { ascending: true })
 
-      // Check which machines are assigned to projects
-      const machinesWithAssignment = await Promise.all(
-        (availableMachinesData || []).map(async (machine) => {
-          const { data: assignment } = await supabase
-            .from('project_machines')
-            .select('project_id, project:projects(project_name)')
-            .eq('machine_id', machine.id)
-            .single()
+      // Load all machine assignments in one query
+      const { data: allAssignments } = await supabase
+        .from('project_machines')
+        .select('machine_id, project_id, project:projects(project_name)')
 
-          return {
-            ...machine,
-            assignedProject: assignment?.project || null,
-            isAssignedToThisProject: assignment?.project_id === projectId
-          }
-        })
-      )
+      // Map assignments to machines
+      const machinesWithAssignment = (availableMachinesData || []).map((machine) => {
+        const assignment = allAssignments?.find((a: any) => a.machine_id === machine.id)
+        return {
+          ...machine,
+          assignedProject: assignment?.project || null,
+          isAssignedToThisProject: assignment?.project_id === projectId
+        }
+      })
 
       console.log('✅ Available machines loaded:', machinesWithAssignment?.length || 0)
       setAvailableMachines(machinesWithAssignment || [])
@@ -257,16 +255,11 @@ export default function ProjectDetailPage() {
     if (!selectedMachineId || !companyId) return
 
     try {
-      // Check if machine is already assigned to another project
-      const { data: existingAssignment } = await supabase
-        .from('project_machines')
-        .select('project_id, project:projects(project_name)')
-        .eq('machine_id', selectedMachineId)
-        .single()
+      // Check in availableMachines array (already loaded)
+      const selectedMachine = availableMachines.find((m: any) => m.id === selectedMachineId)
 
-      if (existingAssignment && existingAssignment.project_id !== projectId) {
-        const projectName = (existingAssignment.project as any)?.project_name || 'Bilinmeyen Proje'
-        alert(`Bu tezgah başka bir projeye atanmış: ${projectName}`)
+      if (selectedMachine?.assignedProject && !selectedMachine.isAssignedToThisProject) {
+        alert(`Bu tezgah başka bir projeye atanmış: ${selectedMachine.assignedProject.project_name}`)
         return
       }
 

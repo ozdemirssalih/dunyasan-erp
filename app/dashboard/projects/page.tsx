@@ -25,9 +25,7 @@ export default function ProjectsPage() {
     status: 'planning',
     start_date: '',
     target_quantity: '',
-    unit: 'adet',
-    entry_machine_id: '',
-    exit_machine_id: ''
+    unit: 'adet'
   })
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -108,9 +106,7 @@ export default function ProjectsPage() {
           status: formData.status,
           start_date: formData.start_date || new Date().toISOString().split('T')[0],
           target_quantity: formData.target_quantity ? parseFloat(formData.target_quantity) : null,
-          unit: formData.unit,
-          entry_machine_id: formData.entry_machine_id || null,
-          exit_machine_id: formData.exit_machine_id || null
+          unit: formData.unit
         })
         .select()
         .single()
@@ -154,9 +150,7 @@ export default function ProjectsPage() {
         status: 'planning',
         start_date: '',
         target_quantity: '',
-        unit: 'adet',
-        entry_machine_id: '',
-        exit_machine_id: ''
+        unit: 'adet'
       })
       setProcessMachines([])
       setShowModal(false)
@@ -301,9 +295,7 @@ export default function ProjectsPage() {
                     status: 'planning',
                     start_date: '',
                     target_quantity: '',
-                    unit: 'adet',
-                    entry_machine_id: '',
-                    exit_machine_id: ''
+                    unit: 'adet'
                   })
                   setProcessMachines([])
                 }}
@@ -389,71 +381,29 @@ export default function ProjectsPage() {
 
               {/* Machine Configuration */}
               <div className="border-t-2 border-gray-200 pt-4 mt-4">
-                <h4 className="text-lg font-bold text-gray-800 mb-4">Tezgah Konfigürasyonu</h4>
+                <h4 className="text-lg font-bold text-gray-800 mb-4">Tezgahlar</h4>
 
-                {/* Entry and Exit Machines */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Giriş Tezgahı (Hammadde)
-                    </label>
-                    <select
-                      value={formData.entry_machine_id}
-                      onChange={(e) => setFormData({ ...formData, entry_machine_id: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="">Giriş tezgahı seçiniz</option>
-                      {machines.map((machine) => (
-                        <option key={machine.id} value={machine.id}>
-                          {machine.machine_name} ({machine.machine_code})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">Hammadde giriş yapılacak tezgah</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Çıkış Tezgahı (Mamül)
-                    </label>
-                    <select
-                      value={formData.exit_machine_id}
-                      onChange={(e) => setFormData({ ...formData, exit_machine_id: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Çıkış tezgahı seçiniz</option>
-                      {machines.map((machine) => (
-                        <option key={machine.id} value={machine.id}>
-                          {machine.machine_name} ({machine.machine_code})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">Mamül çıkış yapılacak tezgah</p>
-                  </div>
-                </div>
-
-                {/* Process Machines */}
+                {/* Machines */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-semibold text-gray-700">
-                      Ara İşlem Tezgahları
+                      Proje Tezgahları
                     </label>
                     <button
                       type="button"
                       onClick={handleAddProcessMachine}
-                      className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm"
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
                     >
-                      + Ara Tezgah Ekle
+                      + Tezgah Ekle
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mb-3">Sadece verimlilik takibi için kullanılır, stok etkisi yoktur</p>
 
                   {processMachines.length > 0 && (
                     <div className="space-y-3">
                       {processMachines.map((pm, index) => (
-                        <div key={index} className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div key={index} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-orange-700">Sıra: {pm.sequence_order}</span>
+                            <span className="text-sm font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveProcessMachine(index)}
@@ -471,7 +421,7 @@ export default function ProjectsPage() {
                               <select
                                 value={pm.machine_id}
                                 onChange={(e) => handleUpdateProcessMachine(index, 'machine_id', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               >
                                 <option value="">Tezgah seçiniz</option>
                                 {machines.map((machine) => (
@@ -490,7 +440,7 @@ export default function ProjectsPage() {
                                 type="number"
                                 value={pm.daily_capacity_target}
                                 onChange={(e) => handleUpdateProcessMachine(index, 'daily_capacity_target', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Örn: 1000"
                               />
                             </div>
@@ -503,7 +453,7 @@ export default function ProjectsPage() {
                                 type="text"
                                 value={pm.notes}
                                 onChange={(e) => handleUpdateProcessMachine(index, 'notes', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Opsiyonel notlar"
                               />
                             </div>
@@ -563,9 +513,7 @@ export default function ProjectsPage() {
                     status: 'planning',
                     start_date: '',
                     target_quantity: '',
-                    unit: 'adet',
-                    entry_machine_id: '',
-                    exit_machine_id: ''
+                    unit: 'adet'
                   })
                   setProcessMachines([])
                 }}

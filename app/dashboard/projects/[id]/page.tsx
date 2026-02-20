@@ -20,8 +20,6 @@ export default function ProjectDetailPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
 
   // Yeni: Tezgah konfigürasyonu ve üretim takibi
-  const [entryMachine, setEntryMachine] = useState<any>(null)
-  const [exitMachine, setExitMachine] = useState<any>(null)
   const [processMachines, setProcessMachines] = useState<any[]>([])
   const [dailyProduction, setDailyProduction] = useState<any[]>([])
 
@@ -79,27 +77,7 @@ export default function ProjectDetailPage() {
       setProject(projectData)
       setCustomer(projectData?.customer_company)
 
-      // Load entry machine (if exists)
-      if (projectData?.entry_machine_id) {
-        const { data: entryMachineData } = await supabase
-          .from('machines')
-          .select('*')
-          .eq('id', projectData.entry_machine_id)
-          .single()
-        setEntryMachine(entryMachineData)
-      }
-
-      // Load exit machine (if exists)
-      if (projectData?.exit_machine_id) {
-        const { data: exitMachineData } = await supabase
-          .from('machines')
-          .select('*')
-          .eq('id', projectData.exit_machine_id)
-          .single()
-        setExitMachine(exitMachineData)
-      }
-
-      // Load process machines (ara tezgahlar)
+      // Load process machines
       const { data: processMachinesData } = await supabase
         .from('project_machines')
         .select('*, machine:machines(id, machine_code, machine_name, machine_type, status)')
@@ -543,89 +521,34 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Machine Configuration Section */}
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <div className="flex items-center space-x-2 mb-6">
-          <Factory className="w-6 h-6 text-purple-600" />
-          <h2 className="text-xl font-bold text-gray-800">Tezgah Konfigürasyonu</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Entry Machine */}
-          <div className="border-2 border-green-200 rounded-lg p-4 bg-green-50">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-gray-700">Giriş Tezgahı (Hammadde)</h3>
-              <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">ENTRY</span>
-            </div>
-            {entryMachine ? (
-              <div>
-                <div className="font-bold text-gray-900">{entryMachine.machine_name}</div>
-                <div className="text-sm text-gray-600">{entryMachine.machine_code}</div>
-                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
-                  entryMachine.status === 'active' ? 'bg-green-100 text-green-800' :
-                  entryMachine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {entryMachine.status === 'active' ? 'Çalışıyor' :
-                   entryMachine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
-                </span>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm">Giriş tezgahı atanmamış</p>
-            )}
+      {processMachines.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <Factory className="w-6 h-6 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-800">Proje Tezgahları</h2>
           </div>
 
-          {/* Exit Machine */}
-          <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-gray-700">Çıkış Tezgahı (Mamül)</h3>
-              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">EXIT</span>
-            </div>
-            {exitMachine ? (
-              <div>
-                <div className="font-bold text-gray-900">{exitMachine.machine_name}</div>
-                <div className="text-sm text-gray-600">{exitMachine.machine_code}</div>
-                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
-                  exitMachine.status === 'active' ? 'bg-green-100 text-green-800' :
-                  exitMachine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {exitMachine.status === 'active' ? 'Çalışıyor' :
-                   exitMachine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
-                </span>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm">Çıkış tezgahı atanmamış</p>
-            )}
-          </div>
-        </div>
-
-        {/* Process Machines */}
-        {processMachines.length > 0 && (
-          <div className="border-t-2 border-gray-200 pt-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-4">Ara İşlem Tezgahları</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {processMachines.map((pm) => (
-                <div key={pm.id} className="border border-orange-200 rounded-lg p-3 bg-orange-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-orange-700">Sıra: {pm.sequence_order}</span>
-                    <span className="text-xs bg-orange-600 text-white px-2 py-0.5 rounded">PROCESS</span>
-                  </div>
-                  <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
-                  <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
-                  {pm.daily_capacity_target && (
-                    <div className="mt-2 text-xs text-gray-700">
-                      <span className="font-semibold">Kapasite:</span> {pm.daily_capacity_target}/gün
-                    </div>
-                  )}
-                  {pm.notes && (
-                    <div className="mt-1 text-xs text-gray-600 italic">{pm.notes}</div>
-                  )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {processMachines.map((pm) => (
+              <div key={pm.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
                 </div>
-              ))}
-            </div>
+                <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
+                <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
+                {pm.daily_capacity_target && (
+                  <div className="mt-2 text-xs text-gray-700">
+                    <span className="font-semibold">Kapasite:</span> {pm.daily_capacity_target}/gün
+                  </div>
+                )}
+                {pm.notes && (
+                  <div className="mt-1 text-xs text-gray-600 italic">{pm.notes}</div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Daily Production Tracking */}
       {dailyProduction.length > 0 && (

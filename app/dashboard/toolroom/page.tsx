@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
+import { usePermissions } from '@/lib/hooks/usePermissions'
 import { Package, Wrench, Truck, Plus, Edit, Trash2, Search } from 'lucide-react'
 
 // ── Tipler ───────────────────────────────────────────────────
@@ -68,6 +69,8 @@ const formatDate = (iso: string) =>
 
 // ── Ana Bileşen ──────────────────────────────────────────────
 export default function ToolroomPage() {
+  const { canCreate, canEdit, canDelete } = usePermissions()
+
   const [tab, setTab] = useState<Tab>('inventory')
   const [tools, setTools] = useState<Tool[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([])
@@ -443,14 +446,14 @@ export default function ToolroomPage() {
                   </select>
 
                   {/* Ekle Butonu */}
-                  <PermissionGuard module="toolroom" permission="create">
+                  {canCreate('toolroom') && (
                     <button
                       onClick={openAddToolModal}
                       className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-semibold"
                     >
                       <Plus className="w-5 h-5" /> Yeni Takım
                     </button>
-                  </PermissionGuard>
+                  )}
                 </div>
 
                 {/* Takım Listesi */}
@@ -527,7 +530,7 @@ export default function ToolroomPage() {
                               <td className="px-4 py-3.5">
                                 <div className="flex items-center justify-end gap-2">
                                   {/* Tezgaha Ver */}
-                                  <PermissionGuard module="toolroom" permission="edit">
+                                  {canEdit('toolroom') && (
                                     <button
                                       onClick={() => openDeliveryModal(tool)}
                                       disabled={tool.quantity <= 0}
@@ -536,10 +539,10 @@ export default function ToolroomPage() {
                                     >
                                       <Truck className="w-4 h-4" />
                                     </button>
-                                  </PermissionGuard>
+                                  )}
 
                                   {/* Bakım Ekle */}
-                                  <PermissionGuard module="toolroom" permission="edit">
+                                  {canEdit('toolroom') && (
                                     <button
                                       onClick={() => openMaintenanceModal(tool)}
                                       title="Bakım Ekle"
@@ -547,10 +550,10 @@ export default function ToolroomPage() {
                                     >
                                       <Wrench className="w-4 h-4" />
                                     </button>
-                                  </PermissionGuard>
+                                  )}
 
                                   {/* Düzenle */}
-                                  <PermissionGuard module="toolroom" permission="edit">
+                                  {canEdit('toolroom') && (
                                     <button
                                       onClick={() => openEditToolModal(tool)}
                                       title="Düzenle"
@@ -558,10 +561,10 @@ export default function ToolroomPage() {
                                     >
                                       <Edit className="w-4 h-4" />
                                     </button>
-                                  </PermissionGuard>
+                                  )}
 
                                   {/* Sil */}
-                                  <PermissionGuard module="toolroom" permission="delete">
+                                  {canDelete('toolroom') && (
                                     <button
                                       onClick={() => deleteTool(tool)}
                                       title="Sil"
@@ -569,7 +572,7 @@ export default function ToolroomPage() {
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
-                                  </PermissionGuard>
+                                  )}
                                 </div>
                               </td>
                             </tr>

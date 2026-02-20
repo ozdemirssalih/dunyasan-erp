@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 
-type SourceFilter = 'all' | 'inventory' | 'warehouse' | 'production'
+type SourceFilter = 'all' | 'inventory' | 'warehouse' | 'production' | 'toolroom'
 
 interface UnifiedItem {
   id: string
@@ -18,7 +18,7 @@ interface UnifiedItem {
   min_stock: number
   unit_price: number | null
   location: string | null
-  source: 'inventory' | 'warehouse' | 'production'
+  source: 'inventory' | 'warehouse' | 'production' | 'toolroom'
 }
 
 
@@ -154,7 +154,25 @@ export default function InventoryPage() {
         source: 'production',
       }))
 
-      setAllItems([...whItems, ...invItems, ...prodItems])
+      // 4. tools (takımhane)
+      const { data: toolsData } = await supabase
+        .from('tools').select('*').eq('company_id', cid).eq('is_active', true).order('tool_code')
+
+      const toolItems: UnifiedItem[] = (toolsData || []).map((item: any) => ({
+        id: `tool-${item.id}`,
+        rawId: item.id,
+        code: item.tool_code,
+        name: item.tool_name,
+        category: item.tool_type || 'Takım',
+        quantity: item.quantity,
+        unit: 'Adet',
+        min_stock: item.min_quantity || 0,
+        unit_price: item.unit_price || 0,
+        location: item.location,
+        source: 'toolroom',
+      }))
+
+      setAllItems([...whItems, ...invItems, ...prodItems, ...toolItems])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -162,9 +180,9 @@ export default function InventoryPage() {
     }
   }
 
-  // Sadece inventory kalemleri düzenlenebilir, sadece min_stock ve unit_price
+  // Inventory ve toolroom kalemleri düzenlenebilir
   const openEditModal = (item: UnifiedItem) => {
-    if (item.source !== 'inventory') return
+    if (item.source !== 'inventory' && item.source !== 'toolroom') return
     setEditingItem(item)
     setForm({
       min_stock: item.min_stock,
@@ -173,18 +191,25 @@ export default function InventoryPage() {
     setShowModal(true)
   }
 
-  // Sadece inventory tablosunda min_stock ve unit_price güncellenir
+  // inventory ve toolroom tablosunda min_stock ve unit_price güncellenir
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingItem || editingItem.source !== 'inventory') return
+    if (!editingItem || (editingItem.source !== 'inventory' && editingItem.source !== 'toolroom')) return
     setModalLoading(true)
 
     try {
-      const { error } = await supabase.from('inventory').update({
-        unit_cost: form.unit_price,
-        min_stock_level: form.min_stock,
-      }).eq('id', editingItem.rawId)
-      if (error) throw error
+      if (editingItem.source === 'inventory') {
+        const { error } = await supabase.from('inventory').update({
+          unit_cost: form.unit_price,
+          min_stock_level: form.min_stock,
+        }).eq('id', editingItem.rawId)
+        if (error) throw error
+      } else if (editingItem.source === 'toolroom') {
+        const { error } = await supabase.from('tools').update({
+          unit_price: form.unit_price,
+        }).eq('id', editingItem.rawId)
+        if (error) throw error
+      }
 
       setShowModal(false)
       setEditingItem(null)
@@ -225,6 +250,7 @@ export default function InventoryPage() {
   const whCount = allItems.filter(i => i.source === 'warehouse').length
   const invCount = allItems.filter(i => i.source === 'inventory').length
   const prodCount = allItems.filter(i => i.source === 'production').length
+  const toolCount = allItems.filter(i => i.source === 'toolroom').length
   const lowStockCount = allItems.filter(i => i.quantity > 0 && i.min_stock > 0 && i.quantity < i.min_stock).length
   const outOfStockCount = allItems.filter(i => i.quantity === 0).length
   const totalValue = allItems.reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0)
@@ -237,12 +263,13 @@ export default function InventoryPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Stok & Hammadde</h2>
-            <p className="text-gray-500 text-sm mt-1">Tüm stoklar: Depo · Envanter · Üretim</p>
+            <p className="text-gray-500 text-sm mt-1">Tüm stoklar: Depo · Envanter · Üretim · Takımhane</p>
           </div>
           <div className="flex gap-2 text-sm">
             <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-semibold">{whCount} Depo</span>
             <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">{invCount} Stok</span>
             <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">{prodCount} Üretim</span>
+            <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full font-semibold">{toolCount} Takımhane</span>
           </div>
         </div>
 
@@ -298,6 +325,7 @@ export default function InventoryPage() {
               { key: 'warehouse', label: 'Depo' },
               { key: 'inventory', label: 'Stok' },
               { key: 'production', label: 'Üretim' },
+              { key: 'toolroom', label: 'Takımhane' },
             ].map(f => (
               <button
                 key={f.key}
@@ -379,7 +407,7 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-500">{item.location || '—'}</td>
                       <td className="px-5 py-3.5">
-                        {item.source === 'inventory' ? (
+                        {(item.source === 'inventory' || item.source === 'toolroom') ? (
                           <button
                             onClick={() => openEditModal(item)}
                             className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
@@ -415,7 +443,9 @@ export default function InventoryPage() {
             <div className="bg-white rounded-xl p-7 max-w-sm w-full shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800">Min Stok & Fiyat Güncelle</h3>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    {editingItem.source === 'toolroom' ? 'Fiyat Güncelle' : 'Min Stok & Fiyat Güncelle'}
+                  </h3>
                   <p className="text-xs text-gray-400 mt-0.5">{editingItem.code} — {editingItem.name}</p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -432,17 +462,19 @@ export default function InventoryPage() {
               </div>
 
               <form onSubmit={handleSave} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Stok Seviyesi</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.min_stock}
-                    onChange={(e) => setForm({ ...form, min_stock: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Bu seviyenin altına düşünce uyarı verilir</p>
-                </div>
+                {editingItem.source === 'inventory' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Stok Seviyesi</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.min_stock}
+                      onChange={(e) => setForm({ ...form, min_stock: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Bu seviyenin altına düşünce uyarı verilir</p>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat (₺)</label>

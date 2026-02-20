@@ -3,8 +3,11 @@
 -- Dünyasan ERP | 2026
 -- ============================================================
 
+-- Eski tabloyu sil (eğer varsa)
+DROP TABLE IF EXISTS project_tools CASCADE;
+
 -- Proje takımları junction table
-CREATE TABLE IF NOT EXISTS project_tools (
+CREATE TABLE project_tools (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,

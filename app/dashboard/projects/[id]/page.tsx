@@ -12,14 +12,13 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<any>(null)
   const [customer, setCustomer] = useState<any>(null)
-  const [machines, setMachines] = useState<any[]>([])
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [projectMaterials, setProjectMaterials] = useState<any[]>([])
   const [productions, setProductions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
-  // Yeni: Tezgah konfigürasyonu ve üretim takibi
+  // Tezgah konfigürasyonu ve üretim takibi
   const [processMachines, setProcessMachines] = useState<any[]>([])
   const [dailyProduction, setDailyProduction] = useState<any[]>([])
 
@@ -115,44 +114,6 @@ export default function ProjectDetailPage() {
       console.log('✅ Productions loaded:', productionsData?.length || 0)
       setProductions(productionsData || [])
 
-      // Load machines
-      const { data: machinesData } = await supabase
-        .from('machines')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('company_id', finalCompanyId)
-
-      console.log('✅ Machines loaded:', machinesData?.length || 0)
-
-      const machinesWithStats = await Promise.all(
-        (machinesData || []).map(async (machine) => {
-          // Bu tezgaha verilen malzemeler (tüm kayıtlar - tezgah zaten projeye atanmış)
-          const { data: givenMaterials, error: givenError } = await supabase
-            .from('production_to_machine_transfers')
-            .select('quantity')
-            .eq('machine_id', machine.id)
-
-          if (givenError) console.error('Error loading given materials:', givenError)
-
-          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
-          // Bu tezgahta üretilen ürünler (tüm kayıtlar)
-          const { data: producedItems, error: producedError } = await supabase
-            .from('production_outputs')
-            .select('quantity')
-            .eq('machine_id', machine.id)
-
-          if (producedError) console.error('Error loading produced items:', producedError)
-
-          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
-          const efficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
-
-          return { ...machine, totalGiven, totalProduced, efficiency }
-        })
-      )
-
-      setMachines(machinesWithStats)
-
       // Load warehouse items (tüm depo - malzeme eklemek için)
       const { data: warehouseData } = await supabase
         .from('warehouse_items')
@@ -181,12 +142,11 @@ export default function ProjectDetailPage() {
 
       setCustomers(customersData || [])
 
-      // Load available machines (no project or this project)
+      // Load available machines (all company machines)
       const { data: availableMachinesData } = await supabase
         .from('machines')
         .select('*')
         .eq('company_id', finalCompanyId)
-        .or(`project_id.is.null,project_id.eq.${projectId}`)
         .order('machine_name', { ascending: true })
 
       console.log('✅ Available machines loaded:', availableMachinesData?.length || 0)
@@ -269,13 +229,19 @@ export default function ProjectDetailPage() {
   }
 
   const handleAssignMachine = async () => {
-    if (!selectedMachineId) return
+    if (!selectedMachineId || !companyId) return
 
     try {
+      // Get the next sequence order
+      const nextOrder = processMachines.length + 1
+
       const { error } = await supabase
-        .from('machines')
-        .update({ project_id: projectId })
-        .eq('id', selectedMachineId)
+        .from('project_machines')
+        .insert({
+          project_id: projectId,
+          machine_id: selectedMachineId,
+          sequence_order: nextOrder
+        })
 
       if (error) throw error
 
@@ -283,20 +249,24 @@ export default function ProjectDetailPage() {
       await loadData()
       setShowMachineModal(false)
       setSelectedMachineId('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error assigning machine:', error)
-      alert('Tezgah atanırken hata oluştu!')
+      if (error?.code === '23505') {
+        alert('Bu tezgah zaten projeye eklenmiş!')
+      } else {
+        alert('Tezgah eklenirken hata oluştu!')
+      }
     }
   }
 
-  const handleRemoveMachine = async (machineId: string) => {
+  const handleRemoveMachine = async (projectMachineId: string) => {
     if (!confirm('Bu tezgahı projeden çıkarmak istediğinize emin misiniz?')) return
 
     try {
       const { error } = await supabase
-        .from('machines')
-        .update({ project_id: null })
-        .eq('id', machineId)
+        .from('project_machines')
+        .delete()
+        .eq('id', projectMachineId)
 
       if (error) throw error
 
@@ -530,8 +500,8 @@ export default function ProjectDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-green-50 rounded-xl p-6 border-l-4 border-green-500">
           <Factory className="w-8 h-8 text-green-600 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{machines.length}</div>
-          <div className="text-gray-600">Bu Projede Çalışan Tezgah</div>
+          <div className="text-3xl font-bold text-gray-900">{processMachines.length}</div>
+          <div className="text-gray-600">Projede Kullanılan Tezgah</div>
         </div>
         <div className="bg-yellow-50 rounded-xl p-6 border-l-4 border-yellow-500">
           <Package className="w-8 h-8 text-yellow-600 mb-2" />
@@ -599,35 +569,6 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* Machine Configuration Section */}
-      {processMachines.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Factory className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-800">Proje Tezgahları</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {processMachines.map((pm) => (
-              <div key={pm.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
-                </div>
-                <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
-                <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
-                {pm.daily_capacity_target && (
-                  <div className="mt-2 text-xs text-gray-700">
-                    <span className="font-semibold">Kapasite:</span> {pm.daily_capacity_target}/gün
-                  </div>
-                )}
-                {pm.notes && (
-                  <div className="mt-1 text-xs text-gray-600 italic">{pm.notes}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Daily Production Tracking */}
       {dailyProduction.length > 0 && (
@@ -691,83 +632,65 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Machines */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-2">
-              <Factory className="w-6 h-6 text-green-600" />
-              <h2 className="text-xl font-bold text-gray-800">Projede Çalışan Tezgahlar</h2>
-            </div>
+      {/* Machines Section */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-2">
+            <Factory className="w-6 h-6 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-800">Projede Kullanılan Tezgahlar</h2>
+          </div>
+          <button
+            onClick={() => setShowMachineModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Tezgah Ekle</span>
+          </button>
+        </div>
+
+        {processMachines.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {processMachines.map((pm) => (
+              <div key={pm.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-blue-700">Sıra: {pm.sequence_order}</span>
+                  <button
+                    onClick={() => handleRemoveMachine(pm.id)}
+                    className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                    title="Projeden Çıkar"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="font-bold text-gray-900 text-sm">{pm.machine?.machine_name}</div>
+                <div className="text-xs text-gray-600">{pm.machine?.machine_code}</div>
+                {pm.daily_capacity_target && (
+                  <div className="mt-2 text-xs text-gray-700">
+                    <span className="font-semibold">Kapasite:</span> {pm.daily_capacity_target}/gün
+                  </div>
+                )}
+                {pm.notes && (
+                  <div className="mt-1 text-xs text-gray-600 italic">{pm.notes}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Factory className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">Bu projeye henüz tezgah eklenmemiş.</p>
             <button
               onClick={() => setShowMachineModal(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="mt-4 text-blue-600 hover:text-blue-800 font-semibold"
             >
-              <Plus className="w-5 h-5" />
-              <span>Tezgah Ekle</span>
+              Tezgah Ekle
             </button>
           </div>
+        )}
+      </div>
 
-          {machines.length > 0 ? (
-            <div className="space-y-4">
-              {machines.map((machine) => (
-                <div key={machine.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">{machine.machine_name}</div>
-                      <div className="text-sm text-gray-600">{machine.machine_code}</div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        machine.status === 'active' ? 'bg-green-100 text-green-800' :
-                        machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {machine.status === 'active' ? 'Çalışıyor' :
-                         machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
-                      </span>
-                      <button
-                        onClick={() => handleRemoveMachine(machine.id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-semibold"
-                        title="Projeden Çıkar"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-gray-200">
-                    <div className="text-center">
-                      <div className="text-xs text-gray-600 mb-1">Verilen</div>
-                      <div className="text-sm font-bold text-gray-900">{machine.totalGiven?.toFixed(2) || '0.00'}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-600 mb-1">Üretilen</div>
-                      <div className="text-sm font-bold text-gray-900">{machine.totalProduced?.toFixed(2) || '0.00'}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-600 mb-1">Verimlilik</div>
-                      <div className={`text-sm font-bold ${
-                        (machine.efficiency || 0) >= 80 ? 'text-green-600' :
-                        (machine.efficiency || 0) >= 60 ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {machine.efficiency?.toFixed(1) || '0.0'}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Factory className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">Bu projede çalışan tezgah yok.</p>
-              <p className="text-gray-400 text-sm mt-1">Tezgah Yönetimi sayfasından tezgahlara proje atayabilirsiniz.</p>
-            </div>
-          )}
-        </div>
+      {/* Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Project Materials */}
         <div className="bg-white rounded-xl shadow-md p-6">
@@ -1100,7 +1023,7 @@ export default function ProjectDetailPage() {
             {availableMachines.length > 0 ? (
               <div className="space-y-3">
                 <p className="text-sm text-gray-600 mb-4">
-                  Projeye atanacak tezgahı seçin. Sadece başka projeye atanmamış tezgahlar listelenmektedir.
+                  Projeye eklenecek tezgahı seçin.
                 </p>
                 {availableMachines.map((machine) => (
                   <div
@@ -1129,11 +1052,6 @@ export default function ProjectDetailPage() {
                           {machine.status === 'active' ? 'Çalışıyor' :
                            machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
                         </span>
-                        {machine.project_id === projectId && (
-                          <span className="text-xs text-green-600 font-semibold">
-                            ✓ Bu projede
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1142,9 +1060,9 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="text-center py-8">
                 <Factory className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">Atanabilir tezgah bulunamadı.</p>
+                <p className="text-gray-500">Tezgah bulunamadı.</p>
                 <p className="text-sm text-gray-400 mt-2">
-                  Tüm tezgahlar başka projelere atanmış olabilir.
+                  Önce Tezgah Yönetimi sayfasından tezgah oluşturun.
                 </p>
               </div>
             )}

@@ -11,6 +11,8 @@ interface DailyProduction {
   project_id: string
   machine_id: string
   employee_id?: string
+  entry_machine_id?: string
+  exit_machine_id?: string
   production_date: string
   capacity_target: number
   actual_production: number
@@ -84,6 +86,8 @@ export default function DailyProductionPage() {
     project_id: '',
     machine_id: '',
     employee_id: '',
+    entry_machine_id: '',
+    exit_machine_id: '',
     production_date: new Date().toISOString().split('T')[0],
     capacity_target: '',
     actual_production: '',
@@ -241,6 +245,8 @@ export default function DailyProductionPage() {
         project_id: formData.project_id,
         machine_id: formData.machine_id,
         employee_id: formData.employee_id || null,
+        entry_machine_id: formData.entry_machine_id || null,
+        exit_machine_id: formData.exit_machine_id || null,
         production_date: formData.production_date,
         capacity_target: parseInt(formData.capacity_target),
         actual_production: parseInt(formData.actual_production),
@@ -287,6 +293,8 @@ export default function DailyProductionPage() {
       project_id: production.project_id,
       machine_id: production.machine_id,
       employee_id: production.employee_id || '',
+      entry_machine_id: production.entry_machine_id || '',
+      exit_machine_id: production.exit_machine_id || '',
       production_date: production.production_date,
       capacity_target: production.capacity_target.toString(),
       actual_production: production.actual_production.toString(),
@@ -320,6 +328,8 @@ export default function DailyProductionPage() {
       project_id: '',
       machine_id: '',
       employee_id: '',
+      entry_machine_id: '',
+      exit_machine_id: '',
       production_date: new Date().toISOString().split('T')[0],
       capacity_target: '',
       actual_production: '',
@@ -587,7 +597,14 @@ export default function DailyProductionPage() {
                     value={formData.project_id}
                     onChange={(e) => {
                       const newProjectId = e.target.value
-                      setFormData({ ...formData, project_id: newProjectId, machine_id: '' })
+                      const selectedProject = projects.find(p => p.id === newProjectId)
+                      setFormData({
+                        ...formData,
+                        project_id: newProjectId,
+                        machine_id: '',
+                        entry_machine_id: selectedProject?.entry_machine_id || '',
+                        exit_machine_id: selectedProject?.exit_machine_id || ''
+                      })
                       loadProjectMachines(newProjectId)
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -605,68 +622,74 @@ export default function DailyProductionPage() {
                 </div>
 
                 {/* Entry, Intermediate, Exit Machines */}
-                {formData.project_id && (() => {
-                  const selectedProject = projects.find(p => p.id === formData.project_id)
-                  const entryMachine = allMachines.find(m => m.id === selectedProject?.entry_machine_id)
-                  const exitMachine = allMachines.find(m => m.id === selectedProject?.exit_machine_id)
-
-                  return (
-                    <div className="grid grid-cols-3 gap-4">
-                      {/* Giriş Tezgahı */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Giriş Tezgahı (Hammadde)
-                        </label>
-                        <input
-                          type="text"
-                          value={entryMachine ? `${entryMachine.machine_name} (${entryMachine.machine_code})` : 'Atanmamış'}
-                          readOnly
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
-                        />
-                      </div>
-
-                      {/* Ara Tezgah */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Ara Tezgah <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={formData.machine_id}
-                          onChange={(e) => {
-                            const selectedMachineId = e.target.value
-                            const machineCapacity = projectMachinesData.find(pm => pm.machine_id === selectedMachineId)
-                            setFormData({
-                              ...formData,
-                              machine_id: selectedMachineId,
-                              capacity_target: machineCapacity?.daily_capacity_target?.toString() || ''
-                            })
-                          }}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        >
-                          <option value="">Ara Tezgah Seçiniz</option>
-                          {machines.map((machine) => (
-                            <option key={machine.id} value={machine.id}>
-                              {machine.machine_name} ({machine.machine_code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Çıkış Tezgahı */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Çıkış Tezgahı (Mamül)
-                        </label>
-                        <input
-                          type="text"
-                          value={exitMachine ? `${exitMachine.machine_name} (${exitMachine.machine_code})` : 'Atanmamış'}
-                          readOnly
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
-                        />
-                      </div>
+                {formData.project_id && (
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Giriş Tezgahı */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Giriş Tezgahı (Hammadde)
+                      </label>
+                      <select
+                        value={formData.entry_machine_id}
+                        onChange={(e) => setFormData({ ...formData, entry_machine_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        <option value="">Giriş Tezgahı Seçiniz (Opsiyonel)</option>
+                        {allMachines.map((machine) => (
+                          <option key={machine.id} value={machine.id}>
+                            {machine.machine_name} ({machine.machine_code})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  )
-                })()}
+
+                    {/* Ara Tezgah */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Ara Tezgah <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={formData.machine_id}
+                        onChange={(e) => {
+                          const selectedMachineId = e.target.value
+                          const machineCapacity = projectMachinesData.find(pm => pm.machine_id === selectedMachineId)
+                          setFormData({
+                            ...formData,
+                            machine_id: selectedMachineId,
+                            capacity_target: machineCapacity?.daily_capacity_target?.toString() || ''
+                          })
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        <option value="">Ara Tezgah Seçiniz</option>
+                        {machines.map((machine) => (
+                          <option key={machine.id} value={machine.id}>
+                            {machine.machine_name} ({machine.machine_code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Çıkış Tezgahı */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Çıkış Tezgahı (Mamül)
+                      </label>
+                      <select
+                        value={formData.exit_machine_id}
+                        onChange={(e) => setFormData({ ...formData, exit_machine_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        <option value="">Çıkış Tezgahı Seçiniz (Opsiyonel)</option>
+                        {allMachines.map((machine) => (
+                          <option key={machine.id} value={machine.id}>
+                            {machine.machine_name} ({machine.machine_code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
 
                 {/* Employee Selection */}
                 {formData.machine_id && (

@@ -142,15 +142,32 @@ export default function ProjectDetailPage() {
 
       setCustomers(customersData || [])
 
-      // Load available machines (all company machines)
+      // Load available machines with project assignment info
       const { data: availableMachinesData } = await supabase
         .from('machines')
         .select('*')
         .eq('company_id', finalCompanyId)
         .order('machine_name', { ascending: true })
 
-      console.log('✅ Available machines loaded:', availableMachinesData?.length || 0)
-      setAvailableMachines(availableMachinesData || [])
+      // Check which machines are assigned to projects
+      const machinesWithAssignment = await Promise.all(
+        (availableMachinesData || []).map(async (machine) => {
+          const { data: assignment } = await supabase
+            .from('project_machines')
+            .select('project_id, project:projects(project_name)')
+            .eq('machine_id', machine.id)
+            .single()
+
+          return {
+            ...machine,
+            assignedProject: assignment?.project || null,
+            isAssignedToThisProject: assignment?.project_id === projectId
+          }
+        })
+      )
+
+      console.log('✅ Available machines loaded:', machinesWithAssignment?.length || 0)
+      setAvailableMachines(machinesWithAssignment || [])
 
       // Load project tools
       const { data: projectToolsData } = await supabase
@@ -232,6 +249,19 @@ export default function ProjectDetailPage() {
     if (!selectedMachineId || !companyId) return
 
     try {
+      // Check if machine is already assigned to another project
+      const { data: existingAssignment } = await supabase
+        .from('project_machines')
+        .select('project_id, project:projects(project_name)')
+        .eq('machine_id', selectedMachineId)
+        .single()
+
+      if (existingAssignment && existingAssignment.project_id !== projectId) {
+        const projectName = (existingAssignment.project as any)?.project_name || 'Bilinmeyen Proje'
+        alert(`Bu tezgah başka bir projeye atanmış: ${projectName}`)
+        return
+      }
+
       // Get the next sequence order
       const nextOrder = processMachines.length + 1
 
@@ -252,7 +282,7 @@ export default function ProjectDetailPage() {
     } catch (error: any) {
       console.error('❌ Error assigning machine:', error)
       if (error?.code === '23505') {
-        alert('Bu tezgah zaten projeye eklenmiş!')
+        alert('Bu tezgah zaten bu projeye eklenmiş!')
       } else {
         alert('Tezgah eklenirken hata oluştu!')
       }
@@ -1025,37 +1055,49 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-gray-600 mb-4">
                   Projeye eklenecek tezgahı seçin.
                 </p>
-                {availableMachines.map((machine) => (
-                  <div
-                    key={machine.id}
-                    onClick={() => setSelectedMachineId(machine.id)}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      selectedMachineId === machine.id
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-green-300 bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="font-bold text-gray-900">{machine.machine_name}</div>
-                        <div className="text-sm text-gray-600">{machine.machine_code}</div>
-                        {machine.location && (
-                          <div className="text-xs text-gray-500 mt-1">📍 {machine.location}</div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          machine.status === 'active' ? 'bg-green-100 text-green-800' :
-                          machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {machine.status === 'active' ? 'Çalışıyor' :
-                           machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
-                        </span>
+                {availableMachines.map((machine: any) => {
+                  const isAssignedToOther = machine.assignedProject && !machine.isAssignedToThisProject
+                  const isDisabled = isAssignedToOther
+
+                  return (
+                    <div
+                      key={machine.id}
+                      onClick={() => !isDisabled && setSelectedMachineId(machine.id)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        isDisabled
+                          ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
+                          : selectedMachineId === machine.id
+                          ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                          : 'border-gray-200 hover:border-blue-300 bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="font-bold text-gray-900">{machine.machine_name}</div>
+                          <div className="text-sm text-gray-600">{machine.machine_code}</div>
+                          {machine.location && (
+                            <div className="text-xs text-gray-500 mt-1">📍 {machine.location}</div>
+                          )}
+                          {isAssignedToOther && (
+                            <div className="text-xs text-red-600 font-semibold mt-2">
+                              ⚠️ Başka projeye atanmış: {machine.assignedProject?.project_name || 'Bilinmeyen'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end space-y-2">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            machine.status === 'active' ? 'bg-green-100 text-green-800' :
+                            machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {machine.status === 'active' ? 'Çalışıyor' :
+                             machine.status === 'maintenance' ? 'Bakımda' : 'Çalışmıyor'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-8">

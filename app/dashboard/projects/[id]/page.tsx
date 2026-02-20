@@ -269,6 +269,7 @@ export default function ProjectDetailPage() {
       const { error } = await supabase
         .from('project_machines')
         .insert({
+          company_id: companyId,
           project_id: projectId,
           machine_id: selectedMachineId,
           display_order: nextOrder

@@ -28,7 +28,7 @@ CREATE POLICY "Users can view project tools for their company"
     EXISTS (
       SELECT 1 FROM projects p
       INNER JOIN profiles pr ON pr.company_id = p.company_id
-      WHERE p.id = project_tools.project_id
+      WHERE p.id = project_id
       AND pr.id = auth.uid()
     )
   );
@@ -40,7 +40,7 @@ CREATE POLICY "Users can insert project tools for their company"
     EXISTS (
       SELECT 1 FROM projects p
       INNER JOIN profiles pr ON pr.company_id = p.company_id
-      WHERE p.id = project_tools.project_id
+      WHERE p.id = project_id
       AND pr.id = auth.uid()
     )
   );
@@ -52,7 +52,7 @@ CREATE POLICY "Users can update project tools for their company"
     EXISTS (
       SELECT 1 FROM projects p
       INNER JOIN profiles pr ON pr.company_id = p.company_id
-      WHERE p.id = project_tools.project_id
+      WHERE p.id = project_id
       AND pr.id = auth.uid()
     )
   );
@@ -64,7 +64,7 @@ CREATE POLICY "Users can delete project tools for their company"
     EXISTS (
       SELECT 1 FROM projects p
       INNER JOIN profiles pr ON pr.company_id = p.company_id
-      WHERE p.id = project_tools.project_id
+      WHERE p.id = project_id
       AND pr.id = auth.uid()
     )
   );

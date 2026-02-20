@@ -140,9 +140,9 @@ export default function ToolroomPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: ur } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single()
-      if (!ur) return
-      const cid = ur.company_id
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+      if (!profile?.company_id) return
+      const cid = profile.company_id
       setCompanyId(cid)
 
       const [toolsRes, maintenanceRes, suppliersRes, machinesRes] = await Promise.all([

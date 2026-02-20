@@ -31,22 +31,22 @@ ALTER TABLE tool_machine_deliveries ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view tool deliveries for their company" ON tool_machine_deliveries;
 CREATE POLICY "Users can view tool deliveries for their company"
   ON tool_machine_deliveries FOR SELECT
-  USING (company_id IN (SELECT company_id FROM user_roles WHERE user_id = auth.uid()));
+  USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
 DROP POLICY IF EXISTS "Users can insert tool deliveries for their company" ON tool_machine_deliveries;
 CREATE POLICY "Users can insert tool deliveries for their company"
   ON tool_machine_deliveries FOR INSERT
-  WITH CHECK (company_id IN (SELECT company_id FROM user_roles WHERE user_id = auth.uid()));
+  WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
 DROP POLICY IF EXISTS "Users can update tool deliveries for their company" ON tool_machine_deliveries;
 CREATE POLICY "Users can update tool deliveries for their company"
   ON tool_machine_deliveries FOR UPDATE
-  USING (company_id IN (SELECT company_id FROM user_roles WHERE user_id = auth.uid()));
+  USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
 DROP POLICY IF EXISTS "Users can delete tool deliveries for their company" ON tool_machine_deliveries;
 CREATE POLICY "Users can delete tool deliveries for their company"
   ON tool_machine_deliveries FOR DELETE
-  USING (company_id IN (SELECT company_id FROM user_roles WHERE user_id = auth.uid()));
+  USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()));
 
 -- ============================================================
 -- TAMAMLANDI

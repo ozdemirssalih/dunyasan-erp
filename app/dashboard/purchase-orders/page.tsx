@@ -1071,26 +1071,25 @@ export default function PurchaseOrdersPage() {
 
                 {/* Sağ: Başlık */}
                 <div className="text-right">
-                  <h2 className="text-3xl font-bold mb-1" style={{ color: '#1e3a8a' }}>SİPARİŞ ONAY FORMU</h2>
-                  <p className="text-lg" style={{ color: '#6b7280' }}>Order Confirmation Form</p>
+                  <h2 className="text-3xl font-bold" style={{ color: '#1e3a8a' }}>SİPARİŞ ONAY FORMU</h2>
                 </div>
               </div>
 
               {/* Şirket ve Form Bilgileri */}
-              <div className="mb-6 border-t-2 pt-4" style={{ borderColor: '#d1d5db' }}>
+              <div className="mb-6">
                 <div className="grid grid-cols-2 gap-6">
                   {/* Sol Kolon */}
                   <div className="space-y-2">
                     <div className="flex text-sm">
-                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ŞİRKETİ/COMPANY:</span>
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ŞİRKETİ:</span>
                       <span className="flex-1">{orderFormData.company_name}</span>
                     </div>
                     <div className="flex text-sm">
-                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>YETKİLİ/RESPONSABLE:</span>
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>YETKİLİ:</span>
                       <span className="flex-1">{orderFormData.contact_person}</span>
                     </div>
                     <div className="flex text-sm">
-                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>TELEFON/PHONE:</span>
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>TELEFON:</span>
                       <span className="flex-1">{orderFormData.phone}</span>
                     </div>
                     <div className="flex text-sm">
@@ -1102,11 +1101,11 @@ export default function PurchaseOrdersPage() {
                   {/* Sağ Kolon */}
                   <div className="space-y-2">
                     <div className="flex text-sm">
-                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TEKLİF/OFFER:</span>
+                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TEKLİF:</span>
                       <span className="flex-1">{orderFormData.offer_number}</span>
                     </div>
                     <div className="flex text-sm">
-                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TARİH/DATE:</span>
+                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TARİH:</span>
                       <span className="flex-1">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
                     </div>
                     <div className="flex text-sm">
@@ -1118,7 +1117,7 @@ export default function PurchaseOrdersPage() {
 
                 {/* Adres - Tam Genişlik */}
                 <div className="flex text-sm mt-2">
-                  <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ADRES/ADDRESS:</span>
+                  <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ADRES:</span>
                   <span className="flex-1">{orderFormData.address}</span>
                 </div>
               </div>
@@ -1127,17 +1126,11 @@ export default function PurchaseOrdersPage() {
               <table className="w-full border-collapse border-2 border-black">
                 <thead>
                   <tr style={{ backgroundColor: '#1e3a8a', color: 'white' }}>
-                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '80px' }}>SIRA NO</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" style={{ width: '80px' }}>SIRA NO</th>
                     <th className="border border-black px-3 py-3 text-sm font-bold" style={{ width: '120px' }}>MİKTAR</th>
-                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2}>AÇIKLAMA</th>
-                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '140px' }}>BİRİM FİYAT</th>
-                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '140px' }}>TOPLAM</th>
-                  </tr>
-                  <tr style={{ backgroundColor: '#1e3a8a', color: 'white' }}>
-                    <th className="border border-black px-3 py-2 text-xs font-bold">AMOUNT</th>
-                    <th className="border border-black px-3 py-2 text-xs font-bold">DESCRİPTİON</th>
-                    <th className="border border-black px-3 py-2 text-xs font-bold">UNİT PRİCE</th>
-                    <th className="border border-black px-3 py-2 text-xs font-bold">TOTAL</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold">AÇIKLAMA</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" style={{ width: '140px' }}>BİRİM FİYAT</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" style={{ width: '140px' }}>TOPLAM</th>
                   </tr>
                 </thead>
                 <tbody>

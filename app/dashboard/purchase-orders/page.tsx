@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ShoppingCart, Plus, Eye, Trash2, Package, Calendar, User } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ShoppingCart, Plus, Eye, Trash2, Package, Calendar, User, FileText, Download } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 import { supabase } from '@/lib/supabase/client'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 interface PurchaseOrder {
   id: string
@@ -21,10 +23,11 @@ interface PurchaseOrder {
 }
 
 export default function PurchaseOrdersPage() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers' | 'order-form'>('orders')
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
 
   // Form states
   const [showModal, setShowModal] = useState(false)
@@ -64,6 +67,24 @@ export default function PurchaseOrdersPage() {
     tax_number: '',
     notes: ''
   })
+
+  // Order Form states
+  const [orderFormData, setOrderFormData] = useState({
+    company_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    tax_number: '',
+    offer_number: '',
+    date: new Date().toISOString().split('T')[0]
+  })
+  const [orderFormItems, setOrderFormItems] = useState<Array<{
+    amount: string
+    description: string
+    unit_price: string
+    total: number
+  }>>([{ amount: '', description: '', unit_price: '', total: 0 }])
 
   useEffect(() => {
     loadData()
@@ -339,6 +360,64 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  // Order Form Functions
+  const handleAddOrderFormItem = () => {
+    setOrderFormItems([...orderFormItems, { amount: '', description: '', unit_price: '', total: 0 }])
+  }
+
+  const handleRemoveOrderFormItem = (index: number) => {
+    setOrderFormItems(orderFormItems.filter((_, i) => i !== index))
+  }
+
+  const handleOrderFormItemChange = (index: number, field: string, value: string) => {
+    const updated = [...orderFormItems]
+    updated[index] = { ...updated[index], [field]: value }
+
+    // Calculate total for this item
+    if (field === 'amount' || field === 'unit_price') {
+      const amount = parseFloat(updated[index].amount) || 0
+      const unitPrice = parseFloat(updated[index].unit_price) || 0
+      updated[index].total = amount * unitPrice
+    }
+
+    setOrderFormItems(updated)
+  }
+
+  const calculateSubtotal = () => {
+    return orderFormItems.reduce((sum, item) => sum + item.total, 0)
+  }
+
+  const calculateVAT = () => {
+    return calculateSubtotal() * 0.20
+  }
+
+  const calculateGrandTotal = () => {
+    return calculateSubtotal() + calculateVAT()
+  }
+
+  const exportToPDF = async () => {
+    if (!formRef.current) return
+
+    try {
+      const canvas = await html2canvas(formRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      })
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgWidth = 210 // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+      pdf.save(`siparis-talep-formu-${orderFormData.offer_number || 'yeni'}.pdf`)
+    } catch (error) {
+      console.error('PDF Error:', error)
+      alert('PDF oluşturulurken hata oluştu!')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const badges: any = {
       draft: 'bg-gray-100 text-gray-800',
@@ -386,6 +465,16 @@ export default function PurchaseOrdersPage() {
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Tedarikçiler
+            </button>
+            <button
+              onClick={() => setActiveTab('order-form')}
+              className={`${
+                activeTab === 'order-form'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Sipariş Talep Formu
             </button>
           </nav>
         </div>
@@ -884,6 +973,220 @@ export default function PurchaseOrdersPage() {
                 </div>
               </div>
             )}
+          </>
+        )}
+
+        {/* Order Form Tab */}
+        {activeTab === 'order-form' && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800">Sipariş Talep Formu</h2>
+                <p className="text-gray-600">PDF olarak indirebileceğiniz sipariş talebi oluşturun</p>
+              </div>
+              <button
+                onClick={exportToPDF}
+                className="flex items-center space-x-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                <span>PDF İndir</span>
+              </button>
+            </div>
+
+            {/* PDF Form */}
+            <div ref={formRef} className="bg-white p-8" style={{ width: '210mm', minHeight: '297mm' }}>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <h1 className="text-2xl font-bold text-blue-900">DÜNYASAN SAVUNMA</h1>
+                  <p className="text-sm">DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</p>
+                  <p className="text-xs mt-2">Fabrikalar Mh. Kırıkkale Silah İhtisas OSB 2. Sk. No: 18/1 KIRIKKALE</p>
+                  <p className="text-xs">Tel: 0318 606 00 06 +90 530 389 00 71</p>
+                  <p className="text-xs">e-mail: satinalma@dunyasan.com</p>
+                  <p className="text-xs">Irmak V.D. 123 110 3150</p>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-xl font-bold">SİPARİŞ ONAY FORMU</h2>
+                  <p className="text-sm">Order Confirmation Form</p>
+                </div>
+              </div>
+
+              {/* Company Info Form */}
+              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                <div>
+                  <label className="font-bold">ŞİRKETİ/COMPANY:</label>
+                  <input
+                    type="text"
+                    value={orderFormData.company_name}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, company_name: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">TEKLİF/OFFER:</label>
+                  <input
+                    type="text"
+                    value={orderFormData.offer_number}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, offer_number: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">YETKİLİ/RESPONSABLE:</label>
+                  <input
+                    type="text"
+                    value={orderFormData.contact_person}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, contact_person: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">TARİH/DATE:</label>
+                  <input
+                    type="date"
+                    value={orderFormData.date}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, date: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">TELEFON/PHONE:</label>
+                  <input
+                    type="text"
+                    value={orderFormData.phone}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, phone: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">VERGİ NO:</label>
+                  <input
+                    type="text"
+                    value={orderFormData.tax_number}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, tax_number: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold">E-MAİL:</label>
+                  <input
+                    type="email"
+                    value={orderFormData.email}
+                    onChange={(e) => setOrderFormData({ ...orderFormData, email: e.target.value })}
+                    className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="font-bold text-sm">ADRES/ADDRESS:</label>
+                <input
+                  type="text"
+                  value={orderFormData.address}
+                  onChange={(e) => setOrderFormData({ ...orderFormData, address: e.target.value })}
+                  className="w-full border-b border-gray-300 px-1 py-1 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Order Items Table */}
+              <table className="w-full border-collapse border border-gray-400 mb-4">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border border-gray-400 px-2 py-2 text-sm font-bold">SIRA NO</th>
+                    <th className="border border-gray-400 px-2 py-2 text-sm font-bold">MİKTAR<br/>AMOUNT</th>
+                    <th className="border border-gray-400 px-2 py-2 text-sm font-bold">AÇIKLAMA<br/>DESCRIPTION</th>
+                    <th className="border border-gray-400 px-2 py-2 text-sm font-bold">BİRİM FİYAT<br/>UNIT PRICE</th>
+                    <th className="border border-gray-400 px-2 py-2 text-sm font-bold">TOPLAM<br/>TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderFormItems.map((item, index) => (
+                    <tr key={index}>
+                      <td className="border border-gray-400 px-2 py-2 text-center text-sm">{index + 1}</td>
+                      <td className="border border-gray-400 px-2 py-2">
+                        <input
+                          type="text"
+                          value={item.amount}
+                          onChange={(e) => handleOrderFormItemChange(index, 'amount', e.target.value)}
+                          className="w-full px-1 py-1 text-sm focus:outline-none"
+                        />
+                      </td>
+                      <td className="border border-gray-400 px-2 py-2">
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => handleOrderFormItemChange(index, 'description', e.target.value)}
+                          className="w-full px-1 py-1 text-sm focus:outline-none"
+                        />
+                      </td>
+                      <td className="border border-gray-400 px-2 py-2">
+                        <input
+                          type="text"
+                          value={item.unit_price}
+                          onChange={(e) => handleOrderFormItemChange(index, 'unit_price', e.target.value)}
+                          className="w-full px-1 py-1 text-sm focus:outline-none"
+                        />
+                      </td>
+                      <td className="border border-gray-400 px-2 py-2 text-right text-sm font-semibold">
+                        {item.total.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Summary Rows */}
+                  <tr>
+                    <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      ARA TOPLAM
+                    </td>
+                    <td className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      {calculateSubtotal().toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      KDV %20
+                    </td>
+                    <td className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      {calculateVAT().toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      TOPLAM
+                    </td>
+                    <td className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      {calculateGrandTotal().toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={4} className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      TL KARŞILIĞI
+                    </td>
+                    <td className="border border-gray-400 px-2 py-2 text-right bg-red-100 font-bold text-sm">
+                      {calculateGrandTotal().toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Add/Remove Item Buttons */}
+              <div className="flex gap-2 mb-4 print:hidden">
+                <button
+                  onClick={handleAddOrderFormItem}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                >
+                  + Satır Ekle
+                </button>
+                {orderFormItems.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveOrderFormItem(orderFormItems.length - 1)}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                  >
+                    - Son Satırı Sil
+                  </button>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>

@@ -1082,19 +1082,19 @@ export default function PurchaseOrdersPage() {
                   <div className="space-y-2">
                     <div className="flex text-sm">
                       <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ŞİRKETİ:</span>
-                      <span className="flex-1">{orderFormData.company_name}</span>
+                      <span className="flex-1 text-black">{orderFormData.company_name}</span>
                     </div>
                     <div className="flex text-sm">
                       <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>YETKİLİ:</span>
-                      <span className="flex-1">{orderFormData.contact_person}</span>
+                      <span className="flex-1 text-black">{orderFormData.contact_person}</span>
                     </div>
                     <div className="flex text-sm">
                       <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>TELEFON:</span>
-                      <span className="flex-1">{orderFormData.phone}</span>
+                      <span className="flex-1 text-black">{orderFormData.phone}</span>
                     </div>
                     <div className="flex text-sm">
                       <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>E-MAİL:</span>
-                      <span className="flex-1">{orderFormData.email}</span>
+                      <span className="flex-1 text-black">{orderFormData.email}</span>
                     </div>
                   </div>
 
@@ -1102,15 +1102,15 @@ export default function PurchaseOrdersPage() {
                   <div className="space-y-2">
                     <div className="flex text-sm">
                       <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TEKLİF:</span>
-                      <span className="flex-1">{orderFormData.offer_number}</span>
+                      <span className="flex-1 text-black">{orderFormData.offer_number}</span>
                     </div>
                     <div className="flex text-sm">
                       <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TARİH:</span>
-                      <span className="flex-1">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
+                      <span className="flex-1 text-black">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
                     </div>
                     <div className="flex text-sm">
                       <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>VERGİ NO:</span>
-                      <span className="flex-1">{orderFormData.tax_number}</span>
+                      <span className="flex-1 text-black">{orderFormData.tax_number}</span>
                     </div>
                   </div>
                 </div>
@@ -1118,7 +1118,7 @@ export default function PurchaseOrdersPage() {
                 {/* Adres - Tam Genişlik */}
                 <div className="flex text-sm mt-2">
                   <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ADRES:</span>
-                  <span className="flex-1">{orderFormData.address}</span>
+                  <span className="flex-1 text-black">{orderFormData.address}</span>
                 </div>
               </div>
 

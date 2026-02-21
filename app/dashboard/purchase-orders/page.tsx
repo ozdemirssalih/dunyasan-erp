@@ -1028,21 +1028,21 @@ export default function PurchaseOrdersPage() {
             </div>
 
             {/* PDF Form - Minimal Horizontal Layout */}
-            <div ref={formRef} className="bg-white p-8 shadow-lg" style={{ width: '297mm', minHeight: '210mm' }}>
+            <div ref={formRef} className="bg-white p-10 shadow-lg" style={{ width: '297mm', minHeight: '210mm' }}>
               {/* Header - Minimal */}
-              <div className="flex justify-between items-center mb-6 pb-3 border-b-2 border-gray-800">
+              <div className="flex justify-between items-center mb-8 pb-4 border-b-2 border-gray-800">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">DÜNYASAN SAVUNMA A.Ş.</h1>
-                  <p className="text-xs text-gray-600">Sipariş Talep Formu</p>
+                  <h1 className="text-3xl font-bold text-gray-900">DÜNYASAN SAVUNMA A.Ş.</h1>
+                  <p className="text-sm text-gray-600 mt-1">Sipariş Talep Formu</p>
                 </div>
-                <div className="text-right text-xs text-gray-600">
-                  <p>Tarih: {new Date(orderFormData.date).toLocaleDateString('tr-TR')}</p>
-                  <p>Teklif No: {orderFormData.offer_number || '-'}</p>
+                <div className="text-right text-sm text-gray-700">
+                  <p className="font-semibold">Tarih: {new Date(orderFormData.date).toLocaleDateString('tr-TR')}</p>
+                  <p className="font-semibold">Teklif No: {orderFormData.offer_number || '-'}</p>
                 </div>
               </div>
 
               {/* Company Info - Horizontal Layout */}
-              <div className="grid grid-cols-4 gap-x-4 gap-y-2 mb-6 text-xs">
+              <div className="grid grid-cols-4 gap-x-6 gap-y-3 mb-8 text-sm">
                 <div className="col-span-2">
                   <span className="font-bold">Tedarikçi:</span> {orderFormData.company_name}
                 </div>
@@ -1064,45 +1064,45 @@ export default function PurchaseOrdersPage() {
               </div>
 
               {/* Order Items Table - Minimal */}
-              <table className="w-full border-collapse border border-gray-800 mb-4">
+              <table className="w-full border-collapse border-2 border-gray-800 mb-6">
                 <thead>
                   <tr className="bg-gray-800 text-white">
-                    <th className="border border-gray-700 px-2 py-2 text-xs font-bold w-12">No</th>
-                    <th className="border border-gray-700 px-2 py-2 text-xs font-bold w-20">Miktar</th>
-                    <th className="border border-gray-700 px-2 py-2 text-xs font-bold">Açıklama</th>
-                    <th className="border border-gray-700 px-2 py-2 text-xs font-bold w-24">Birim Fiyat</th>
-                    <th className="border border-gray-700 px-2 py-2 text-xs font-bold w-24">Toplam</th>
+                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-16">No</th>
+                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-28">Miktar</th>
+                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold">Açıklama</th>
+                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-32">Birim Fiyat</th>
+                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-32">Toplam</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orderFormItems.map((item, index) => (
                     <tr key={index}>
-                      <td className="border border-gray-300 px-2 py-1.5 text-center text-xs">{index + 1}</td>
-                      <td className="border border-gray-300 px-2 py-1">
+                      <td className="border border-gray-300 px-3 py-2.5 text-center text-sm font-semibold">{index + 1}</td>
+                      <td className="border border-gray-300 px-2 py-1.5">
                         <input
                           type="text"
                           value={item.amount}
                           onChange={(e) => handleOrderFormItemChange(index, 'amount', e.target.value)}
-                          className="w-full px-1 py-1 text-xs focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-1.5 text-sm focus:outline-none focus:bg-yellow-50"
                         />
                       </td>
-                      <td className="border border-gray-300 px-2 py-1">
+                      <td className="border border-gray-300 px-2 py-1.5">
                         <input
                           type="text"
                           value={item.description}
                           onChange={(e) => handleOrderFormItemChange(index, 'description', e.target.value)}
-                          className="w-full px-1 py-1 text-xs focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-1.5 text-sm focus:outline-none focus:bg-yellow-50"
                         />
                       </td>
-                      <td className="border border-gray-300 px-2 py-1">
+                      <td className="border border-gray-300 px-2 py-1.5">
                         <input
                           type="text"
                           value={item.unit_price}
                           onChange={(e) => handleOrderFormItemChange(index, 'unit_price', e.target.value)}
-                          className="w-full px-1 py-1 text-xs text-right focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-1.5 text-sm text-right focus:outline-none focus:bg-yellow-50"
                         />
                       </td>
-                      <td className="border border-gray-300 px-2 py-1.5 text-right text-xs font-semibold">
+                      <td className="border border-gray-300 px-3 py-2.5 text-right text-sm font-bold">
                         {item.total.toFixed(2)} ₺
                       </td>
                     </tr>
@@ -1110,26 +1110,26 @@ export default function PurchaseOrdersPage() {
 
                   {/* Summary Rows */}
                   <tr className="bg-gray-100">
-                    <td colSpan={4} className="border border-gray-800 px-2 py-1.5 text-right font-bold text-xs">
+                    <td colSpan={4} className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
                       Ara Toplam
                     </td>
-                    <td className="border border-gray-800 px-2 py-1.5 text-right font-bold text-xs">
+                    <td className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
                       {calculateSubtotal().toFixed(2)} ₺
                     </td>
                   </tr>
                   <tr className="bg-gray-100">
-                    <td colSpan={4} className="border border-gray-800 px-2 py-1.5 text-right font-bold text-xs">
+                    <td colSpan={4} className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
                       KDV %20
                     </td>
-                    <td className="border border-gray-800 px-2 py-1.5 text-right font-bold text-xs">
+                    <td className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
                       {calculateVAT().toFixed(2)} ₺
                     </td>
                   </tr>
                   <tr className="bg-gray-800 text-white">
-                    <td colSpan={4} className="border border-gray-800 px-2 py-2 text-right font-bold text-sm">
+                    <td colSpan={4} className="border border-gray-800 px-3 py-3 text-right font-bold text-base">
                       TOPLAM
                     </td>
-                    <td className="border border-gray-800 px-2 py-2 text-right font-bold text-sm">
+                    <td className="border border-gray-800 px-3 py-3 text-right font-bold text-base">
                       {calculateGrandTotal().toFixed(2)} ₺
                     </td>
                   </tr>
@@ -1137,17 +1137,17 @@ export default function PurchaseOrdersPage() {
               </table>
 
               {/* Add/Remove Item Buttons */}
-              <div className="flex gap-2 mb-6 print:hidden">
+              <div className="flex gap-2 mb-8 print:hidden">
                 <button
                   onClick={handleAddOrderFormItem}
-                  className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
                 >
                   + Satır Ekle
                 </button>
                 {orderFormItems.length > 1 && (
                   <button
                     onClick={() => handleRemoveOrderFormItem(orderFormItems.length - 1)}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
                   >
                     - Sil
                   </button>
@@ -1155,15 +1155,15 @@ export default function PurchaseOrdersPage() {
               </div>
 
               {/* Footer - Minimal */}
-              <div className="grid grid-cols-2 gap-8 mt-8 pt-6 border-t border-gray-300">
+              <div className="grid grid-cols-2 gap-12 mt-12 pt-8 border-t border-gray-300">
                 <div>
-                  <div className="border-t-2 border-gray-800 pt-2 mt-12">
-                    <p className="text-xs font-bold text-center">DÜNYASAN SAVUNMA A.Ş.</p>
+                  <div className="border-t-2 border-gray-800 pt-3 mt-16">
+                    <p className="text-sm font-bold text-center">DÜNYASAN SAVUNMA A.Ş.</p>
                   </div>
                 </div>
                 <div>
-                  <div className="border-t-2 border-gray-800 pt-2 mt-12">
-                    <p className="text-xs font-bold text-center">TEDARİKÇİ</p>
+                  <div className="border-t-2 border-gray-800 pt-3 mt-16">
+                    <p className="text-sm font-bold text-center">TEDARİKÇİ</p>
                   </div>
                 </div>
               </div>

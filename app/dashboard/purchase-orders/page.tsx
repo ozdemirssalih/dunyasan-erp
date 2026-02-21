@@ -21,6 +21,7 @@ interface PurchaseOrder {
 }
 
 export default function PurchaseOrdersPage() {
+  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders')
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -49,6 +50,18 @@ export default function PurchaseOrdersPage() {
     quantity: '',
     unit: 'kg',
     unit_price: '',
+    notes: ''
+  })
+
+  // Supplier modal states
+  const [showSupplierModal, setShowSupplierModal] = useState(false)
+  const [supplierFormData, setSupplierFormData] = useState({
+    supplier_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    tax_number: '',
     notes: ''
   })
 
@@ -264,6 +277,67 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  // Supplier functions
+  const handleAddSupplier = async () => {
+    if (!supplierFormData.supplier_name) {
+      alert('Tedarikçi adı zorunludur!')
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .insert({
+          company_id: companyId,
+          supplier_name: supplierFormData.supplier_name,
+          contact_person: supplierFormData.contact_person || null,
+          phone: supplierFormData.phone || null,
+          email: supplierFormData.email || null,
+          address: supplierFormData.address || null,
+          tax_number: supplierFormData.tax_number || null,
+          notes: supplierFormData.notes || null,
+          is_active: true
+        })
+
+      if (error) throw error
+
+      alert('Tedarikçi başarıyla eklendi!')
+      setShowSupplierModal(false)
+      setSupplierFormData({
+        supplier_name: '',
+        contact_person: '',
+        phone: '',
+        email: '',
+        address: '',
+        tax_number: '',
+        notes: ''
+      })
+      loadData()
+    } catch (error: any) {
+      console.error('Error adding supplier:', error)
+      alert('Tedarikçi eklenirken hata oluştu!')
+    }
+  }
+
+  const handleDeleteSupplier = async (id: string) => {
+    if (!confirm('Bu tedarikçiyi silmek istediğinizden emin misiniz?')) return
+
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .update({ is_active: false })
+        .eq('id', id)
+
+      if (error) throw error
+
+      alert('Tedarikçi silindi!')
+      loadData()
+    } catch (error) {
+      console.error('Error deleting supplier:', error)
+      alert('Tedarikçi silinirken hata oluştu!')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const badges: any = {
       draft: 'bg-gray-100 text-gray-800',
@@ -289,20 +363,49 @@ export default function PurchaseOrdersPage() {
   return (
     <PermissionGuard module="inventory" permission="view">
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">Satın Alma Siparişleri</h2>
-            <p className="text-gray-600">Tedarikçilerden yapılan siparişleri yönetin</p>
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Yeni Sipariş</span>
-          </button>
+        {/* Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`${
+                activeTab === 'orders'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Siparişler
+            </button>
+            <button
+              onClick={() => setActiveTab('suppliers')}
+              className={`${
+                activeTab === 'suppliers'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Tedarikçiler
+            </button>
+          </nav>
         </div>
+
+        {/* Orders Tab */}
+        {activeTab === 'orders' && (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800">Satın Alma Siparişleri</h2>
+                <p className="text-gray-600">Tedarikçilerden yapılan siparişleri yönetin</p>
+              </div>
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Yeni Sipariş</span>
+              </button>
+            </div>
 
         {/* Purchase Orders List */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -612,6 +715,175 @@ export default function PurchaseOrdersPage() {
               </div>
             </div>
           </div>
+        )}
+          </>
+        )}
+
+        {/* Suppliers Tab */}
+        {activeTab === 'suppliers' && (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800">Tedarikçiler</h2>
+                <p className="text-gray-600">Tedarikçileri yönetin</p>
+              </div>
+              <button
+                onClick={() => setShowSupplierModal(true)}
+                className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Yeni Tedarikçi</span>
+              </button>
+            </div>
+
+            {/* Suppliers List */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              {suppliers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tedarikçi Adı</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Yetkili</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Telefon</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">E-posta</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Vergi No</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemler</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {suppliers.map((supplier) => (
+                        <tr key={supplier.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm font-semibold text-gray-900">{supplier.supplier_name}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{supplier.contact_person || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{supplier.phone || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{supplier.email || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{supplier.tax_number || '-'}</td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleDeleteSupplier(supplier.id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Henüz tedarikçi yok</p>
+                </div>
+              )}
+            </div>
+
+            {/* Supplier Modal */}
+            {showSupplierModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
+                  <div className="p-6 border-b border-gray-200">
+                    <h3 className="text-2xl font-bold text-gray-800">Yeni Tedarikçi</h3>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Tedarikçi Adı <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={supplierFormData.supplier_name}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, supplier_name: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Yetkili Kişi</label>
+                        <input
+                          type="text"
+                          value={supplierFormData.contact_person}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, contact_person: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Telefon</label>
+                        <input
+                          type="text"
+                          value={supplierFormData.phone}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, phone: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">E-posta</label>
+                        <input
+                          type="email"
+                          value={supplierFormData.email}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, email: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Vergi Numarası</label>
+                        <input
+                          type="text"
+                          value={supplierFormData.tax_number}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, tax_number: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Adres</label>
+                        <textarea
+                          value={supplierFormData.address}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })}
+                          rows={2}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                        <textarea
+                          value={supplierFormData.notes}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, notes: e.target.value })}
+                          rows={2}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                    <button
+                      onClick={() => setShowSupplierModal(false)}
+                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={handleAddSupplier}
+                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      Tedarikçi Ekle
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </PermissionGuard>

@@ -15,7 +15,7 @@ interface PurchaseOrder {
   notes?: string
   supplier: {
     id: string
-    supplier_name: string
+    company_name: string
     contact_person?: string
   }
 }
@@ -56,7 +56,7 @@ export default function PurchaseOrdersPage() {
   // Supplier modal states
   const [showSupplierModal, setShowSupplierModal] = useState(false)
   const [supplierFormData, setSupplierFormData] = useState({
-    supplier_name: '',
+    company_name: '',
     contact_person: '',
     phone: '',
     email: '',
@@ -90,7 +90,7 @@ export default function PurchaseOrdersPage() {
         .from('purchase_orders')
         .select(`
           *,
-          supplier:suppliers(id, supplier_name, contact_person)
+          supplier:suppliers(id, company_name, contact_person)
         `)
         .eq('company_id', fetchedCompanyId)
         .order('order_date', { ascending: false })
@@ -103,7 +103,7 @@ export default function PurchaseOrdersPage() {
         .select('*')
         .eq('company_id', fetchedCompanyId)
         .eq('is_active', true)
-        .order('supplier_name')
+        .order('company_name')
 
       console.log('✅ Loaded suppliers:', suppliersData?.length || 0)
       setSuppliers(suppliersData || [])
@@ -280,7 +280,7 @@ export default function PurchaseOrdersPage() {
 
   // Supplier functions
   const handleAddSupplier = async () => {
-    if (!supplierFormData.supplier_name) {
+    if (!supplierFormData.company_name) {
       alert('Tedarikçi adı zorunludur!')
       return
     }
@@ -290,7 +290,7 @@ export default function PurchaseOrdersPage() {
         .from('suppliers')
         .insert({
           company_id: companyId,
-          supplier_name: supplierFormData.supplier_name,
+          company_name: supplierFormData.company_name,
           contact_person: supplierFormData.contact_person || null,
           phone: supplierFormData.phone || null,
           email: supplierFormData.email || null,
@@ -305,7 +305,7 @@ export default function PurchaseOrdersPage() {
       alert('Tedarikçi başarıyla eklendi!')
       setShowSupplierModal(false)
       setSupplierFormData({
-        supplier_name: '',
+        company_name: '',
         contact_person: '',
         phone: '',
         email: '',
@@ -430,7 +430,7 @@ export default function PurchaseOrdersPage() {
                     return (
                       <tr key={order.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm font-semibold text-gray-900">{order.order_number}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{order.supplier?.supplier_name}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{order.supplier?.company_name}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {new Date(order.order_date).toLocaleDateString('tr-TR')}
                         </td>
@@ -493,7 +493,7 @@ export default function PurchaseOrdersPage() {
                       <option value="">Tedarikçi Seçin</option>
                       {suppliers.map((supplier) => (
                         <option key={supplier.id} value={supplier.id}>
-                          {supplier.supplier_name}
+                          {supplier.company_name}
                         </option>
                       ))}
                     </select>
@@ -756,7 +756,7 @@ export default function PurchaseOrdersPage() {
                     <tbody className="divide-y divide-gray-200">
                       {suppliers.map((supplier) => (
                         <tr key={supplier.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-semibold text-gray-900">{supplier.supplier_name}</td>
+                          <td className="px-6 py-4 text-sm font-semibold text-gray-900">{supplier.company_name}</td>
                           <td className="px-6 py-4 text-sm text-gray-600">{supplier.contact_person || '-'}</td>
                           <td className="px-6 py-4 text-sm text-gray-600">{supplier.phone || '-'}</td>
                           <td className="px-6 py-4 text-sm text-gray-600">{supplier.email || '-'}</td>
@@ -799,8 +799,8 @@ export default function PurchaseOrdersPage() {
                         </label>
                         <input
                           type="text"
-                          value={supplierFormData.supplier_name}
-                          onChange={(e) => setSupplierFormData({ ...supplierFormData, supplier_name: e.target.value })}
+                          value={supplierFormData.company_name}
+                          onChange={(e) => setSupplierFormData({ ...supplierFormData, company_name: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                         />
                       </div>

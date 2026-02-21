@@ -105,7 +105,25 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => {
     loadData()
+    generateOfferNumber()
   }, [])
+
+  const generateOfferNumber = () => {
+    // LocalStorage'dan son numarayı al
+    const lastNumber = localStorage.getItem('lastOfferNumber')
+    let nextNumber = 1
+
+    if (lastNumber) {
+      const match = lastNumber.match(/dnysn-(\d+)/)
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1
+      }
+    }
+
+    const newOfferNumber = `dnysn-${String(nextNumber).padStart(3, '0')}`
+    setOrderFormData(prev => ({ ...prev, offer_number: newOfferNumber }))
+    localStorage.setItem('lastOfferNumber', newOfferNumber)
+  }
 
   const loadData = async () => {
     try {
@@ -423,12 +441,19 @@ export default function PurchaseOrdersPage() {
       })
 
       const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const imgWidth = 210 // A4 width in mm
+      const pdf = new jsPDF('l', 'mm', 'a4') // 'l' for landscape
+      const imgWidth = 297 // A4 landscape width in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width
 
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
-      pdf.save(`siparis-talep-formu-${orderFormData.offer_number || 'yeni'}.pdf`)
+      pdf.save(`siparis-onay-formu-${orderFormData.offer_number || 'yeni'}.pdf`)
+
+      // PDF indirdikten sonra yeni numara oluştur
+      setTimeout(() => {
+        generateOfferNumber()
+        // Formu temizle
+        setOrderFormItems([{ amount: '', description: '', unit_price: '', total: 0 }])
+      }, 500)
     } catch (error) {
       console.error('PDF Error:', error)
       alert('PDF oluşturulurken hata oluştu!')

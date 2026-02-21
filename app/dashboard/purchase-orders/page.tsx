@@ -1051,21 +1051,14 @@ export default function PurchaseOrdersPage() {
               <div className="flex justify-between items-start mb-8">
                 {/* Sol: Logo ve Şirket Bilgileri */}
                 <div>
-                  <div className="flex items-center mb-3">
-                    {/* Logo SVG */}
-                    <svg width="80" height="80" viewBox="0 0 100 100" className="mr-3">
-                      <defs>
-                        <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-                          <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#1e3a8a" strokeWidth="0.5"/>
-                        </pattern>
-                      </defs>
-                      <circle cx="50" cy="50" r="35" fill="url(#grid)" stroke="#1e3a8a" strokeWidth="2"/>
-                      <circle cx="50" cy="50" r="25" fill="none" stroke="#1e3a8a" strokeWidth="1.5"/>
-                    </svg>
-                    <div>
-                      <h1 className="text-2xl font-bold" style={{ color: '#1e3a8a' }}>Dünyasan</h1>
-                      <p className="text-xs font-semibold" style={{ color: '#1e3a8a' }}>SAVUNMA</p>
-                    </div>
+                  <div className="flex items-start mb-3">
+                    {/* Logo PNG */}
+                    <img
+                      src="/dunyalogopng.png"
+                      alt="Dünyasan Logo"
+                      className="mr-4"
+                      style={{ width: '200px', height: 'auto' }}
+                    />
                   </div>
                   <div className="text-xs" style={{ color: '#1e3a8a' }}>
                     <p className="font-bold mb-1">DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</p>

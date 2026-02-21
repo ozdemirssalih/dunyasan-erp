@@ -1161,13 +1161,13 @@ export default function PurchaseOrdersPage() {
                 <tbody>
                   {orderFormItems.map((item, index) => (
                     <tr key={index}>
-                      <td className="border border-black px-3 py-3 text-center font-bold">{index + 1}</td>
+                      <td className="border border-black px-3 py-3 text-center font-bold text-black">{index + 1}</td>
                       <td className="border border-black px-2 py-2">
                         <input
                           type="text"
                           value={item.amount}
                           onChange={(e) => handleOrderFormItemChange(index, 'amount', e.target.value)}
-                          className="w-full px-2 py-1 text-sm focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm text-black focus:outline-none focus:bg-gray-100"
                         />
                       </td>
                       <td className="border border-black px-2 py-2">
@@ -1175,7 +1175,7 @@ export default function PurchaseOrdersPage() {
                           type="text"
                           value={item.description}
                           onChange={(e) => handleOrderFormItemChange(index, 'description', e.target.value)}
-                          className="w-full px-2 py-1 text-sm focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm text-black focus:outline-none focus:bg-gray-100"
                         />
                       </td>
                       <td className="border border-black px-2 py-2">
@@ -1183,10 +1183,10 @@ export default function PurchaseOrdersPage() {
                           type="text"
                           value={item.unit_price}
                           onChange={(e) => handleOrderFormItemChange(index, 'unit_price', e.target.value)}
-                          className="w-full px-2 py-1 text-sm text-right focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm text-black text-right focus:outline-none focus:bg-gray-100"
                         />
                       </td>
-                      <td className="border border-black px-3 py-3 text-right font-bold">
+                      <td className="border border-black px-3 py-3 text-right font-bold text-black">
                         {item.total.toFixed(2)}
                       </td>
                     </tr>
@@ -1194,7 +1194,7 @@ export default function PurchaseOrdersPage() {
 
                   {/* Özet Satırları */}
                   <tr>
-                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td colSpan={3} className="border-none bg-white"></td>
                     <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       ARA TOPLAM
                     </td>
@@ -1203,7 +1203,7 @@ export default function PurchaseOrdersPage() {
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td colSpan={3} className="border-none bg-white"></td>
                     <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       KDV %20
                     </td>
@@ -1212,7 +1212,7 @@ export default function PurchaseOrdersPage() {
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td colSpan={3} className="border-none bg-white"></td>
                     <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       TOPLAM
                     </td>
@@ -1221,7 +1221,7 @@ export default function PurchaseOrdersPage() {
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td colSpan={3} className="border-none bg-white"></td>
                     <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       TL KARŞILIĞI
                     </td>

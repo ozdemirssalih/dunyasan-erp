@@ -178,7 +178,7 @@ export default function ProjectDetailPage() {
       // Load project tools
       const { data: projectToolsData } = await supabase
         .from('project_tools')
-        .select('*, tool:tools(id, tool_code, tool_name, unit_price)')
+        .select('*, tool:tools(id, tool_code, tool_name, unit_price), calculated_unit_cost, last_calculation_date')
         .eq('project_id', projectId)
 
       console.log('✅ Project tools loaded:', projectToolsData?.length || 0)
@@ -891,6 +891,32 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Hesaplanan Maliyet Bilgileri */}
+                  {pt.calculated_unit_cost && (
+                    <div className="mt-3 pt-3 border-t border-blue-200 bg-blue-50 rounded-md p-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-xs text-blue-600 font-semibold">Hesaplanan Parça Başı Maliyet</div>
+                          <div className="text-sm font-bold text-blue-700">
+                            {pt.calculated_unit_cost?.toFixed(4) || '0.0000'} €
+                          </div>
+                        </div>
+                        {pt.last_calculation_date && (
+                          <div>
+                            <div className="text-xs text-blue-600 font-semibold">Son Hesaplama</div>
+                            <div className="text-xs text-blue-700">
+                              {new Date(pt.last_calculation_date).toLocaleDateString('tr-TR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

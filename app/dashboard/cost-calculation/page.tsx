@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calculator, TrendingUp } from 'lucide-react'
+import { Calculator, TrendingUp, Save } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 import { supabase } from '@/lib/supabase/client'
 
@@ -27,6 +27,7 @@ export default function CostCalculationPage() {
   const [toolsData, setToolsData] = useState<ToolData[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadProjects()
@@ -145,6 +146,38 @@ export default function CostCalculationPage() {
   // Genel toplamlar
   const totalCuttingCost = calculations.reduce((sum, item) => sum + item.totalCost, 0)
   const costPerPieceTotal = orderQuantity > 0 ? totalCuttingCost / orderQuantity : 0
+
+  // Hesaplamaları kaydet
+  const handleSaveCalculations = async () => {
+    if (!selectedProjectId || toolsData.length === 0) {
+      alert('Kaydedilecek hesaplama yok!')
+      return
+    }
+
+    setSaving(true)
+    try {
+      // Her takım için hesaplanan parça başı maliyeti kaydet
+      const updates = toolsData.map((tool, index) => {
+        const calc = calculations[index]
+        return supabase
+          .from('project_tools')
+          .update({
+            calculated_unit_cost: calc.costPerPiece,
+            last_calculation_date: new Date().toISOString()
+          })
+          .eq('id', tool.projectToolId)
+      })
+
+      await Promise.all(updates)
+
+      alert('Hesaplamalar başarıyla kaydedildi!')
+    } catch (error) {
+      console.error('Error saving calculations:', error)
+      alert('Hesaplamalar kaydedilirken hata oluştu!')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <PermissionGuard module="costs" permission="view">
@@ -270,35 +303,49 @@ export default function CostCalculationPage() {
 
         {/* Özet Kartlar */}
         {selectedProjectId && orderQuantity > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Toplam Kesici Maliyeti */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border-l-4 border-green-500 shadow-md">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-semibold text-gray-700">TOPLAM KESİCİ MALİYETİ</h4>
-                <TrendingUp className="w-6 h-6 text-green-600" />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Toplam Kesici Maliyeti */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border-l-4 border-green-500 shadow-md">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">TOPLAM KESİCİ MALİYETİ</h4>
+                  <TrendingUp className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="text-4xl font-bold text-green-700 mb-1">
+                  {totalCuttingCost.toFixed(2)} €
+                </div>
+                <p className="text-xs text-gray-600">
+                  {orderQuantity.toLocaleString()} adet sipariş için toplam kesici takım maliyeti
+                </p>
               </div>
-              <div className="text-4xl font-bold text-green-700 mb-1">
-                {totalCuttingCost.toFixed(2)} €
+
+              {/* Parça Başı Toplam Kesici Maliyeti */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border-l-4 border-blue-500 shadow-md">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">PARÇA BAŞI TOPLAM MALİYET</h4>
+                  <Calculator className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="text-4xl font-bold text-blue-700 mb-1">
+                  {costPerPieceTotal.toFixed(4)} €
+                </div>
+                <p className="text-xs text-gray-600">
+                  Her bir parça için kesici takım maliyeti
+                </p>
               </div>
-              <p className="text-xs text-gray-600">
-                {orderQuantity.toLocaleString()} adet sipariş için toplam kesici takım maliyeti
-              </p>
             </div>
 
-            {/* Parça Başı Toplam Kesici Maliyeti */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border-l-4 border-blue-500 shadow-md">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-semibold text-gray-700">PARÇA BAŞI TOPLAM MALİYET</h4>
-                <Calculator className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="text-4xl font-bold text-blue-700 mb-1">
-                {costPerPieceTotal.toFixed(4)} €
-              </div>
-              <p className="text-xs text-gray-600">
-                Her bir parça için kesici takım maliyeti
-              </p>
+            {/* Kaydet Butonu */}
+            <div className="flex justify-center">
+              <button
+                onClick={handleSaveCalculations}
+                disabled={saving}
+                className="flex items-center space-x-2 px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md"
+              >
+                <Save className="w-5 h-5" />
+                <span>{saving ? 'Kaydediliyor...' : 'Hesaplamaları Kaydet'}</span>
+              </button>
             </div>
-          </div>
+          </>
         )}
 
         {/* Uyarı: Proje seçilmiş ama takım yok */}

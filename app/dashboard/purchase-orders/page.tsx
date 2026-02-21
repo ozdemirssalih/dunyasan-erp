@@ -996,7 +996,7 @@ export default function PurchaseOrdersPage() {
         {/* Order Form Tab */}
         {activeTab === 'order-form' && (
           <>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-3xl font-bold text-gray-800">Sipariş Talep Formu</h2>
                 <p className="text-gray-600">Tedarikçi seçin ve PDF olarak indirin</p>
@@ -1011,7 +1011,7 @@ export default function PurchaseOrdersPage() {
             </div>
 
             {/* Supplier Selector */}
-            <div className="mb-4 print:hidden">
+            <div className="mb-6 print:hidden">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Tedarikçi Seç</label>
               <select
                 value={selectedSupplierForForm}
@@ -1027,109 +1027,123 @@ export default function PurchaseOrdersPage() {
               </select>
             </div>
 
-            {/* PDF Form - Minimal Horizontal Layout */}
-            <div ref={formRef} className="bg-white p-10 shadow-lg" style={{ width: '297mm', minHeight: '210mm' }}>
-              {/* Header - Minimal */}
-              <div className="flex justify-between items-center mb-8 pb-4 border-b-2 border-gray-800">
+            {/* PDF Form - A4 Landscape */}
+            <div ref={formRef} className="bg-white p-12" style={{ width: '297mm', minHeight: '210mm' }}>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-10 pb-5 border-b-4 border-black">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">DÜNYASAN SAVUNMA A.Ş.</h1>
-                  <p className="text-sm text-gray-600 mt-1">Sipariş Talep Formu</p>
+                  <h1 className="text-4xl font-bold text-black mb-2">DÜNYASAN SAVUNMA A.Ş.</h1>
+                  <p className="text-base text-black font-semibold">SİPARİŞ TALEP FORMU</p>
                 </div>
-                <div className="text-right text-sm text-gray-700">
-                  <p className="font-semibold">Tarih: {new Date(orderFormData.date).toLocaleDateString('tr-TR')}</p>
-                  <p className="font-semibold">Teklif No: {orderFormData.offer_number || '-'}</p>
+                <div className="text-right">
+                  <div className="mb-2">
+                    <span className="text-base font-bold text-black">Tarih: </span>
+                    <span className="text-base text-black">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
+                  </div>
+                  <div>
+                    <span className="text-base font-bold text-black">Teklif No: </span>
+                    <span className="text-base text-black">{orderFormData.offer_number || '-'}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Company Info - Horizontal Layout */}
-              <div className="grid grid-cols-4 gap-x-6 gap-y-3 mb-8 text-sm">
-                <div className="col-span-2">
-                  <span className="font-bold">Tedarikçi:</span> {orderFormData.company_name}
-                </div>
-                <div>
-                  <span className="font-bold">Yetkili:</span> {orderFormData.contact_person}
-                </div>
-                <div>
-                  <span className="font-bold">Tel:</span> {orderFormData.phone}
-                </div>
-                <div className="col-span-2">
-                  <span className="font-bold">Adres:</span> {orderFormData.address}
-                </div>
-                <div>
-                  <span className="font-bold">E-mail:</span> {orderFormData.email}
-                </div>
-                <div>
-                  <span className="font-bold">Vergi No:</span> {orderFormData.tax_number}
+              {/* Supplier Info */}
+              <div className="mb-8">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">Tedarikçi:</span>
+                    <span className="text-base text-black">{orderFormData.company_name}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">Yetkili:</span>
+                    <span className="text-base text-black">{orderFormData.contact_person}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">Adres:</span>
+                    <span className="text-base text-black">{orderFormData.address}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">Telefon:</span>
+                    <span className="text-base text-black">{orderFormData.phone}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">E-mail:</span>
+                    <span className="text-base text-black">{orderFormData.email}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="text-base font-bold text-black min-w-32">Vergi No:</span>
+                    <span className="text-base text-black">{orderFormData.tax_number}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Order Items Table - Minimal */}
-              <table className="w-full border-collapse border-2 border-gray-800 mb-6">
+              {/* Order Items Table */}
+              <table className="w-full border-collapse border-2 border-black mb-8">
                 <thead>
-                  <tr className="bg-gray-800 text-white">
-                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-16">No</th>
-                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-28">Miktar</th>
-                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold">Açıklama</th>
-                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-32">Birim Fiyat</th>
-                    <th className="border border-gray-700 px-3 py-3 text-sm font-bold w-32">Toplam</th>
+                  <tr className="bg-black text-white">
+                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-center" style={{ width: '60px' }}>NO</th>
+                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-left" style={{ width: '100px' }}>MİKTAR</th>
+                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-left">AÇIKLAMA</th>
+                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-right" style={{ width: '140px' }}>BİRİM FİYAT</th>
+                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-right" style={{ width: '140px' }}>TOPLAM</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orderFormItems.map((item, index) => (
-                    <tr key={index}>
-                      <td className="border border-gray-300 px-3 py-2.5 text-center text-sm font-semibold">{index + 1}</td>
-                      <td className="border border-gray-300 px-2 py-1.5">
+                    <tr key={index} className="bg-white">
+                      <td className="border border-black px-4 py-3 text-base text-black text-center font-semibold">{index + 1}</td>
+                      <td className="border border-black px-2 py-2">
                         <input
                           type="text"
                           value={item.amount}
                           onChange={(e) => handleOrderFormItemChange(index, 'amount', e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-2 text-base text-black focus:outline-none focus:bg-gray-100"
                         />
                       </td>
-                      <td className="border border-gray-300 px-2 py-1.5">
+                      <td className="border border-black px-2 py-2">
                         <input
                           type="text"
                           value={item.description}
                           onChange={(e) => handleOrderFormItemChange(index, 'description', e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-2 text-base text-black focus:outline-none focus:bg-gray-100"
                         />
                       </td>
-                      <td className="border border-gray-300 px-2 py-1.5">
+                      <td className="border border-black px-2 py-2">
                         <input
                           type="text"
                           value={item.unit_price}
                           onChange={(e) => handleOrderFormItemChange(index, 'unit_price', e.target.value)}
-                          className="w-full px-2 py-1.5 text-sm text-right focus:outline-none focus:bg-yellow-50"
+                          className="w-full px-2 py-2 text-base text-black text-right focus:outline-none focus:bg-gray-100"
                         />
                       </td>
-                      <td className="border border-gray-300 px-3 py-2.5 text-right text-sm font-bold">
+                      <td className="border border-black px-4 py-3 text-base text-black text-right font-bold">
                         {item.total.toFixed(2)} ₺
                       </td>
                     </tr>
                   ))}
 
                   {/* Summary Rows */}
-                  <tr className="bg-gray-100">
-                    <td colSpan={4} className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
-                      Ara Toplam
+                  <tr className="bg-white">
+                    <td colSpan={4} className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
+                      ARA TOPLAM:
                     </td>
-                    <td className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
+                    <td className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
                       {calculateSubtotal().toFixed(2)} ₺
                     </td>
                   </tr>
-                  <tr className="bg-gray-100">
-                    <td colSpan={4} className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
-                      KDV %20
+                  <tr className="bg-white">
+                    <td colSpan={4} className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
+                      KDV (%20):
                     </td>
-                    <td className="border border-gray-800 px-3 py-2.5 text-right font-bold text-sm">
+                    <td className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
                       {calculateVAT().toFixed(2)} ₺
                     </td>
                   </tr>
-                  <tr className="bg-gray-800 text-white">
-                    <td colSpan={4} className="border border-gray-800 px-3 py-3 text-right font-bold text-base">
-                      TOPLAM
+                  <tr className="bg-black text-white">
+                    <td colSpan={4} className="border-2 border-black px-4 py-4 text-lg text-white text-right font-bold">
+                      GENEL TOPLAM:
                     </td>
-                    <td className="border border-gray-800 px-3 py-3 text-right font-bold text-base">
+                    <td className="border-2 border-black px-4 py-4 text-lg text-white text-right font-bold">
                       {calculateGrandTotal().toFixed(2)} ₺
                     </td>
                   </tr>
@@ -1137,33 +1151,37 @@ export default function PurchaseOrdersPage() {
               </table>
 
               {/* Add/Remove Item Buttons */}
-              <div className="flex gap-2 mb-8 print:hidden">
+              <div className="flex gap-3 mb-10 print:hidden">
                 <button
                   onClick={handleAddOrderFormItem}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                  className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold"
                 >
                   + Satır Ekle
                 </button>
                 {orderFormItems.length > 1 && (
                   <button
                     onClick={() => handleRemoveOrderFormItem(orderFormItems.length - 1)}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                    className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
                   >
-                    - Sil
+                    - Son Satırı Sil
                   </button>
                 )}
               </div>
 
-              {/* Footer - Minimal */}
-              <div className="grid grid-cols-2 gap-12 mt-12 pt-8 border-t border-gray-300">
-                <div>
-                  <div className="border-t-2 border-gray-800 pt-3 mt-16">
-                    <p className="text-sm font-bold text-center">DÜNYASAN SAVUNMA A.Ş.</p>
+              {/* Signatures */}
+              <div className="grid grid-cols-2 gap-20 mt-16">
+                <div className="text-center">
+                  <div className="h-20 mb-3"></div>
+                  <div className="border-t-2 border-black pt-3">
+                    <p className="text-base font-bold text-black">DÜNYASAN SAVUNMA A.Ş.</p>
+                    <p className="text-sm text-black">Yetkili İmza ve Kaşe</p>
                   </div>
                 </div>
-                <div>
-                  <div className="border-t-2 border-gray-800 pt-3 mt-16">
-                    <p className="text-sm font-bold text-center">TEDARİKÇİ</p>
+                <div className="text-center">
+                  <div className="h-20 mb-3"></div>
+                  <div className="border-t-2 border-black pt-3">
+                    <p className="text-base font-bold text-black">TEDARİKÇİ FİRMA</p>
+                    <p className="text-sm text-black">Yetkili İmza ve Kaşe</p>
                   </div>
                 </div>
               </div>

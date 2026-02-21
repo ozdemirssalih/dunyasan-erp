@@ -1027,6 +1027,24 @@ export default function PurchaseOrdersPage() {
               </select>
             </div>
 
+            {/* Add/Remove Item Buttons - Outside PDF */}
+            <div className="flex gap-3 mb-4">
+              <button
+                onClick={handleAddOrderFormItem}
+                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold"
+              >
+                + Satır Ekle
+              </button>
+              {orderFormItems.length > 1 && (
+                <button
+                  onClick={() => handleRemoveOrderFormItem(orderFormItems.length - 1)}
+                  className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
+                >
+                  - Son Satırı Sil
+                </button>
+              )}
+            </div>
+
             {/* PDF Form - A4 Landscape */}
             <div ref={formRef} className="bg-white p-12" style={{ width: '297mm', minHeight: '210mm' }}>
               {/* Header */}
@@ -1149,24 +1167,6 @@ export default function PurchaseOrdersPage() {
                   </tr>
                 </tbody>
               </table>
-
-              {/* Add/Remove Item Buttons */}
-              <div className="flex gap-3 mb-10 print:hidden">
-                <button
-                  onClick={handleAddOrderFormItem}
-                  className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold"
-                >
-                  + Satır Ekle
-                </button>
-                {orderFormItems.length > 1 && (
-                  <button
-                    onClick={() => handleRemoveOrderFormItem(orderFormItems.length - 1)}
-                    className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
-                  >
-                    - Son Satırı Sil
-                  </button>
-                )}
-              </div>
 
               {/* Signatures */}
               <div className="grid grid-cols-2 gap-20 mt-16">

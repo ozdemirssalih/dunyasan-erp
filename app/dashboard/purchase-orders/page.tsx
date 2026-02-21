@@ -1045,77 +1045,118 @@ export default function PurchaseOrdersPage() {
               )}
             </div>
 
-            {/* PDF Form - A4 Landscape */}
-            <div ref={formRef} className="bg-white p-12" style={{ width: '297mm', minHeight: '210mm' }}>
-              {/* Header */}
-              <div className="flex justify-between items-start mb-10 pb-5 border-b-4 border-black">
+            {/* PDF Form - A4 Landscape - Dünyasan Orijinal Tasarım */}
+            <div ref={formRef} className="bg-white p-8" style={{ width: '297mm', minHeight: '210mm' }}>
+              {/* Header - Logo ve Başlık */}
+              <div className="flex justify-between items-start mb-8">
+                {/* Sol: Logo ve Şirket Bilgileri */}
                 <div>
-                  <h1 className="text-4xl font-bold text-black mb-2">DÜNYASAN SAVUNMA A.Ş.</h1>
-                  <p className="text-base text-black font-semibold">SİPARİŞ TALEP FORMU</p>
+                  <div className="flex items-center mb-3">
+                    {/* Logo SVG */}
+                    <svg width="80" height="80" viewBox="0 0 100 100" className="mr-3">
+                      <defs>
+                        <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                          <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#1e3a8a" strokeWidth="0.5"/>
+                        </pattern>
+                      </defs>
+                      <circle cx="50" cy="50" r="35" fill="url(#grid)" stroke="#1e3a8a" strokeWidth="2"/>
+                      <circle cx="50" cy="50" r="25" fill="none" stroke="#1e3a8a" strokeWidth="1.5"/>
+                    </svg>
+                    <div>
+                      <h1 className="text-2xl font-bold" style={{ color: '#1e3a8a' }}>Dünyasan</h1>
+                      <p className="text-xs font-semibold" style={{ color: '#1e3a8a' }}>SAVUNMA</p>
+                    </div>
+                  </div>
+                  <div className="text-xs" style={{ color: '#1e3a8a' }}>
+                    <p className="font-bold mb-1">DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</p>
+                    <p>Fabrikalar Mh. Kırıkkale Silah İhtisas OSB 2. Sk. No: 18/1 KIRIKKALE</p>
+                    <p>Tel: 0318 606 00 06 &nbsp;&nbsp; +90 530 389 00 71</p>
+                    <p>e-mail: satinalma@dunyasan.com</p>
+                    <p>Irmak V.D. 123 110 3150</p>
+                  </div>
                 </div>
+
+                {/* Sağ: Başlık */}
                 <div className="text-right">
-                  <div className="mb-2">
-                    <span className="text-base font-bold text-black">Tarih: </span>
-                    <span className="text-base text-black">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
-                  </div>
-                  <div>
-                    <span className="text-base font-bold text-black">Teklif No: </span>
-                    <span className="text-base text-black">{orderFormData.offer_number || '-'}</span>
-                  </div>
+                  <h2 className="text-3xl font-bold mb-1" style={{ color: '#1e3a8a' }}>SİPARİŞ ONAY FORMU</h2>
+                  <p className="text-lg" style={{ color: '#6b7280' }}>Order Confirmation Form</p>
                 </div>
               </div>
 
-              {/* Supplier Info */}
-              <div className="mb-8">
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">Tedarikçi:</span>
-                    <span className="text-base text-black">{orderFormData.company_name}</span>
+              {/* Şirket ve Form Bilgileri */}
+              <div className="mb-6 border-t-2 pt-4" style={{ borderColor: '#d1d5db' }}>
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Sol Kolon */}
+                  <div className="space-y-2">
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ŞİRKETİ/COMPANY:</span>
+                      <span className="flex-1">{orderFormData.company_name}</span>
+                    </div>
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>YETKİLİ/RESPONSABLE:</span>
+                      <span className="flex-1">{orderFormData.contact_person}</span>
+                    </div>
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>TELEFON/PHONE:</span>
+                      <span className="flex-1">{orderFormData.phone}</span>
+                    </div>
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>E-MAİL:</span>
+                      <span className="flex-1">{orderFormData.email}</span>
+                    </div>
                   </div>
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">Yetkili:</span>
-                    <span className="text-base text-black">{orderFormData.contact_person}</span>
+
+                  {/* Sağ Kolon */}
+                  <div className="space-y-2">
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TEKLİF/OFFER:</span>
+                      <span className="flex-1">{orderFormData.offer_number}</span>
+                    </div>
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>TARİH/DATE:</span>
+                      <span className="flex-1">{new Date(orderFormData.date).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                    <div className="flex text-sm">
+                      <span className="font-bold min-w-32" style={{ color: '#1e3a8a' }}>VERGİ NO:</span>
+                      <span className="flex-1">{orderFormData.tax_number}</span>
+                    </div>
                   </div>
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">Adres:</span>
-                    <span className="text-base text-black">{orderFormData.address}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">Telefon:</span>
-                    <span className="text-base text-black">{orderFormData.phone}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">E-mail:</span>
-                    <span className="text-base text-black">{orderFormData.email}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-base font-bold text-black min-w-32">Vergi No:</span>
-                    <span className="text-base text-black">{orderFormData.tax_number}</span>
-                  </div>
+                </div>
+
+                {/* Adres - Tam Genişlik */}
+                <div className="flex text-sm mt-2">
+                  <span className="font-bold min-w-40" style={{ color: '#1e3a8a' }}>ADRES/ADDRESS:</span>
+                  <span className="flex-1">{orderFormData.address}</span>
                 </div>
               </div>
 
-              {/* Order Items Table */}
-              <table className="w-full border-collapse border-2 border-black mb-8">
+              {/* Tablo */}
+              <table className="w-full border-collapse border-2 border-black">
                 <thead>
-                  <tr className="bg-black text-white">
-                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-center" style={{ width: '60px' }}>NO</th>
-                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-left" style={{ width: '100px' }}>MİKTAR</th>
-                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-left">AÇIKLAMA</th>
-                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-right" style={{ width: '140px' }}>BİRİM FİYAT</th>
-                    <th className="border-2 border-black px-4 py-4 text-base font-bold text-right" style={{ width: '140px' }}>TOPLAM</th>
+                  <tr style={{ backgroundColor: '#1e3a8a', color: 'white' }}>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '80px' }}>SIRA NO</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" style={{ width: '120px' }}>MİKTAR</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2}>AÇIKLAMA</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '140px' }}>BİRİM FİYAT</th>
+                    <th className="border border-black px-3 py-3 text-sm font-bold" rowSpan={2} style={{ width: '140px' }}>TOPLAM</th>
+                  </tr>
+                  <tr style={{ backgroundColor: '#1e3a8a', color: 'white' }}>
+                    <th className="border border-black px-3 py-2 text-xs font-bold">AMOUNT</th>
+                    <th className="border border-black px-3 py-2 text-xs font-bold">DESCRİPTİON</th>
+                    <th className="border border-black px-3 py-2 text-xs font-bold">UNİT PRİCE</th>
+                    <th className="border border-black px-3 py-2 text-xs font-bold">TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orderFormItems.map((item, index) => (
-                    <tr key={index} className="bg-white">
-                      <td className="border border-black px-4 py-3 text-base text-black text-center font-semibold">{index + 1}</td>
+                    <tr key={index}>
+                      <td className="border border-black px-3 py-3 text-center font-bold">{index + 1}</td>
                       <td className="border border-black px-2 py-2">
                         <input
                           type="text"
                           value={item.amount}
                           onChange={(e) => handleOrderFormItemChange(index, 'amount', e.target.value)}
-                          className="w-full px-2 py-2 text-base text-black focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm focus:outline-none focus:bg-gray-100"
                         />
                       </td>
                       <td className="border border-black px-2 py-2">
@@ -1123,7 +1164,7 @@ export default function PurchaseOrdersPage() {
                           type="text"
                           value={item.description}
                           onChange={(e) => handleOrderFormItemChange(index, 'description', e.target.value)}
-                          className="w-full px-2 py-2 text-base text-black focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm focus:outline-none focus:bg-gray-100"
                         />
                       </td>
                       <td className="border border-black px-2 py-2">
@@ -1131,60 +1172,50 @@ export default function PurchaseOrdersPage() {
                           type="text"
                           value={item.unit_price}
                           onChange={(e) => handleOrderFormItemChange(index, 'unit_price', e.target.value)}
-                          className="w-full px-2 py-2 text-base text-black text-right focus:outline-none focus:bg-gray-100"
+                          className="w-full px-2 py-1 text-sm text-right focus:outline-none focus:bg-gray-100"
                         />
                       </td>
-                      <td className="border border-black px-4 py-3 text-base text-black text-right font-bold">
-                        {item.total.toFixed(2)} ₺
+                      <td className="border border-black px-3 py-3 text-right font-bold">
+                        {item.total.toFixed(2)}
                       </td>
                     </tr>
                   ))}
 
-                  {/* Summary Rows */}
-                  <tr className="bg-white">
-                    <td colSpan={4} className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
-                      ARA TOPLAM:
+                  {/* Özet Satırları */}
+                  <tr style={{ backgroundColor: '#ef4444' }}>
+                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      ARA TOPLAM
                     </td>
-                    <td className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
-                      {calculateSubtotal().toFixed(2)} ₺
-                    </td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td colSpan={4} className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
-                      KDV (%20):
-                    </td>
-                    <td className="border-2 border-black px-4 py-3 text-base text-black text-right font-bold">
-                      {calculateVAT().toFixed(2)} ₺
+                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      {calculateSubtotal().toFixed(2)}
                     </td>
                   </tr>
-                  <tr className="bg-black text-white">
-                    <td colSpan={4} className="border-2 border-black px-4 py-4 text-lg text-white text-right font-bold">
-                      GENEL TOPLAM:
+                  <tr style={{ backgroundColor: '#ef4444' }}>
+                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      KDV %20
                     </td>
-                    <td className="border-2 border-black px-4 py-4 text-lg text-white text-right font-bold">
-                      {calculateGrandTotal().toFixed(2)} ₺
+                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      {calculateVAT().toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#ef4444' }}>
+                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      TOPLAM
+                    </td>
+                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      {calculateGrandTotal().toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#ef4444' }}>
+                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      TL KARŞILIĞI
+                    </td>
+                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                      {calculateGrandTotal().toFixed(2)}
                     </td>
                   </tr>
                 </tbody>
               </table>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-20 mt-16">
-                <div className="text-center">
-                  <div className="h-20 mb-3"></div>
-                  <div className="border-t-2 border-black pt-3">
-                    <p className="text-base font-bold text-black">DÜNYASAN SAVUNMA A.Ş.</p>
-                    <p className="text-sm text-black">Yetkili İmza ve Kaşe</p>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="h-20 mb-3"></div>
-                  <div className="border-t-2 border-black pt-3">
-                    <p className="text-base font-bold text-black">TEDARİKÇİ FİRMA</p>
-                    <p className="text-sm text-black">Yetkili İmza ve Kaşe</p>
-                  </div>
-                </div>
-              </div>
             </div>
           </>
         )}

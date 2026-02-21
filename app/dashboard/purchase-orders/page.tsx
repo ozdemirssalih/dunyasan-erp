@@ -1193,35 +1193,39 @@ export default function PurchaseOrdersPage() {
                   ))}
 
                   {/* Özet Satırları */}
-                  <tr style={{ backgroundColor: '#ef4444' }}>
-                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                  <tr>
+                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       ARA TOPLAM
                     </td>
-                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       {calculateSubtotal().toFixed(2)}
                     </td>
                   </tr>
-                  <tr style={{ backgroundColor: '#ef4444' }}>
-                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                  <tr>
+                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       KDV %20
                     </td>
-                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       {calculateVAT().toFixed(2)}
                     </td>
                   </tr>
-                  <tr style={{ backgroundColor: '#ef4444' }}>
-                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                  <tr>
+                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       TOPLAM
                     </td>
-                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       {calculateGrandTotal().toFixed(2)}
                     </td>
                   </tr>
-                  <tr style={{ backgroundColor: '#ef4444' }}>
-                    <td colSpan={4} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                  <tr>
+                    <td colSpan={3} className="border border-black bg-white"></td>
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       TL KARŞILIĞI
                     </td>
-                    <td className="border-2 border-black px-3 py-2 text-right font-bold text-white">
+                    <td style={{ backgroundColor: '#ef4444' }} className="border-2 border-black px-3 py-2 text-right font-bold text-white">
                       {calculateGrandTotal().toFixed(2)}
                     </td>
                   </tr>

@@ -154,8 +154,15 @@ export default function CostCalculationPage() {
       return
     }
 
+    if (orderQuantity <= 0) {
+      alert('Sipariş adedi girilmelidir!')
+      return
+    }
+
     setSaving(true)
     try {
+      const now = new Date().toISOString()
+
       // Her takım için hesaplanan parça başı maliyeti kaydet
       const updates = toolsData.map((tool, index) => {
         const calc = calculations[index]
@@ -163,12 +170,23 @@ export default function CostCalculationPage() {
           .from('project_tools')
           .update({
             calculated_unit_cost: calc.costPerPiece,
-            last_calculation_date: new Date().toISOString()
+            last_calculation_date: now
           })
           .eq('id', tool.projectToolId)
       })
 
       await Promise.all(updates)
+
+      // Projeye toplam maliyetleri kaydet
+      await supabase
+        .from('projects')
+        .update({
+          last_calculated_total_cost: totalCuttingCost,
+          last_calculated_unit_cost: costPerPieceTotal,
+          last_order_quantity: orderQuantity,
+          last_cost_calculation_date: now
+        })
+        .eq('id', selectedProjectId)
 
       alert('Hesaplamalar başarıyla kaydedildi!')
     } catch (error) {

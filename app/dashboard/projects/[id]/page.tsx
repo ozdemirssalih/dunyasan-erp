@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users, Wrench, Edit } from 'lucide-react'
+import { ArrowLeft, Factory, Package, Building2, TrendingUp, Plus, Users, Wrench, Edit, Calculator } from 'lucide-react'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -496,6 +496,51 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Cost Summary */}
+      {project.last_calculated_total_cost && (
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-100 rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
+          <div className="flex items-center space-x-2 mb-4">
+            <Calculator className="w-6 h-6 text-emerald-700" />
+            <h2 className="text-xl font-bold text-gray-800">Maliyet Özeti</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white/60 rounded-lg p-4">
+              <div className="text-xs font-semibold text-gray-600 mb-1">TOPLAM KESİCİ MALİYETİ</div>
+              <div className="text-2xl font-bold text-emerald-700">
+                {project.last_calculated_total_cost?.toFixed(2)} €
+              </div>
+            </div>
+
+            <div className="bg-white/60 rounded-lg p-4">
+              <div className="text-xs font-semibold text-gray-600 mb-1">PARÇA BAŞI MALİYET</div>
+              <div className="text-2xl font-bold text-teal-700">
+                {project.last_calculated_unit_cost?.toFixed(4)} €
+              </div>
+            </div>
+
+            <div className="bg-white/60 rounded-lg p-4">
+              <div className="text-xs font-semibold text-gray-600 mb-1">SİPARİŞ ADEDİ</div>
+              <div className="text-2xl font-bold text-gray-700">
+                {project.last_order_quantity?.toLocaleString('tr-TR')}
+              </div>
+            </div>
+          </div>
+
+          {project.last_cost_calculation_date && (
+            <div className="mt-3 text-xs text-emerald-700 font-semibold">
+              Son Hesaplama: {new Date(project.last_cost_calculation_date).toLocaleDateString('tr-TR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Customer Section */}
       <div className="bg-white rounded-xl shadow-md p-6">

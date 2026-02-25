@@ -701,12 +701,10 @@ export default function ProductionPage() {
       }
 
       const availableStock = stockRecord.current_stock
-      // Fire, üretilen miktarın içindedir (toplam üretim = mamül + fire)
-      // Dolayısıyla hammadde kullanımı = sadece üretilen miktar
-      const usedQuantity = outputForm.quantity
+      const usedQuantity = outputForm.quantity + outputForm.fire_quantity
 
       if (usedQuantity > availableStock) {
-        alert(`❌ Kullanılan miktar mevcut stoğu aşıyor!\n\nMevcut Stok: ${availableStock} birim\nKullanmak İstediğiniz: ${usedQuantity} birim\n  → Toplam Üretim: ${outputForm.quantity}\n  → Fire: ${outputForm.fire_quantity}`)
+        alert(`❌ Kullanılan miktar mevcut stoğu aşıyor!\n\nMevcut Stok: ${availableStock} birim\nKullanmak İstediğiniz: ${usedQuantity} birim\n  → Mamül: ${outputForm.quantity}\n  → Fire: ${outputForm.fire_quantity}`)
         return
       }
 
@@ -757,9 +755,7 @@ export default function ProductionPage() {
         if (fireError) console.error('Fire kaydı hatası:', fireError)
       }
 
-      // 5. Bitmiş ürünü stoğa ekle (sadece sağlam ürünler, fire hariç)
-      const goodProducts = outputForm.quantity - outputForm.fire_quantity
-
+      // 5. Bitmiş ürünü stoğa ekle
       const { data: existingFinished } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -772,7 +768,7 @@ export default function ProductionPage() {
         const { error: updateFinishedError } = await supabase
           .from('production_inventory')
           .update({
-            current_stock: existingFinished.current_stock + goodProducts,
+            current_stock: existingFinished.current_stock + outputForm.quantity,
             updated_at: new Date().toISOString()
           })
           .eq('company_id', companyId)
@@ -786,7 +782,7 @@ export default function ProductionPage() {
           .insert({
             company_id: companyId,
             item_id: outputForm.output_item_id,
-            current_stock: goodProducts,
+            current_stock: outputForm.quantity,
             item_type: 'finished_product',
             notes: 'Üretimden gelen bitmiş ürün'
           })
@@ -797,12 +793,10 @@ export default function ProductionPage() {
       // Başarı mesajı
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
       successMsg += `\n\n✨ Üretim Sonucu:`
-      successMsg += `\n  • Toplam Üretim: ${outputForm.quantity} birim`
-      successMsg += `\n  • Sağlam Mamül: ${goodProducts} birim`
+      successMsg += `\n  • Mamül: ${outputForm.quantity} birim`
       if (outputForm.fire_quantity > 0) {
         successMsg += `\n  • Fire: ${outputForm.fire_quantity} birim`
       }
-      successMsg += `\n  • Kullanılan hammadde: ${usedQuantity} birim`
       successMsg += `\n  • Kalan hammadde: ${availableStock - usedQuantity} birim`
 
       setShowOutputModal(false)
@@ -2003,9 +1997,8 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Toplam Üretim Miktarı <span className="text-red-500">*</span>
+                      Üretilen Miktar <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-xs text-gray-500 mb-2">Sağlam ürün + Fire (toplam kullanılan hammadde)</p>
                     <input
                       type="number"
                       step="0.001"

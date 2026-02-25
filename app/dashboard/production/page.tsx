@@ -454,7 +454,7 @@ export default function ProductionPage() {
 
     const finishedProducts = finishedStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
 
-    // 3. Toplam üretilen (tüm zamanlar - sadece bilgi için)
+    // 3. Toplam üretilen (tüm zamanlar)
     const { data: allOutputs } = await supabase
       .from('production_outputs')
       .select('quantity')
@@ -462,15 +462,19 @@ export default function ProductionPage() {
 
     const totalProducedEver = allOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 4. Toplam fire (tüm zamanlar - sadece bilgi için)
+    // 4. Toplam fire (tüm zamanlar)
     const { data: allFire } = await supabase
       .from('production_scrap_records')
       .select('quantity')
       .eq('company_id', companyId)
+      .eq('source_type', 'production')
 
     const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 5. Bugünkü üretim
+    // 5. İşlenen Mamul = Üretilen + Fire
+    const processedProducts = totalProducedEver + totalFire
+
+    // 6. Bugünkü üretim
     const today = new Date().toISOString().split('T')[0]
     const { data: todayOutputs } = await supabase
       .from('production_outputs')
@@ -482,14 +486,14 @@ export default function ProductionPage() {
 
     console.log('📊 [PRODUCTION] İstatistikler:', {
       'Üretim Deposu Hammadde': rawMaterialsReady,
-      'Üretim Deposu Bitmiş Ürün': finishedProducts,
+      'İşlenen Mamul (Üretilen+Fire)': processedProducts,
       'Bugünkü Üretim': todayProduction,
       'Toplam Fire': totalFire
     })
 
     setStats({
       rawMaterialsReady,
-      finishedProducts,
+      finishedProducts: processedProducts, // İşlenen mamul = üretilen + fire
       pendingQC: 0, // Kalite kontrol sistemi henüz yok
       todayProduction,
       calculatedScrap: 0, // Hesaplanamaz - oran bilgisi yok
@@ -1050,7 +1054,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.rawMaterialsReady}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenmeye Hazır Hammadde</h3>
-            <p className="text-xs text-gray-600 mt-1">Tezgaha verilen - Üretilen - Fire</p>
+            <p className="text-xs text-gray-600 mt-1">Üretim deposundaki hammadde</p>
             {stats.recentProjects.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-600 mb-1">Son projeler:</p>
@@ -1074,7 +1078,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.finishedProducts}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenen Mamul</h3>
-            <p className="text-xs text-gray-600 mt-1">Toplam üretilen ürün sayısı</p>
+            <p className="text-xs text-gray-600 mt-1">Üretilen + Fire</p>
           </div>
 
           {/* Kalite Kontrolde Bekleyen */}

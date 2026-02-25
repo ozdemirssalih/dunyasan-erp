@@ -747,12 +747,17 @@ export default function DailyProductionPage() {
                   <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                     <div className="text-sm font-semibold text-gray-700 mb-2">Verimlilik Önizlemesi:</div>
                     <div className={`text-3xl font-bold ${
-                      (parseInt(formData.actual_production) / parseInt(formData.capacity_target) * 100) >= 80 ? 'text-green-600' :
-                      (parseInt(formData.actual_production) / parseInt(formData.capacity_target) * 100) >= 60 ? 'text-yellow-600' :
+                      ((parseInt(formData.actual_production) - parseInt(formData.defect_count || '0')) / parseInt(formData.capacity_target) * 100) >= 80 ? 'text-green-600' :
+                      ((parseInt(formData.actual_production) - parseInt(formData.defect_count || '0')) / parseInt(formData.capacity_target) * 100) >= 60 ? 'text-yellow-600' :
                       'text-red-600'
                     }`}>
-                      {((parseInt(formData.actual_production) / parseInt(formData.capacity_target)) * 100).toFixed(1)}%
+                      {(((parseInt(formData.actual_production) - parseInt(formData.defect_count || '0')) / parseInt(formData.capacity_target)) * 100).toFixed(1)}%
                     </div>
+                    {formData.defect_count && parseInt(formData.defect_count) > 0 && (
+                      <div className="text-xs text-gray-600 mt-2">
+                        Fire düşüldükten sonra: {parseInt(formData.actual_production) - parseInt(formData.defect_count)} adet
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

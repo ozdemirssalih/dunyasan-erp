@@ -738,14 +738,14 @@ export default function ProductionPage() {
 
       if (deductError) throw deductError
 
-      // 4. Eğer fire varsa fire kaydını oluştur
+      // 4. Eğer fire varsa fire kaydını oluştur (mamül olarak)
       if (outputForm.fire_quantity > 0) {
         const { error: fireError } = await supabase
           .from('production_scrap_records')
           .insert({
             company_id: companyId,
             source_type: 'production',
-            item_id: outputForm.input_item_id,
+            item_id: outputForm.output_item_id, // Fire olan MAMÜL parçalar
             quantity: outputForm.fire_quantity,
             scrap_reason: outputForm.fire_reason,
             notes: `Üretim sırasında fire - ${outputForm.notes || ''}`,

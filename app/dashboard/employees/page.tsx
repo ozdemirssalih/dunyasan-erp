@@ -366,6 +366,14 @@ export default function EmployeesPage() {
                     </span>
                   </div>
                 )}
+                {employee.salary && (
+                  <div className="flex items-center space-x-2 text-sm text-gray-700">
+                    <DollarSign className="w-4 h-4 text-green-500" />
+                    <span className="font-semibold text-green-600">
+                      {employee.salary.toLocaleString('tr-TR')} ₺
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Verimlilik Barı */}

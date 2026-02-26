@@ -423,7 +423,7 @@ export default function ProductionPage() {
 
     const { data } = await supabase
       .from('project_parts')
-      .select('id, part_name, part_code, quantity, unit')
+      .select('id, part_name, part_code, quantity, unit, raw_material_id, finished_product_id')
       .eq('project_id', projectId)
       .order('part_name')
 
@@ -2060,7 +2060,22 @@ export default function ProductionPage() {
                     </label>
                     <select
                       value={outputForm.project_part_id}
-                      onChange={(e) => setOutputForm({ ...outputForm, project_part_id: e.target.value })}
+                      onChange={(e) => {
+                        const partId = e.target.value
+                        const selectedPart = projectParts.find(p => p.id === partId)
+
+                        // Parça seçilince hammadde ve mamülü otomatik doldur
+                        if (selectedPart && selectedPart.raw_material_id && selectedPart.finished_product_id) {
+                          setOutputForm({
+                            ...outputForm,
+                            project_part_id: partId,
+                            input_item_id: selectedPart.raw_material_id,
+                            output_item_id: selectedPart.finished_product_id
+                          })
+                        } else {
+                          setOutputForm({ ...outputForm, project_part_id: partId })
+                        }
+                      }}
                       disabled={!outputForm.project_id}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
                     >
@@ -2071,6 +2086,9 @@ export default function ProductionPage() {
                         </option>
                       ))}
                     </select>
+                    {outputForm.project_part_id && projectParts.find(p => p.id === outputForm.project_part_id)?.raw_material_id && (
+                      <p className="text-xs text-green-600 mt-1">✓ Hammadde ve mamül otomatik seçildi</p>
+                    )}
                   </div>
 
                   <div>

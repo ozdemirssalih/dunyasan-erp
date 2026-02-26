@@ -204,7 +204,7 @@ export default function DailyProductionPage() {
         .from('machine_daily_production')
         .select(`
           *,
-          machine:machines(id, machine_code, machine_name),
+          machine:machines!machine_daily_production_machine_id_fkey(id, machine_code, machine_name),
           project:projects(id, project_code, project_name),
           employee:employees(id, employee_code, full_name)
         `)

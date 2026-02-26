@@ -29,6 +29,10 @@ interface DailyProduction {
     project_code: string
     project_name: string
   }
+  employee?: {
+    employee_code: string
+    full_name: string
+  }
 }
 
 interface ToolDelivery {
@@ -92,7 +96,8 @@ export default function MachineDetailPage() {
         .from('machine_daily_production')
         .select(`
           *,
-          project:projects(project_code, project_name)
+          project:projects(project_code, project_name),
+          employee:employees(employee_code, full_name)
         `)
         .eq('machine_id', machineId)
         .order('production_date', { ascending: false })
@@ -258,6 +263,11 @@ export default function MachineDetailPage() {
                       <div className="text-xs text-gray-500 mt-1">
                         Vardiya: {record.shift || 'Belirtilmemiş'}
                       </div>
+                      {record.employee && (
+                        <div className="text-xs text-green-700 font-medium mt-1">
+                          👤 {record.employee.full_name} ({record.employee.employee_code})
+                        </div>
+                      )}
                     </div>
                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${
                       record.efficiency_rate >= 80 ? 'bg-green-100 text-green-700' :

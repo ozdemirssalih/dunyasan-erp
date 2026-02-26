@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Users, Plus, Phone, Mail, Briefcase, Calendar, Trash2, Edit, BadgeCheck, DollarSign } from 'lucide-react'
+import { Users, Plus, Phone, Mail, Briefcase, Calendar, Trash2, Edit, BadgeCheck, DollarSign, Eye } from 'lucide-react'
+import Link from 'next/link'
 import PermissionGuard from '@/components/PermissionGuard'
 
 interface Employee {
@@ -315,6 +316,13 @@ export default function EmployeesPage() {
                   </div>
                 </div>
                 <div className="flex space-x-1">
+                  <Link
+                    href={`/dashboard/employees/${employee.id}`}
+                    className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+                    title="Detay"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Link>
                   <button
                     onClick={() => handleOpenModal(employee)}
                     className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"

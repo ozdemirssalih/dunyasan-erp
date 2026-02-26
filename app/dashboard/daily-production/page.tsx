@@ -224,10 +224,17 @@ export default function DailyProductionPage() {
         query = query.lte('production_date', filterEndDate)
       }
 
-      const { data } = await query.order('production_date', { ascending: false })
+      const { data, error } = await query.order('production_date', { ascending: false })
+
+      if (error) {
+        console.error('❌ [LOAD] Query error:', error)
+        throw error
+      }
 
       console.log('✅ [LOAD] Yüklenen kayıt sayısı:', data?.length || 0)
+      console.log('📦 [LOAD] İlk kayıt:', data?.[0])
       setProductions(data || [])
+      console.log('🔄 [LOAD] State güncellendi')
     } catch (error) {
       console.error('❌ [LOAD] Error loading productions:', error)
     }
@@ -471,9 +478,14 @@ export default function DailyProductionPage() {
 
         {/* Production Records */}
         <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Calendar className="w-6 h-6 text-green-600" />
-            <h3 className="text-xl font-bold text-gray-800">Üretim Kayıtları</h3>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-6 h-6 text-green-600" />
+              <h3 className="text-xl font-bold text-gray-800">Üretim Kayıtları</h3>
+            </div>
+            <div className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              {productions.length} kayıt
+            </div>
           </div>
 
           {productions.length > 0 ? (

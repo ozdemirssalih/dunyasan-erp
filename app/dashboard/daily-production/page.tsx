@@ -228,6 +228,8 @@ export default function DailyProductionPage() {
   }
 
   const handleSubmit = async () => {
+    console.log('🔵 [SUBMIT] Form verileri:', formData)
+
     if (!formData.project_id || !formData.machine_id || !formData.production_date || !formData.capacity_target || !formData.actual_production) {
       alert('Lütfen gerekli tüm alanları doldurun!')
       return
@@ -247,6 +249,8 @@ export default function DailyProductionPage() {
         notes: formData.notes || null
       }
 
+      console.log('🟢 [SUBMIT] Gönderilecek veri:', productionData)
+
       if (editingId) {
         // Update existing
         const { error } = await supabase
@@ -255,6 +259,7 @@ export default function DailyProductionPage() {
           .eq('id', editingId)
 
         if (error) throw error
+        console.log('✅ [SUBMIT] Güncelleme başarılı')
       } else {
         // Create new
         const { error } = await supabase
@@ -262,14 +267,16 @@ export default function DailyProductionPage() {
           .insert(productionData)
 
         if (error) throw error
+        console.log('✅ [SUBMIT] Ekleme başarılı')
       }
 
       // Reset and reload
+      alert('✅ Kayıt başarıyla oluşturuldu!')
       resetForm()
       await loadProductions()
     } catch (error: any) {
-      console.error('Error saving production:', error)
-      alert(`Hata oluştu!\n${error?.message || 'Bilinmeyen hata'}`)
+      console.error('❌ [SUBMIT] Error saving production:', error)
+      alert(`Hata oluştu!\n\nDetay: ${error?.message || 'Bilinmeyen hata'}\n\n${JSON.stringify(error, null, 2)}`)
     }
   }
 

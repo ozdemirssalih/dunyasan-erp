@@ -192,7 +192,12 @@ export default function DailyProductionPage() {
 
   const loadProductions = async (cId?: string) => {
     const finalCompanyId = cId || companyId
-    if (!finalCompanyId) return
+    console.log('🔄 [LOAD] loadProductions çağrıldı, companyId:', finalCompanyId)
+
+    if (!finalCompanyId) {
+      console.log('❌ [LOAD] companyId bulunamadı!')
+      return
+    }
 
     try {
       let query = supabase
@@ -221,9 +226,10 @@ export default function DailyProductionPage() {
 
       const { data } = await query.order('production_date', { ascending: false })
 
+      console.log('✅ [LOAD] Yüklenen kayıt sayısı:', data?.length || 0)
       setProductions(data || [])
     } catch (error) {
-      console.error('Error loading productions:', error)
+      console.error('❌ [LOAD] Error loading productions:', error)
     }
   }
 
@@ -272,6 +278,7 @@ export default function DailyProductionPage() {
 
       // Reset and reload
       alert('✅ Kayıt başarıyla oluşturuldu!')
+      setShowModal(false)
       resetForm()
       await loadProductions()
     } catch (error: any) {

@@ -47,7 +47,9 @@ export default function QualityControlPage() {
   // PDF Upload states
   const [showPDFModal, setShowPDFModal] = useState(false)
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null)
+  const [selectedRecordType, setSelectedRecordType] = useState<'qc_transfer' | 'warehouse_qc'>('qc_transfer')
   const [qcDocuments, setQCDocuments] = useState<Record<string, any[]>>({})
+  const [warehouseQCDocuments, setWarehouseQCDocuments] = useState<Record<string, any[]>>({})
   const [uploadingPDF, setUploadingPDF] = useState(false)
   const [pdfForm, setPdfForm] = useState({
     document_type: 'test_report',
@@ -137,6 +139,7 @@ export default function QualityControlPage() {
         loadHistory(finalCompanyId),
         loadWarehouseQCRequests(finalCompanyId),
         loadQCDocuments(finalCompanyId),
+        loadWarehouseQCDocuments(finalCompanyId),
       ])
 
     } catch (error) {
@@ -319,6 +322,25 @@ export default function QualityControlPage() {
         docsByTransfer[doc.qc_transfer_id].push(doc)
       })
       setQCDocuments(docsByTransfer)
+    }
+  }
+
+  const loadWarehouseQCDocuments = async (companyId: string) => {
+    const { data } = await supabase
+      .from('warehouse_qc_documents')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('uploaded_at', { ascending: false })
+
+    if (data) {
+      const docsByRequest: Record<string, any[]> = {}
+      data.forEach(doc => {
+        if (!docsByRequest[doc.warehouse_qc_request_id]) {
+          docsByRequest[doc.warehouse_qc_request_id] = []
+        }
+        docsByRequest[doc.warehouse_qc_request_id].push(doc)
+      })
+      setWarehouseQCDocuments(docsByRequest)
     }
   }
 
@@ -725,21 +747,39 @@ export default function QualityControlPage() {
 
       if (uploadError) throw uploadError
 
-      const { error: dbError } = await supabase
-        .from('quality_control_documents')
-        .insert({
-          company_id: companyId,
-          qc_transfer_id: selectedTransferId,
-          document_type: pdfForm.document_type,
-          document_title: pdfForm.document_title,
-          file_url: filePath,
-          file_name: pdfForm.file.name,
-          file_size: pdfForm.file.size,
-          notes: pdfForm.notes,
-          uploaded_by: currentUserId
-        })
+      if (selectedRecordType === 'qc_transfer') {
+        const { error: dbError } = await supabase
+          .from('quality_control_documents')
+          .insert({
+            company_id: companyId,
+            qc_transfer_id: selectedTransferId,
+            document_type: pdfForm.document_type,
+            document_title: pdfForm.document_title,
+            file_url: filePath,
+            file_name: pdfForm.file.name,
+            file_size: pdfForm.file.size,
+            notes: pdfForm.notes,
+            uploaded_by: currentUserId
+          })
 
-      if (dbError) throw dbError
+        if (dbError) throw dbError
+      } else {
+        const { error: dbError } = await supabase
+          .from('warehouse_qc_documents')
+          .insert({
+            company_id: companyId,
+            warehouse_qc_request_id: selectedTransferId,
+            document_type: pdfForm.document_type,
+            document_title: pdfForm.document_title,
+            file_url: filePath,
+            file_name: pdfForm.file.name,
+            file_size: pdfForm.file.size,
+            notes: pdfForm.notes,
+            uploaded_by: currentUserId
+          })
+
+        if (dbError) throw dbError
+      }
 
       alert('✅ Doküman başarıyla yüklendi!')
       setShowPDFModal(false)
@@ -758,7 +798,7 @@ export default function QualityControlPage() {
     }
   }
 
-  const handleDeleteDocument = async (docId: string, filePath: string) => {
+  const handleDeleteDocument = async (docId: string, filePath: string, recordType: 'qc_transfer' | 'warehouse_qc') => {
     if (!confirm('Bu dokümanı silmek istediğinizden emin misiniz?')) return
 
     try {
@@ -766,8 +806,10 @@ export default function QualityControlPage() {
         .from('quality-control-docs')
         .remove([filePath])
 
+      const tableName = recordType === 'qc_transfer' ? 'quality_control_documents' : 'warehouse_qc_documents'
+
       const { error } = await supabase
-        .from('quality_control_documents')
+        .from(tableName)
         .delete()
         .eq('id', docId)
 
@@ -1038,15 +1080,25 @@ export default function QualityControlPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
                 <ClipboardCheck className="w-5 h-5" />
-                Test Sonuçları
+                Tüm Kalite Test Sonuçları
               </h3>
               <p className="text-sm text-blue-700">
-                Kalite test sonuçları. Geçenler ana depoya, kalanlar üretim deposuna geri gönderilir.
+                Üretimden gelen test sonuçları ve depo giriş kontrol sonuçları.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              {outgoingTransfers.map((transfer: any) => {
+            {/* Üretimden Gelen Test Sonuçları */}
+            {outgoingTransfers.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Factory className="w-5 h-5 text-orange-600" />
+                  Üretim Test Sonuçları
+                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-semibold">
+                    {outgoingTransfers.length}
+                  </span>
+                </h4>
+                <div className="grid grid-cols-1 gap-4">
+                  {outgoingTransfers.map((transfer: any) => {
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-100 text-yellow-700',
                   approved: 'bg-green-100 text-green-700',
@@ -1111,6 +1163,7 @@ export default function QualityControlPage() {
                         <button
                           onClick={() => {
                             setSelectedTransferId(transfer.id)
+                            setSelectedRecordType('qc_transfer')
                             setShowPDFModal(true)
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
@@ -1160,7 +1213,7 @@ export default function QualityControlPage() {
                                   <Download className="w-4 h-4" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                  onClick={() => handleDeleteDocument(doc.id, doc.file_url, 'qc_transfer')}
                                   className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded"
                                 >
                                   <X className="w-4 h-4" />
@@ -1179,8 +1232,157 @@ export default function QualityControlPage() {
                 )
               })}
             </div>
+              </div>
+            )}
 
-            {outgoingTransfers.length === 0 && (
+            {/* Depo Giriş Kontrol Sonuçları */}
+            {warehouseQCRequests.filter((r: any) => r.status !== 'pending').length > 0 && (
+              <div className="space-y-2 mt-6">
+                <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-purple-600" />
+                  Depo Giriş Kontrol Sonuçları
+                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-semibold">
+                    {warehouseQCRequests.filter((r: any) => r.status !== 'pending').length}
+                  </span>
+                </h4>
+                <div className="grid grid-cols-1 gap-4">
+                  {warehouseQCRequests.filter((r: any) => r.status !== 'pending').map((request: any) => {
+                    const statusColors: Record<string, string> = {
+                      approved: 'bg-green-100 text-green-700',
+                      rejected: 'bg-red-100 text-red-700'
+                    }
+
+                    return (
+                      <div key={request.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="font-bold text-gray-800">{request.item?.name || 'Bilinmiyor'}</h4>
+                            <p className="text-sm text-gray-500">{request.item?.code || '-'}</p>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[request.status] || 'bg-gray-100 text-gray-700'}`}>
+                            {request.status === 'approved' ? 'ONAYLANDI' : 'REDDEDİLDİ'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                            <span className="font-semibold text-gray-900">{request.quantity} {request.item?.unit || ''}</span>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">Talep Eden</span>
+                            <span className="text-gray-900">{request.requested_by_user?.full_name || 'Bilinmiyor'}</span>
+                          </div>
+                          {request.supplier && (
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-gray-500 text-xs block mb-1">Tedarikçi</span>
+                              <span className="text-gray-900">{request.supplier}</span>
+                            </div>
+                          )}
+                          {request.reference_number && (
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-gray-500 text-xs block mb-1">İrsaliye No</span>
+                              <span className="text-gray-900">{request.reference_number}</span>
+                            </div>
+                          )}
+                          <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                            <span className="text-gray-500 text-xs block mb-1">İnceleme Tarihi</span>
+                            <span className="text-gray-900">{new Date(request.reviewed_at).toLocaleString('tr-TR')}</span>
+                          </div>
+                          {request.review_notes && (
+                            <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                              <span className="text-gray-500 text-xs block mb-1">İnceleme Notu</span>
+                              <p className="text-gray-900">{request.review_notes}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* PDF Dokümanlar */}
+                        <div className="pt-4 border-t border-gray-200">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-purple-600" />
+                              <span className="text-sm font-semibold text-gray-700">Kontrol Dokümanları</span>
+                              <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                                {warehouseQCDocuments[request.id]?.length || 0}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedTransferId(request.id)
+                                setSelectedRecordType('warehouse_qc')
+                                setShowPDFModal(true)
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold"
+                            >
+                              <Upload className="w-3 h-3" />
+                              PDF Yükle
+                            </button>
+                          </div>
+
+                          {warehouseQCDocuments[request.id]?.length > 0 ? (
+                            <div className="space-y-2">
+                              {warehouseQCDocuments[request.id].map((doc: any) => (
+                                <div key={doc.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <div className="font-semibold text-sm text-gray-900">{doc.document_title}</div>
+                                    <div className="text-xs text-gray-600 flex items-center gap-2 mt-1">
+                                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                                        {doc.document_type === 'test_report' ? 'Test Raporu' :
+                                         doc.document_type === 'certificate' ? 'Sertifika' :
+                                         doc.document_type === 'measurement' ? 'Ölçüm Sonucu' :
+                                         doc.document_type === 'photo' ? 'Fotoğraf' : 'Diğer'}
+                                      </span>
+                                      <span>{doc.file_name}</span>
+                                      <span>({(doc.file_size / 1024).toFixed(1)} KB)</span>
+                                    </div>
+                                    {doc.notes && (
+                                      <div className="text-xs text-gray-500 mt-1 italic">Not: {doc.notes}</div>
+                                    )}
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {new Date(doc.uploaded_at).toLocaleString('tr-TR')}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={async () => {
+                                        const { data, error } = await supabase.storage
+                                          .from('quality-control-docs')
+                                          .createSignedUrl(doc.file_url, 60)
+                                        if (!error && data) {
+                                          window.open(data.signedUrl, '_blank')
+                                        } else {
+                                          alert('❌ Dosya açılamadı: ' + error?.message)
+                                        }
+                                      }}
+                                      className="p-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteDocument(doc.id, doc.file_url, 'warehouse_qc')}
+                                      className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg">
+                              Henüz doküman yüklenmemiş
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {outgoingTransfers.length === 0 && warehouseQCRequests.filter((r: any) => r.status !== 'pending').length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz test sonucu yok</p>
               </div>

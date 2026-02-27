@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, TrendingUp, Calendar, Factory, User } from 'lucide-react'
+import { ArrowLeft, TrendingUp, Calendar, Factory, User, FileText, Upload, Download, Trash2, Plus, X } from 'lucide-react'
 
 interface Employee {
   id: string
@@ -38,6 +38,20 @@ interface DailyProduction {
   }
 }
 
+interface EmployeeRecord {
+  id: string
+  record_type: string
+  record_title: string
+  file_url: string
+  file_name: string
+  file_size: number
+  notes?: string
+  uploaded_at: string
+  uploaded_by?: {
+    full_name: string
+  }
+}
+
 export default function EmployeeDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -45,6 +59,7 @@ export default function EmployeeDetailPage() {
 
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [dailyProductions, setDailyProductions] = useState<DailyProduction[]>([])
+  const [records, setRecords] = useState<EmployeeRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   const [stats, setStats] = useState({
@@ -53,6 +68,17 @@ export default function EmployeeDetailPage() {
     efficiency: 0,
     totalDays: 0
   })
+
+  // Upload modal
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadForm, setUploadForm] = useState({
+    record_type: 'tutanak',
+    record_title: '',
+    notes: '',
+    file: null as File | null
+  })
+  const [companyId, setCompanyId] = useState<string | null>(null)
 
   useEffect(() => {
     loadEmployeeData()
@@ -70,6 +96,8 @@ export default function EmployeeDetailPage() {
         .single()
 
       if (!profile?.company_id) return
+
+      setCompanyId(profile.company_id)
 
       // Load employee details
       const { data: employeeData } = await supabase
@@ -112,10 +140,135 @@ export default function EmployeeDetailPage() {
           totalDays: dailyProductionData.length
         })
       }
+
+      // Load employee records (PDF documents)
+      await loadRecords(profile.company_id)
     } catch (error) {
       console.error('Error loading employee data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadRecords = async (cId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('employee_records')
+        .select(`
+          *,
+          uploaded_by:profiles(full_name)
+        `)
+        .eq('company_id', cId)
+        .eq('employee_id', employeeId)
+        .order('uploaded_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading records:', error)
+        return
+      }
+
+      setRecords(data || [])
+    } catch (error) {
+      console.error('Error in loadRecords:', error)
+    }
+  }
+
+  const handleFileUpload = async () => {
+    if (!uploadForm.file || !uploadForm.record_title || !companyId) {
+      alert('Lütfen tüm gerekli alanları doldurun ve bir dosya seçin!')
+      return
+    }
+
+    // Sadece PDF kabul et
+    if (uploadForm.file.type !== 'application/pdf') {
+      alert('Sadece PDF dosyaları yüklenebilir!')
+      return
+    }
+
+    setUploading(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Kullanıcı bulunamadı')
+
+      // Generate unique file name
+      const fileExt = 'pdf'
+      const fileName = `${employeeId}/${Date.now()}_${uploadForm.file.name}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from('employee-records')
+        .upload(fileName, uploadForm.file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('employee-records')
+        .getPublicUrl(fileName)
+
+      // Save record to database
+      const { error: dbError } = await supabase
+        .from('employee_records')
+        .insert({
+          company_id: companyId,
+          employee_id: employeeId,
+          record_type: uploadForm.record_type,
+          record_title: uploadForm.record_title,
+          file_url: publicUrl,
+          file_name: uploadForm.file.name,
+          file_size: uploadForm.file.size,
+          notes: uploadForm.notes || null,
+          uploaded_by: user.id
+        })
+
+      if (dbError) throw dbError
+
+      alert('✅ Dosya başarıyla yüklendi!')
+      setShowUploadModal(false)
+      setUploadForm({
+        record_type: 'tutanak',
+        record_title: '',
+        notes: '',
+        file: null
+      })
+      await loadRecords(companyId)
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      alert(`❌ Yükleme hatası: ${error.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleDeleteRecord = async (recordId: string, fileName: string) => {
+    if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return
+
+    try {
+      // Delete from storage
+      const filePath = fileName.split('employee-records/')[1]
+      if (filePath) {
+        await supabase.storage
+          .from('employee-records')
+          .remove([filePath])
+      }
+
+      // Delete from database
+      const { error } = await supabase
+        .from('employee_records')
+        .delete()
+        .eq('id', recordId)
+
+      if (error) throw error
+
+      alert('✅ Kayıt silindi!')
+      if (companyId) await loadRecords(companyId)
+    } catch (error: any) {
+      console.error('Delete error:', error)
+      alert(`❌ Silme hatası: ${error.message}`)
     }
   }
 
@@ -350,6 +503,184 @@ export default function EmployeeDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Employee Records (PDFs) */}
+      <div className="bg-white rounded-xl shadow-md p-6 mt-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-6 h-6 text-purple-600" />
+            <h2 className="text-xl font-bold text-gray-800">Belgeler & Tutanaklar</h2>
+          </div>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            <Plus className="w-4 h-4" />
+            <span>PDF Yükle</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {records.length > 0 ? (
+            records.map(record => (
+              <div key={record.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className="p-2 bg-red-100 rounded-lg">
+                      <FileText className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900 text-sm">{record.record_title}</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(record.uploaded_at).toLocaleDateString('tr-TR')}
+                      </p>
+                      <span className="inline-block mt-2 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                        {record.record_type === 'tutanak' ? 'Tutanak' :
+                         record.record_type === 'sertifika' ? 'Sertifika' :
+                         record.record_type === 'disiplin' ? 'Disiplin' : 'Diğer'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {record.notes && (
+                  <p className="text-xs text-gray-600 mb-3 italic">{record.notes}</p>
+                )}
+
+                <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                  <span className="text-xs text-gray-500">
+                    {(record.file_size / 1024).toFixed(1)} KB
+                  </span>
+                  <div className="flex space-x-2">
+                    <a
+                      href={record.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Görüntüle"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                    <button
+                      onClick={() => handleDeleteRecord(record.id, record.file_url)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Sil"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-12 text-gray-500">
+              <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>Henüz belge yüklenmemiş</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-800">PDF Belge Yükle</h2>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Belge Türü <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={uploadForm.record_type}
+                  onChange={(e) => setUploadForm({ ...uploadForm, record_type: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="tutanak">Tutanak</option>
+                  <option value="sertifika">Sertifika</option>
+                  <option value="disiplin">Disiplin Kaydı</option>
+                  <option value="diger">Diğer</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Belge Başlığı <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={uploadForm.record_title}
+                  onChange={(e) => setUploadForm({ ...uploadForm, record_title: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Örn: İş Sağlığı ve Güvenliği Eğitimi"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  PDF Dosya <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Sadece PDF dosyaları kabul edilir</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notlar
+                </label>
+                <textarea
+                  value={uploadForm.notes}
+                  onChange={(e) => setUploadForm({ ...uploadForm, notes: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Ek açıklamalar..."
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                disabled={uploading}
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleFileUpload}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
+                disabled={uploading || !uploadForm.file || !uploadForm.record_title}
+              >
+                {uploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Yükleniyor...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Yükle
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

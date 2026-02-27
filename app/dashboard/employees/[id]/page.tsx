@@ -173,6 +173,25 @@ export default function EmployeeDetailPage() {
     }
   }
 
+  const sanitizeFileName = (fileName: string): string => {
+    return fileName
+      .replace(/ğ/g, 'g')
+      .replace(/Ğ/g, 'G')
+      .replace(/ü/g, 'u')
+      .replace(/Ü/g, 'U')
+      .replace(/ş/g, 's')
+      .replace(/Ş/g, 'S')
+      .replace(/ı/g, 'i')
+      .replace(/İ/g, 'I')
+      .replace(/ö/g, 'o')
+      .replace(/Ö/g, 'O')
+      .replace(/ç/g, 'c')
+      .replace(/Ç/g, 'C')
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Diğer özel karakterleri alt çizgi yap
+      .replace(/_+/g, '_') // Birden fazla alt çizgiyi teke indir
+      .replace(/^_|_$/g, '') // Baştaki ve sondaki alt çizgileri kaldır
+  }
+
   const handleFileUpload = async () => {
     if (!uploadForm.file || !uploadForm.record_title || !companyId) {
       alert('Lütfen tüm gerekli alanları doldurun ve bir dosya seçin!')
@@ -191,9 +210,10 @@ export default function EmployeeDetailPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Kullanıcı bulunamadı')
 
-      // Generate unique file name
+      // Generate unique file name with sanitized filename
       const fileExt = 'pdf'
-      const fileName = `${employeeId}/${Date.now()}_${uploadForm.file.name}`
+      const sanitizedName = sanitizeFileName(uploadForm.file.name)
+      const fileName = `${employeeId}/${Date.now()}_${sanitizedName}`
 
       // Upload to Supabase Storage
       const { error: uploadError, data: uploadData } = await supabase.storage

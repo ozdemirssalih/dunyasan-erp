@@ -167,26 +167,8 @@ export default function EmployeeDetailPage() {
         return
       }
 
-      // Her kayıt için signed URL oluştur (private bucket için gerekli)
-      const recordsWithSignedUrls = await Promise.all(
-        (data || []).map(async (record) => {
-          const { data: signedData, error: signedError } = await supabase.storage
-            .from('employee-records')
-            .createSignedUrl(record.file_url, 3600) // 1 saat geçerli
-
-          if (signedError) {
-            console.error('Signed URL error:', signedError)
-            return record
-          }
-
-          return {
-            ...record,
-            file_url: signedData.signedUrl // Signed URL ile değiştir
-          }
-        })
-      )
-
-      setRecords(recordsWithSignedUrls)
+      // Kayıtları direkt kullan (signed URL download butonuna tıklanınca oluşturulacak)
+      setRecords(data || [])
     } catch (error) {
       console.error('Error in loadRecords:', error)
     }
@@ -595,15 +577,29 @@ export default function EmployeeDetailPage() {
                     {(record.file_size / 1024).toFixed(1)} KB
                   </span>
                   <div className="flex space-x-2">
-                    <a
-                      href={record.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={async () => {
+                        try {
+                          // Signed URL ile dosya indir
+                          const { data, error } = await supabase.storage
+                            .from('employee-records')
+                            .createSignedUrl(record.file_url, 60) // 60 saniye geçerli
+
+                          if (error) {
+                            alert('Dosya açılamadı: ' + error.message)
+                            return
+                          }
+
+                          window.open(data.signedUrl, '_blank')
+                        } catch (err: any) {
+                          alert('Hata: ' + err.message)
+                        }
+                      }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Görüntüle"
                     >
                       <Download className="w-4 h-4" />
-                    </a>
+                    </button>
                     <button
                       onClick={() => handleDeleteRecord(record.id)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

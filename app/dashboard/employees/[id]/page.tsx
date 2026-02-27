@@ -167,7 +167,26 @@ export default function EmployeeDetailPage() {
         return
       }
 
-      setRecords(data || [])
+      // Her kayıt için signed URL oluştur (private bucket için gerekli)
+      const recordsWithSignedUrls = await Promise.all(
+        (data || []).map(async (record) => {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('employee-records')
+            .createSignedUrl(record.file_url, 3600) // 1 saat geçerli
+
+          if (signedError) {
+            console.error('Signed URL error:', signedError)
+            return record
+          }
+
+          return {
+            ...record,
+            file_url: signedData.signedUrl // Signed URL ile değiştir
+          }
+        })
+      )
+
+      setRecords(recordsWithSignedUrls)
     } catch (error) {
       console.error('Error in loadRecords:', error)
     }
@@ -225,12 +244,10 @@ export default function EmployeeDetailPage() {
 
       if (uploadError) throw uploadError
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('employee-records')
-        .getPublicUrl(fileName)
+      // Private bucket için path'i sakla (signed URL ihtiyacımız yok, sadece path)
+      const fileUrl = fileName
 
-      // Save record to database
+      // Save record to database (file_url'de path saklıyoruz)
       const { error: dbError } = await supabase
         .from('employee_records')
         .insert({
@@ -238,7 +255,7 @@ export default function EmployeeDetailPage() {
           employee_id: employeeId,
           record_type: uploadForm.record_type,
           record_title: uploadForm.record_title,
-          file_url: publicUrl,
+          file_url: fileUrl, // Path saklıyoruz
           file_name: uploadForm.file.name,
           file_size: uploadForm.file.size,
           notes: uploadForm.notes || null,
@@ -264,16 +281,22 @@ export default function EmployeeDetailPage() {
     }
   }
 
-  const handleDeleteRecord = async (recordId: string, fileName: string) => {
+  const handleDeleteRecord = async (recordId: string) => {
     if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return
 
     try {
+      // Önce database'den kaydı al (file_url path olarak saklanıyor)
+      const { data: recordData } = await supabase
+        .from('employee_records')
+        .select('file_url')
+        .eq('id', recordId)
+        .single()
+
       // Delete from storage
-      const filePath = fileName.split('employee-records/')[1]
-      if (filePath) {
+      if (recordData?.file_url) {
         await supabase.storage
           .from('employee-records')
-          .remove([filePath])
+          .remove([recordData.file_url])
       }
 
       // Delete from database
@@ -582,7 +605,7 @@ export default function EmployeeDetailPage() {
                       <Download className="w-4 h-4" />
                     </a>
                     <button
-                      onClick={() => handleDeleteRecord(record.id, record.file_url)}
+                      onClick={() => handleDeleteRecord(record.id)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Sil"
                     >

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import Image from 'next/image'
+import CompanyChat from '@/components/CompanyChat'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -211,6 +212,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </div>
       </main>
+
+      {/* Company Chat - Floating */}
+      <CompanyChat />
     </div>
   )
 }

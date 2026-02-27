@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
-import { Package, Factory, ClipboardCheck } from 'lucide-react'
+import { Package, Factory, ClipboardCheck, Upload, Download, FileText, X } from 'lucide-react'
 
 type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history' | 'warehouse-qc'
 
@@ -43,6 +43,18 @@ export default function QualityControlPage() {
 
   // Submitting state (çift tıklama engellemek için)
   const [submittingTransfer, setSubmittingTransfer] = useState(false)
+
+  // PDF Upload states
+  const [showPDFModal, setShowPDFModal] = useState(false)
+  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null)
+  const [qcDocuments, setQCDocuments] = useState<Record<string, any[]>>({})
+  const [uploadingPDF, setUploadingPDF] = useState(false)
+  const [pdfForm, setPdfForm] = useState({
+    document_type: 'test_report',
+    document_title: '',
+    notes: '',
+    file: null as File | null
+  })
 
   useEffect(() => {
     loadData()
@@ -124,6 +136,7 @@ export default function QualityControlPage() {
         loadStats(finalCompanyId),
         loadHistory(finalCompanyId),
         loadWarehouseQCRequests(finalCompanyId),
+        loadQCDocuments(finalCompanyId),
       ])
 
     } catch (error) {
@@ -288,6 +301,25 @@ export default function QualityControlPage() {
       .order('requested_at', { ascending: false })
 
     setWarehouseQCRequests(data || [])
+  }
+
+  const loadQCDocuments = async (companyId: string) => {
+    const { data } = await supabase
+      .from('quality_control_documents')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('uploaded_at', { ascending: false })
+
+    if (data) {
+      const docsByTransfer: Record<string, any[]> = {}
+      data.forEach(doc => {
+        if (!docsByTransfer[doc.qc_transfer_id]) {
+          docsByTransfer[doc.qc_transfer_id] = []
+        }
+        docsByTransfer[doc.qc_transfer_id].push(doc)
+      })
+      setQCDocuments(docsByTransfer)
+    }
   }
 
   const handleApproveWarehouseQC = async (requestId: string, notes: string) => {
@@ -663,6 +695,92 @@ export default function QualityControlPage() {
     }
   }
 
+  const sanitizeFileName = (fileName: string): string => {
+    return fileName
+      .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+      .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+      .replace(/ş/g, 's').replace(/Ş/g, 'S')
+      .replace(/ı/g, 'i').replace(/İ/g, 'I')
+      .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+      .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+  }
+
+  const handleUploadPDF = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pdfForm.file || !selectedTransferId || !companyId) return
+
+    setUploadingPDF(true)
+
+    try {
+      const timestamp = Date.now()
+      const sanitizedFileName = sanitizeFileName(pdfForm.file.name)
+      const filePath = `${companyId}/${timestamp}_${sanitizedFileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('quality-control-docs')
+        .upload(filePath, pdfForm.file)
+
+      if (uploadError) throw uploadError
+
+      const { error: dbError } = await supabase
+        .from('quality_control_documents')
+        .insert({
+          company_id: companyId,
+          qc_transfer_id: selectedTransferId,
+          document_type: pdfForm.document_type,
+          document_title: pdfForm.document_title,
+          file_url: filePath,
+          file_name: pdfForm.file.name,
+          file_size: pdfForm.file.size,
+          notes: pdfForm.notes,
+          uploaded_by: currentUserId
+        })
+
+      if (dbError) throw dbError
+
+      alert('✅ Doküman başarıyla yüklendi!')
+      setShowPDFModal(false)
+      setPdfForm({
+        document_type: 'test_report',
+        document_title: '',
+        notes: '',
+        file: null
+      })
+      loadData()
+    } catch (error: any) {
+      console.error('Error uploading PDF:', error)
+      alert('❌ Hata: ' + error.message)
+    } finally {
+      setUploadingPDF(false)
+    }
+  }
+
+  const handleDeleteDocument = async (docId: string, filePath: string) => {
+    if (!confirm('Bu dokümanı silmek istediğinizden emin misiniz?')) return
+
+    try {
+      await supabase.storage
+        .from('quality-control-docs')
+        .remove([filePath])
+
+      const { error } = await supabase
+        .from('quality_control_documents')
+        .delete()
+        .eq('id', docId)
+
+      if (error) throw error
+
+      alert('✅ Doküman silindi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error deleting document:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
   const resetTransferForm = () => {
     setTransferForm({
       item_id: '',
@@ -957,7 +1075,7 @@ export default function QualityControlPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Miktar</span>
                         <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
@@ -976,6 +1094,84 @@ export default function QualityControlPage() {
                         <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
                           <span className="text-gray-500 text-xs block mb-1">Not</span>
                           <p className="text-gray-900">{transfer.notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* PDF Dokümanlar */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-semibold text-gray-700">Test Dokümanları</span>
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                            {qcDocuments[transfer.id]?.length || 0}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedTransferId(transfer.id)
+                            setShowPDFModal(true)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
+                        >
+                          <Upload className="w-3 h-3" />
+                          PDF Yükle
+                        </button>
+                      </div>
+
+                      {qcDocuments[transfer.id]?.length > 0 ? (
+                        <div className="space-y-2">
+                          {qcDocuments[transfer.id].map((doc: any) => (
+                            <div key={doc.id} className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-sm text-gray-900">{doc.document_title}</div>
+                                <div className="text-xs text-gray-600 flex items-center gap-2 mt-1">
+                                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                    {doc.document_type === 'test_report' ? 'Test Raporu' :
+                                     doc.document_type === 'certificate' ? 'Sertifika' :
+                                     doc.document_type === 'measurement' ? 'Ölçüm Sonucu' :
+                                     doc.document_type === 'photo' ? 'Fotoğraf' : 'Diğer'}
+                                  </span>
+                                  <span>{doc.file_name}</span>
+                                  <span>({(doc.file_size / 1024).toFixed(1)} KB)</span>
+                                </div>
+                                {doc.notes && (
+                                  <div className="text-xs text-gray-500 mt-1 italic">Not: {doc.notes}</div>
+                                )}
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {new Date(doc.uploaded_at).toLocaleString('tr-TR')}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const { data, error } = await supabase.storage
+                                      .from('quality-control-docs')
+                                      .createSignedUrl(doc.file_url, 60)
+                                    if (!error && data) {
+                                      window.open(data.signedUrl, '_blank')
+                                    } else {
+                                      alert('❌ Dosya açılamadı: ' + error?.message)
+                                    }
+                                  }}
+                                  className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                                  className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg">
+                          Henüz doküman yüklenmemiş
                         </div>
                       )}
                     </div>
@@ -1271,6 +1467,118 @@ export default function QualityControlPage() {
                     onClick={() => {
                       setShowTransferModal(false)
                       resetTransferForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* PDF Upload Modal */}
+        {showPDFModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-800">Test Dokümanı Yükle</h3>
+                <button
+                  onClick={() => {
+                    setShowPDFModal(false)
+                    setPdfForm({
+                      document_type: 'test_report',
+                      document_title: '',
+                      notes: '',
+                      file: null
+                    })
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUploadPDF} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Doküman Türü <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={pdfForm.document_type}
+                    onChange={(e) => setPdfForm({ ...pdfForm, document_type: e.target.value })}
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  >
+                    <option value="test_report">Test Raporu</option>
+                    <option value="certificate">Sertifika</option>
+                    <option value="measurement">Ölçüm Sonucu</option>
+                    <option value="photo">Fotoğraf</option>
+                    <option value="other">Diğer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Doküman Başlığı <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={pdfForm.document_title}
+                    onChange={(e) => setPdfForm({ ...pdfForm, document_title: e.target.value })}
+                    placeholder="Örn: Kalite Test Raporu - 27.02.2026"
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    PDF Dosyası <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setPdfForm({ ...pdfForm, file })
+                    }}
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">PDF veya resim dosyası yükleyebilirsiniz</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                  <textarea
+                    value={pdfForm.notes}
+                    onChange={(e) => setPdfForm({ ...pdfForm, notes: e.target.value })}
+                    rows={3}
+                    placeholder="Ek notlar..."
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    disabled={uploadingPDF}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadingPDF ? 'Yükleniyor...' : 'Dokümanı Yükle'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPDFModal(false)
+                      setPdfForm({
+                        document_type: 'test_report',
+                        document_title: '',
+                        notes: '',
+                        file: null
+                      })
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

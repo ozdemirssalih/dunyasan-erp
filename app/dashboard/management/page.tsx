@@ -14,7 +14,16 @@ import {
   Users,
   Box,
   Activity,
-  ArrowRight
+  ArrowRight,
+  Award,
+  Target,
+  BarChart3,
+  Calendar,
+  FileText,
+  ShoppingCart,
+  AlertCircle,
+  TrendingDown,
+  Zap
 } from 'lucide-react'
 import {
   BarChart,
@@ -31,10 +40,15 @@ import {
   LineChart,
   Line,
   Area,
-  AreaChart
+  AreaChart,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar
 } from 'recharts'
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 interface Stats {
   totalProduction: number
@@ -43,6 +57,14 @@ interface Stats {
   efficiency: number
   pendingQC: number
   lowStock: number
+  totalEmployees: number
+  activeProjects: number
+  monthlyProduction: number
+  defectRate: number
+  approvedQC: number
+  rejectedQC: number
+  todayProduction: number
+  weeklyProduction: number
 }
 
 interface MachineStatus {
@@ -51,6 +73,7 @@ interface MachineStatus {
   machine_name: string
   status: string
   current_efficiency: number
+  total_production: number
 }
 
 interface DailyProduction {
@@ -63,6 +86,33 @@ interface DailyProduction {
 interface ProductDistribution {
   name: string
   value: number
+}
+
+interface ProjectDefects {
+  name: string
+  defects: number
+  production: number
+  rate: number
+}
+
+interface MachineComparison {
+  machine: string
+  production: number
+  efficiency: number
+}
+
+interface StockItem {
+  item_name: string
+  current_stock: number
+  min_stock: number
+  unit: string
+}
+
+interface TopProject {
+  project_name: string
+  total_production: number
+  total_defects: number
+  efficiency: number
 }
 
 interface RecentActivity {
@@ -84,12 +134,24 @@ export default function ManagementDashboard() {
     totalDefects: 0,
     efficiency: 0,
     pendingQC: 0,
-    lowStock: 0
+    lowStock: 0,
+    totalEmployees: 0,
+    activeProjects: 0,
+    monthlyProduction: 0,
+    defectRate: 0,
+    approvedQC: 0,
+    rejectedQC: 0,
+    todayProduction: 0,
+    weeklyProduction: 0
   })
 
   const [machines, setMachines] = useState<MachineStatus[]>([])
   const [dailyProduction, setDailyProduction] = useState<DailyProduction[]>([])
   const [productDistribution, setProductDistribution] = useState<ProductDistribution[]>([])
+  const [projectDefects, setProjectDefects] = useState<ProjectDefects[]>([])
+  const [machineComparison, setMachineComparison] = useState<MachineComparison[]>([])
+  const [criticalStock, setCriticalStock] = useState<StockItem[]>([])
+  const [topProjects, setTopProjects] = useState<TopProject[]>([])
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
 
   useEffect(() => {
@@ -121,6 +183,10 @@ export default function ManagementDashboard() {
         loadMachines(profile.company_id),
         loadDailyProduction(profile.company_id),
         loadProductDistribution(profile.company_id),
+        loadProjectDefects(profile.company_id),
+        loadMachineComparison(profile.company_id),
+        loadCriticalStock(profile.company_id),
+        loadTopProjects(profile.company_id),
         loadRecentActivities(profile.company_id)
       ])
 
@@ -132,10 +198,10 @@ export default function ManagementDashboard() {
   }
 
   const loadStats = async (companyId: string) => {
-    // Toplam üretim
+    // Toplam üretim ve fire
     const { data: productionData } = await supabase
       .from('machine_daily_production')
-      .select('actual_production, defect_count, efficiency_rate')
+      .select('actual_production, defect_count, efficiency_rate, production_date')
       .eq('company_id', companyId)
 
     const totalProduction = productionData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
@@ -143,6 +209,30 @@ export default function ManagementDashboard() {
     const avgEfficiency = productionData && productionData.length > 0
       ? productionData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / productionData.length
       : 0
+    const defectRate = totalProduction > 0 ? (totalDefects / totalProduction) * 100 : 0
+
+    // Bu ayki üretim
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+    const monthlyProduction = productionData?.filter(p =>
+      new Date(p.production_date) >= monthStart
+    ).reduce((sum, p) => sum + p.actual_production, 0) || 0
+
+    // Bugünkü üretim
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayProduction = productionData?.filter(p =>
+      new Date(p.production_date).toDateString() === today.toDateString()
+    ).reduce((sum, p) => sum + p.actual_production, 0) || 0
+
+    // Bu haftaki üretim
+    const weekStart = new Date()
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+    weekStart.setHours(0, 0, 0, 0)
+    const weeklyProduction = productionData?.filter(p =>
+      new Date(p.production_date) >= weekStart
+    ).reduce((sum, p) => sum + p.actual_production, 0) || 0
 
     // Aktif tezgahlar
     const { data: machinesData } = await supabase
@@ -152,14 +242,15 @@ export default function ManagementDashboard() {
 
     const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
-    // Bekleyen KK
+    // Bekleyen, onaylanan ve reddedilen KK
     const { data: qcData } = await supabase
       .from('production_to_qc_transfers')
-      .select('quantity')
+      .select('quantity, status')
       .eq('company_id', companyId)
-      .eq('status', 'pending')
 
-    const pendingQC = qcData?.reduce((sum, q) => sum + q.quantity, 0) || 0
+    const pendingQC = qcData?.filter(q => q.status === 'pending').reduce((sum, q) => sum + q.quantity, 0) || 0
+    const approvedQC = qcData?.filter(q => q.status === 'approved').length || 0
+    const rejectedQC = qcData?.filter(q => q.status === 'rejected').length || 0
 
     // Düşük stok uyarısı
     const { data: stockData } = await supabase
@@ -169,13 +260,38 @@ export default function ManagementDashboard() {
 
     const lowStock = stockData?.filter(s => s.current_stock <= s.min_stock).length || 0
 
+    // Toplam çalışan sayısı
+    const { data: employeesData } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('company_id', companyId)
+
+    const totalEmployees = employeesData?.length || 0
+
+    // Aktif proje sayısı
+    const { data: projectsData } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('status', 'active')
+
+    const activeProjects = projectsData?.length || 0
+
     setStats({
       totalProduction,
       activeMachines,
       totalDefects,
       efficiency: avgEfficiency,
       pendingQC,
-      lowStock
+      lowStock,
+      totalEmployees,
+      activeProjects,
+      monthlyProduction,
+      defectRate,
+      approvedQC,
+      rejectedQC,
+      todayProduction,
+      weeklyProduction
     })
   }
 
@@ -188,28 +304,31 @@ export default function ManagementDashboard() {
       .limit(8)
 
     if (data) {
-      // Her tezgah için ortalama verimlilik hesapla
-      const machinesWithEfficiency = await Promise.all(
+      // Her tezgah için ortalama verimlilik ve toplam üretim hesapla
+      const machinesWithData = await Promise.all(
         data.map(async (machine) => {
           const { data: prodData } = await supabase
             .from('machine_daily_production')
-            .select('efficiency_rate')
+            .select('efficiency_rate, actual_production')
             .eq('machine_id', machine.id)
             .order('production_date', { ascending: false })
-            .limit(5)
+            .limit(10)
 
           const avgEff = prodData && prodData.length > 0
             ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
             : 0
 
+          const totalProd = prodData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
+
           return {
             ...machine,
-            current_efficiency: avgEff
+            current_efficiency: avgEff,
+            total_production: totalProd
           }
         })
       )
 
-      setMachines(machinesWithEfficiency)
+      setMachines(machinesWithData)
     }
   }
 
@@ -218,7 +337,7 @@ export default function ManagementDashboard() {
       .from('machine_daily_production')
       .select('production_date, actual_production, defect_count, efficiency_rate')
       .eq('company_id', companyId)
-      .gte('production_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .gte('production_date', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
       .order('production_date', { ascending: true })
 
     if (data) {
@@ -253,7 +372,7 @@ export default function ManagementDashboard() {
         project:projects(project_name)
       `)
       .eq('company_id', companyId)
-      .limit(100)
+      .limit(500)
 
     if (data) {
       const distribution = data.reduce((acc: any, curr: any) => {
@@ -267,9 +386,134 @@ export default function ManagementDashboard() {
       const chartData = Object.keys(distribution)
         .map(name => ({ name, value: distribution[name] }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 6)
+        .slice(0, 8)
 
       setProductDistribution(chartData)
+    }
+  }
+
+  const loadProjectDefects = async (companyId: string) => {
+    const { data } = await supabase
+      .from('machine_daily_production')
+      .select(`
+        actual_production,
+        defect_count,
+        project:projects(project_name)
+      `)
+      .eq('company_id', companyId)
+      .limit(500)
+
+    if (data) {
+      const defects: any = {}
+      data.forEach((curr: any) => {
+        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+        const name = project?.project_name || 'Diğer'
+        if (!defects[name]) {
+          defects[name] = { defects: 0, production: 0 }
+        }
+        defects[name].defects += curr.defect_count || 0
+        defects[name].production += curr.actual_production
+      })
+
+      const chartData = Object.keys(defects)
+        .map(name => ({
+          name,
+          defects: defects[name].defects,
+          production: defects[name].production,
+          rate: defects[name].production > 0 ? (defects[name].defects / defects[name].production) * 100 : 0
+        }))
+        .filter(p => p.defects > 0)
+        .sort((a, b) => b.rate - a.rate)
+        .slice(0, 6)
+
+      setProjectDefects(chartData)
+    }
+  }
+
+  const loadMachineComparison = async (companyId: string) => {
+    const { data: machinesData } = await supabase
+      .from('machines')
+      .select('id, machine_code')
+      .eq('company_id', companyId)
+      .limit(10)
+
+    if (machinesData) {
+      const comparison = await Promise.all(
+        machinesData.map(async (machine) => {
+          const { data: prodData } = await supabase
+            .from('machine_daily_production')
+            .select('actual_production, efficiency_rate')
+            .eq('machine_id', machine.id)
+            .gte('production_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+
+          const totalProd = prodData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
+          const avgEff = prodData && prodData.length > 0
+            ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
+            : 0
+
+          return {
+            machine: machine.machine_code,
+            production: totalProd,
+            efficiency: avgEff
+          }
+        })
+      )
+
+      setMachineComparison(comparison.sort((a, b) => b.production - a.production))
+    }
+  }
+
+  const loadCriticalStock = async (companyId: string) => {
+    const { data } = await supabase
+      .from('warehouse_items')
+      .select('item_name, current_stock, min_stock, unit')
+      .eq('company_id', companyId)
+      .lte('current_stock', supabase.raw('min_stock'))
+      .order('current_stock', { ascending: true })
+      .limit(10)
+
+    if (data) {
+      setCriticalStock(data)
+    }
+  }
+
+  const loadTopProjects = async (companyId: string) => {
+    const { data } = await supabase
+      .from('machine_daily_production')
+      .select(`
+        actual_production,
+        defect_count,
+        efficiency_rate,
+        project:projects(project_name)
+      `)
+      .eq('company_id', companyId)
+      .limit(500)
+
+    if (data) {
+      const projects: any = {}
+      data.forEach((curr: any) => {
+        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+        const name = project?.project_name || 'Diğer'
+        if (!projects[name]) {
+          projects[name] = { production: 0, defects: 0, effSum: 0, count: 0 }
+        }
+        projects[name].production += curr.actual_production
+        projects[name].defects += curr.defect_count || 0
+        projects[name].effSum += curr.efficiency_rate || 0
+        projects[name].count += 1
+      })
+
+      const topList = Object.keys(projects)
+        .map(name => ({
+          project_name: name,
+          total_production: projects[name].production,
+          total_defects: projects[name].defects,
+          efficiency: projects[name].count > 0 ? projects[name].effSum / projects[name].count : 0
+        }))
+        .sort((a, b) => b.total_production - a.total_production)
+        .slice(0, 10)
+
+      setTopProjects(topList)
     }
   }
 
@@ -282,13 +526,14 @@ export default function ManagementDashboard() {
       .select(`
         id,
         actual_production,
+        defect_count,
         created_at,
         machine:machines(machine_name),
         project:projects(project_name)
       `)
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
-      .limit(5)
+      .limit(10)
 
     if (prodData) {
       prodData.forEach((p: any) => {
@@ -297,9 +542,9 @@ export default function ManagementDashboard() {
         activities.push({
           id: p.id,
           type: 'production',
-          description: `${machine?.machine_name || 'Tezgah'} - ${p.actual_production} adet üretim`,
+          description: `${machine?.machine_name || 'Tezgah'} - ${project?.project_name || 'Proje'} - ${p.actual_production} adet üretim${p.defect_count > 0 ? ` (${p.defect_count} fire)` : ''}`,
           time: new Date(p.created_at).toLocaleString('tr-TR'),
-          status: 'success'
+          status: p.defect_count > 0 && (p.defect_count / p.actual_production) > 0.1 ? 'warning' : 'success'
         })
       })
     }
@@ -310,22 +555,50 @@ export default function ManagementDashboard() {
       .select('id, quantity, status, created_at')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
-      .limit(3)
+      .limit(8)
 
     if (qcData) {
       qcData.forEach(q => {
         activities.push({
           id: q.id,
           type: 'qc',
-          description: `${q.quantity} adet KK'ya gönderildi`,
+          description: `${q.quantity} adet KK'ya gönderildi - ${
+            q.status === 'approved' ? '✓ Onaylandı' :
+            q.status === 'pending' ? '⏳ Bekliyor' :
+            q.status === 'rejected' ? '✗ Reddedildi' : q.status
+          }`,
           time: new Date(q.created_at).toLocaleString('tr-TR'),
           status: q.status === 'approved' ? 'success' : q.status === 'pending' ? 'warning' : 'error'
         })
       })
     }
 
+    // Depo işlemleri
+    const { data: warehouseData } = await supabase
+      .from('warehouse_qc_requests')
+      .select('id, quantity, status, created_at')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (warehouseData) {
+      warehouseData.forEach(w => {
+        activities.push({
+          id: w.id,
+          type: 'warehouse',
+          description: `${w.quantity} adet depo girişi - ${
+            w.status === 'approved' ? '✓ Onaylandı' :
+            w.status === 'pending' ? '⏳ Bekliyor' :
+            w.status === 'rejected' ? '✗ Reddedildi' : w.status
+          }`,
+          time: new Date(w.created_at).toLocaleString('tr-TR'),
+          status: w.status === 'approved' ? 'success' : w.status === 'pending' ? 'warning' : 'error'
+        })
+      })
+    }
+
     activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    setRecentActivities(activities.slice(0, 8))
+    setRecentActivities(activities.slice(0, 15))
   }
 
   if (loading) {
@@ -333,128 +606,243 @@ export default function ManagementDashboard() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Dashboard yükleniyor...</p>
+          <p className="text-gray-600 text-lg font-semibold">Detaylı analiz yükleniyor...</p>
+          <p className="text-gray-400 text-sm mt-2">Tüm veriler hesaplanıyor</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 text-white shadow-xl">
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 rounded-xl p-8 text-white shadow-2xl">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">YÖNETİM DASHBOARD</h1>
-            <p className="text-blue-100">Gerçek zamanlı üretim ve performans takibi</p>
+            <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
+              <Activity className="w-10 h-10" />
+              YÖNETİM DASHBOARD
+            </h1>
+            <p className="text-blue-100 text-lg">Gerçek zamanlı üretim ve performans takibi • Detaylı Analiz</p>
+            <div className="mt-4 flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            </div>
           </div>
-          <Activity className="w-16 h-16 opacity-50" />
+          <div className="hidden lg:flex items-center gap-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold">{stats.todayProduction.toLocaleString()}</div>
+              <div className="text-sm text-blue-200">Bugün</div>
+            </div>
+            <div className="w-px h-16 bg-blue-400"></div>
+            <div className="text-center">
+              <div className="text-3xl font-bold">{stats.weeklyProduction.toLocaleString()}</div>
+              <div className="text-sm text-blue-200">Bu Hafta</div>
+            </div>
+            <div className="w-px h-16 bg-blue-400"></div>
+            <div className="text-center">
+              <div className="text-3xl font-bold">{stats.monthlyProduction.toLocaleString()}</div>
+              <div className="text-sm text-blue-200">Bu Ay</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      {/* Main Stats Cards - 10 cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
-            <Package className="w-10 h-10 opacity-80" />
+            <Package className="w-12 h-12 opacity-80" />
             <TrendingUp className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.totalProduction.toLocaleString()}</div>
-          <div className="text-sm text-blue-100">Toplam Üretim</div>
+          <div className="text-4xl font-bold mb-2">{stats.totalProduction.toLocaleString()}</div>
+          <div className="text-sm text-blue-100 font-semibold">Toplam Üretim</div>
+          <div className="mt-3 pt-3 border-t border-blue-400 text-xs text-blue-100">
+            {stats.totalDefects > 0 && `${((stats.totalProduction - stats.totalDefects) / stats.totalProduction * 100).toFixed(1)}% Kaliteli Üretim`}
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
-            <Factory className="w-10 h-10 opacity-80" />
+            <Factory className="w-12 h-12 opacity-80" />
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.activeMachines}</div>
-          <div className="text-sm text-green-100">Aktif Tezgah</div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <Activity className="w-10 h-10 opacity-80" />
-            <div className="text-lg font-bold">%{stats.efficiency.toFixed(1)}</div>
+          <div className="text-4xl font-bold mb-2">{stats.activeMachines}</div>
+          <div className="text-sm text-green-100 font-semibold">Aktif Tezgah</div>
+          <div className="mt-3 pt-3 border-t border-green-400 text-xs text-green-100">
+            Şu anda çalışıyor
           </div>
-          <div className="text-3xl font-bold mb-1">Verimlilik</div>
-          <div className="text-sm text-purple-100">Ortalama</div>
         </div>
 
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
-            <AlertTriangle className="w-10 h-10 opacity-80" />
-            <div className="text-lg">🔥</div>
+            <Activity className="w-12 h-12 opacity-80" />
+            <Zap className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.totalDefects.toLocaleString()}</div>
-          <div className="text-sm text-red-100">Toplam Fire</div>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <Clock className="w-10 h-10 opacity-80" />
-            <div className="text-lg">⏳</div>
+          <div className="text-4xl font-bold mb-2">%{stats.efficiency.toFixed(1)}</div>
+          <div className="text-sm text-purple-100 font-semibold">Ortalama Verimlilik</div>
+          <div className="mt-3 pt-3 border-t border-purple-400 text-xs text-purple-100">
+            {stats.efficiency >= 80 ? 'Mükemmel performans' : stats.efficiency >= 60 ? 'İyi performans' : 'İyileştirme gerekli'}
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.pendingQC.toLocaleString()}</div>
-          <div className="text-sm text-orange-100">Bekleyen KK</div>
         </div>
 
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
-            <Box className="w-10 h-10 opacity-80" />
+            <AlertTriangle className="w-12 h-12 opacity-80" />
+            <TrendingDown className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.totalDefects.toLocaleString()}</div>
+          <div className="text-sm text-red-100 font-semibold">Toplam Fire</div>
+          <div className="mt-3 pt-3 border-t border-red-400 text-xs text-red-100">
+            %{stats.defectRate.toFixed(2)} Fire Oranı
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <Clock className="w-12 h-12 opacity-80" />
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.pendingQC.toLocaleString()}</div>
+          <div className="text-sm text-orange-100 font-semibold">Bekleyen KK</div>
+          <div className="mt-3 pt-3 border-t border-orange-400 text-xs text-orange-100">
+            Kontrol bekliyor
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <Box className="w-12 h-12 opacity-80" />
             <AlertTriangle className="w-6 h-6" />
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.lowStock}</div>
-          <div className="text-sm text-yellow-100">Düşük Stok</div>
+          <div className="text-4xl font-bold mb-2">{stats.lowStock}</div>
+          <div className="text-sm text-yellow-100 font-semibold">Kritik Stok</div>
+          <div className="mt-3 pt-3 border-t border-yellow-400 text-xs text-yellow-100">
+            Minimum seviyede
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <Users className="w-12 h-12 opacity-80" />
+            <Activity className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.totalEmployees}</div>
+          <div className="text-sm text-cyan-100 font-semibold">Toplam Çalışan</div>
+          <div className="mt-3 pt-3 border-t border-cyan-400 text-xs text-cyan-100">
+            Aktif personel sayısı
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <FileText className="w-12 h-12 opacity-80" />
+            <Target className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.activeProjects}</div>
+          <div className="text-sm text-pink-100 font-semibold">Aktif Proje</div>
+          <div className="mt-3 pt-3 border-t border-pink-400 text-xs text-pink-100">
+            Devam eden projeler
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <CheckCircle2 className="w-12 h-12 opacity-80" />
+            <Award className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.approvedQC}</div>
+          <div className="text-sm text-emerald-100 font-semibold">Onaylanan KK</div>
+          <div className="mt-3 pt-3 border-t border-emerald-400 text-xs text-emerald-100">
+            Başarılı kontroller
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+          <div className="flex items-center justify-between mb-4">
+            <AlertCircle className="w-12 h-12 opacity-80" />
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="text-4xl font-bold mb-2">{stats.rejectedQC}</div>
+          <div className="text-sm text-rose-100 font-semibold">Reddedilen KK</div>
+          <div className="mt-3 pt-3 border-t border-rose-400 text-xs text-rose-100">
+            Kalite problemleri
+          </div>
         </div>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Daily Production Chart */}
-        <div className="xl:col-span-2 bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
-            Son 7 Gün Üretim Performansı
+      {/* Main Charts Row - 14 Day Production */}
+      <div className="bg-white rounded-xl shadow-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+            <TrendingUp className="w-7 h-7 text-blue-600" />
+            Son 14 Gün Detaylı Üretim Performansı
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={dailyProduction}>
-              <defs>
-                <linearGradient id="colorProduction" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                </linearGradient>
-                <linearGradient id="colorDefects" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" stroke="#666" />
-              <YAxis stroke="#666" />
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px' }} />
-              <Legend />
-              <Area type="monotone" dataKey="production" stroke="#3b82f6" fillOpacity={1} fill="url(#colorProduction)" name="Üretim" />
-              <Area type="monotone" dataKey="defects" stroke="#ef4444" fillOpacity={1} fill="url(#colorDefects)" name="Fire" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="flex gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 rounded"></div>
+              <span>Üretim</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded"></div>
+              <span>Fire</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded"></div>
+              <span>Verimlilik</span>
+            </div>
+          </div>
         </div>
+        <ResponsiveContainer width="100%" height={350}>
+          <AreaChart data={dailyProduction}>
+            <defs>
+              <linearGradient id="colorProduction" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+              </linearGradient>
+              <linearGradient id="colorDefects" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#fff', border: '2px solid #ddd', borderRadius: '12px', padding: '12px' }}
+              labelStyle={{ fontWeight: 'bold', marginBottom: '8px' }}
+            />
+            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+            <Area type="monotone" dataKey="production" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorProduction)" name="Üretim (adet)" />
+            <Area type="monotone" dataKey="defects" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorDefects)" name="Fire (adet)" />
+            <Line type="monotone" dataKey="efficiency" stroke="#10b981" strokeWidth={3} name="Verimlilik (%)" dot={{ fill: '#10b981', r: 4 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
 
+      {/* Charts Row 2 - Distribution */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Product Distribution Pie Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Package className="w-6 h-6 text-green-600" />
-            Proje Dağılımı
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <Package className="w-7 h-7 text-green-600" />
+            Proje Bazlı Üretim Dağılımı
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
                 data={productDistribution}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                outerRadius={80}
+                labelLine={true}
+                label={({ name, percent, value }) => `${name}: ${value.toLocaleString()} (${(percent * 100).toFixed(1)}%)`}
+                outerRadius={110}
                 fill="#8884d8"
                 dataKey="value"
               >
@@ -462,35 +850,134 @@ export default function ManagementDashboard() {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value: any) => value.toLocaleString() + ' adet'} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Fire Analysis Pie Chart */}
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <AlertTriangle className="w-7 h-7 text-red-600" />
+            Proje Bazlı Fire Analizi
+          </h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <PieChart>
+              <Pie
+                data={projectDefects}
+                cx="50%"
+                cy="50%"
+                labelLine={true}
+                label={({ name, rate }) => `${name}: %${rate.toFixed(1)}`}
+                outerRadius={110}
+                fill="#8884d8"
+                dataKey="defects"
+              >
+                {projectDefects.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: any, name: any, props: any) => [
+                `${value} adet fire (${props.payload.rate.toFixed(2)}%)`,
+                `Toplam Üretim: ${props.payload.production} adet`
+              ]} />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Machines and Recent Activities */}
+      {/* Machine Comparison Bar Chart */}
+      <div className="bg-white rounded-xl shadow-xl p-6">
+        <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+          <BarChart3 className="w-7 h-7 text-purple-600" />
+          Tezgah Bazlı Üretim Karşılaştırması (Son 30 Gün)
+        </h3>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={machineComparison}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="machine" stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <YAxis yAxisId="left" stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <YAxis yAxisId="right" orientation="right" stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#fff', border: '2px solid #ddd', borderRadius: '12px', padding: '12px' }}
+            />
+            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+            <Bar yAxisId="left" dataKey="production" fill="#3b82f6" name="Üretim (adet)" radius={[8, 8, 0, 0]} />
+            <Bar yAxisId="right" dataKey="efficiency" fill="#10b981" name="Verimlilik (%)" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Top Projects Table and Machine Status */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Top 10 Projects */}
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <Award className="w-7 h-7 text-amber-600" />
+              Top 10 Projeler
+            </h3>
+            <button
+              onClick={() => router.push('/dashboard/projects')}
+              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all"
+            >
+              Tümünü Gör <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left p-3 text-sm font-bold text-gray-700">#</th>
+                  <th className="text-left p-3 text-sm font-bold text-gray-700">Proje</th>
+                  <th className="text-right p-3 text-sm font-bold text-gray-700">Üretim</th>
+                  <th className="text-right p-3 text-sm font-bold text-gray-700">Fire</th>
+                  <th className="text-right p-3 text-sm font-bold text-gray-700">Verimlilik</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProjects.map((project, index) => (
+                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="p-3 font-bold text-gray-500">#{index + 1}</td>
+                    <td className="p-3 font-semibold text-gray-900">{project.project_name}</td>
+                    <td className="p-3 text-right font-semibold text-blue-600">{project.total_production.toLocaleString()}</td>
+                    <td className="p-3 text-right font-semibold text-red-600">{project.total_defects.toLocaleString()}</td>
+                    <td className="p-3 text-right">
+                      <span className={`font-bold ${
+                        project.efficiency >= 80 ? 'text-green-600' :
+                        project.efficiency >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        %{project.efficiency.toFixed(1)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {/* Machine Status Grid */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Factory className="w-6 h-6 text-purple-600" />
-              Tezgah Durumları
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <Factory className="w-7 h-7 text-purple-600" />
+              Tezgah Durumları ve Performans
             </h3>
             <button
               onClick={() => router.push('/dashboard/machines')}
-              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all"
             >
               Tümünü Gör <ArrowRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             {machines.map((machine) => (
               <div
                 key={machine.id}
                 onClick={() => router.push(`/dashboard/machines/${machine.id}`)}
-                className="border-2 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                className="border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1"
                 style={{
                   borderColor:
                     machine.status === 'active' ? '#10b981' :
@@ -498,13 +985,13 @@ export default function ManagementDashboard() {
                     machine.status === 'idle' ? '#6b7280' : '#ef4444'
                 }}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <Settings className={`w-6 h-6 ${
+                <div className="flex items-center justify-between mb-3">
+                  <Settings className={`w-7 h-7 ${
                     machine.status === 'active' ? 'text-green-600' :
                     machine.status === 'maintenance' ? 'text-yellow-600' :
                     machine.status === 'idle' ? 'text-gray-600' : 'text-red-600'
                   }`} />
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
                     machine.status === 'active' ? 'bg-green-100 text-green-700' :
                     machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-700' :
                     machine.status === 'idle' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'
@@ -514,48 +1001,155 @@ export default function ManagementDashboard() {
                      machine.status === 'idle' ? 'Boşta' : 'Durduruldu'}
                   </span>
                 </div>
-                <div className="font-bold text-gray-900 mb-1">{machine.machine_code}</div>
-                <div className="text-xs text-gray-600 mb-2 truncate">{machine.machine_name}</div>
-                <div className="text-sm">
-                  <span className="text-gray-600">Verimlilik: </span>
-                  <span className={`font-bold ${
-                    machine.current_efficiency >= 80 ? 'text-green-600' :
-                    machine.current_efficiency >= 60 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
-                    %{machine.current_efficiency.toFixed(1)}
-                  </span>
+                <div className="font-bold text-lg text-gray-900 mb-1">{machine.machine_code}</div>
+                <div className="text-xs text-gray-600 mb-3 truncate">{machine.machine_name}</div>
+                <div className="flex items-center justify-between text-sm pt-3 border-t border-gray-200">
+                  <div>
+                    <div className="text-xs text-gray-500">Üretim</div>
+                    <div className="font-bold text-blue-600">{machine.total_production.toLocaleString()}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500">Verimlilik</div>
+                    <div className={`font-bold text-lg ${
+                      machine.current_efficiency >= 80 ? 'text-green-600' :
+                      machine.current_efficiency >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      %{machine.current_efficiency.toFixed(1)}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Critical Stock and Recent Activities */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Critical Stock Items */}
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <AlertTriangle className="w-7 h-7 text-yellow-600" />
+              Kritik Stok Durumu
+            </h3>
+            <button
+              onClick={() => router.push('/dashboard/warehouse')}
+              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all"
+            >
+              Depoya Git <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-3 max-h-[450px] overflow-y-auto">
+            {criticalStock.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <CheckCircle2 className="w-16 h-16 mx-auto mb-3 text-green-500" />
+                <p className="font-semibold">Tebrikler! Kritik stok bulunmuyor.</p>
+              </div>
+            ) : (
+              criticalStock.map((item, index) => (
+                <div key={index} className="border-l-4 border-yellow-500 bg-yellow-50 rounded-r-lg p-4 hover:bg-yellow-100 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-bold text-gray-900 mb-1">{item.item_name}</div>
+                      <div className="text-sm text-gray-600">
+                        Mevcut: <span className="font-semibold text-red-600">{item.current_stock} {item.unit}</span> •
+                        Minimum: <span className="font-semibold">{item.min_stock} {item.unit}</span>
+                      </div>
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-red-600 h-2 rounded-full"
+                            style={{ width: `${Math.min((item.current_stock / item.min_stock) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <AlertTriangle className="w-6 h-6 text-yellow-600 ml-4" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
 
         {/* Recent Activities */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Clock className="w-6 h-6 text-orange-600" />
-            Son İşlemler
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <Clock className="w-7 h-7 text-orange-600" />
+            Son İşlemler (Detaylı)
           </h3>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="space-y-3 max-h-[450px] overflow-y-auto">
             {recentActivities.map((activity) => (
-              <div key={activity.id} className="border-l-4 pl-4 py-2" style={{
+              <div key={activity.id} className="border-l-4 pl-4 py-3 rounded-r-lg hover:bg-gray-50 transition-colors" style={{
                 borderColor:
                   activity.status === 'success' ? '#10b981' :
                   activity.status === 'warning' ? '#f59e0b' : '#ef4444'
               }}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="font-semibold text-gray-900">{activity.description}</div>
-                    <div className="text-xs text-gray-500 mt-1">{activity.time}</div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        activity.type === 'production' ? 'bg-blue-100 text-blue-700' :
+                        activity.type === 'qc' ? 'bg-purple-100 text-purple-700' :
+                        'bg-cyan-100 text-cyan-700'
+                      }`}>
+                        {activity.type === 'production' ? 'ÜRETİM' :
+                         activity.type === 'qc' ? 'KALİTE' : 'DEPO'}
+                      </span>
+                      <span className={`w-2 h-2 rounded-full ${
+                        activity.status === 'success' ? 'bg-green-500' :
+                        activity.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`} />
+                    </div>
+                    <div className="font-semibold text-gray-900 text-sm mb-1">{activity.description}</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {activity.time}
+                    </div>
                   </div>
-                  <div className={`ml-2 w-2 h-2 rounded-full ${
-                    activity.status === 'success' ? 'bg-green-500' :
-                    activity.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-                  }`} />
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* QC Statistics */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-xl p-8 text-white">
+        <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
+          <CheckCircle2 className="w-8 h-8" />
+          Kalite Kontrol İstatistikleri
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
+            <div className="flex items-center justify-between mb-3">
+              <Clock className="w-10 h-10" />
+              <div className="text-3xl font-bold">{stats.pendingQC.toLocaleString()}</div>
+            </div>
+            <div className="text-sm font-semibold">Bekleyen Kontroller</div>
+            <div className="text-xs text-white/70 mt-2">Adet bazında toplam</div>
+          </div>
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
+            <div className="flex items-center justify-between mb-3">
+              <CheckCircle2 className="w-10 h-10" />
+              <div className="text-3xl font-bold">{stats.approvedQC}</div>
+            </div>
+            <div className="text-sm font-semibold">Onaylanan Kontroller</div>
+            <div className="text-xs text-white/70 mt-2">
+              {stats.approvedQC + stats.rejectedQC > 0 &&
+                `%${((stats.approvedQC / (stats.approvedQC + stats.rejectedQC)) * 100).toFixed(1)} Başarı Oranı`
+              }
+            </div>
+          </div>
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
+            <div className="flex items-center justify-between mb-3">
+              <AlertCircle className="w-10 h-10" />
+              <div className="text-3xl font-bold">{stats.rejectedQC}</div>
+            </div>
+            <div className="text-sm font-semibold">Reddedilen Kontroller</div>
+            <div className="text-xs text-white/70 mt-2">İyileştirme gerekiyor</div>
           </div>
         </div>
       </div>

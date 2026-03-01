@@ -291,11 +291,13 @@ export default function ManagementDashboard() {
       .limit(5)
 
     if (prodData) {
-      prodData.forEach(p => {
+      prodData.forEach((p: any) => {
+        const machine = Array.isArray(p.machine) ? p.machine[0] : p.machine
+        const project = Array.isArray(p.project) ? p.project[0] : p.project
         activities.push({
           id: p.id,
           type: 'production',
-          description: `${p.machine?.machine_name} - ${p.actual_production} adet üretim`,
+          description: `${machine?.machine_name || 'Tezgah'} - ${p.actual_production} adet üretim`,
           time: new Date(p.created_at).toLocaleString('tr-TR'),
           status: 'success'
         })

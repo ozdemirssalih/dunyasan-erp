@@ -8,6 +8,7 @@ interface ChatMessage {
   id: string
   sender_id: string
   message: string
+  chat_group: string | null
   created_at: string
   sender?: {
     full_name: string
@@ -21,6 +22,8 @@ export default function CompanyChat() {
   const [newMessage, setNewMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [companyId, setCompanyId] = useState<string>('')
+  const [userChatGroup, setUserChatGroup] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [unreadCount, setUnreadCount] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
@@ -36,6 +39,12 @@ export default function CompanyChat() {
     }
   }, [isOpen, messages])
 
+  useEffect(() => {
+    if (companyId) {
+      loadMessages(companyId)
+    }
+  }, [selectedGroup])
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -48,13 +57,19 @@ export default function CompanyChat() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('company_id')
+      .select('company_id, chat_group')
       .eq('id', user.id)
       .single()
 
     if (!profile?.company_id) return
 
     setCompanyId(profile.company_id)
+    setUserChatGroup(profile.chat_group)
+
+    // Eğer kullanıcının grubu varsa, varsayılan olarak o grubu seç
+    if (profile.chat_group) {
+      setSelectedGroup(profile.chat_group)
+    }
 
     // Load existing messages
     await loadMessages(profile.company_id)
@@ -88,13 +103,21 @@ export default function CompanyChat() {
   }
 
   const loadMessages = async (companyId: string) => {
-    const { data } = await supabase
+    let query = supabase
       .from('company_chat_messages')
       .select(`
         *,
         sender:profiles!company_chat_messages_sender_id_fkey(full_name, email)
       `)
       .eq('company_id', companyId)
+
+    // Grup filtresi (kullanıcı kendi grubunun mesajlarını görür)
+    // 'all' seçiliyse veya grup yoksa tüm mesajları göster
+    if (selectedGroup !== 'all') {
+      query = query.eq('chat_group', selectedGroup)
+    }
+
+    const { data } = await query
       .order('created_at', { ascending: true })
       .limit(100)
 
@@ -107,12 +130,14 @@ export default function CompanyChat() {
     e.preventDefault()
     if (!newMessage.trim() || !companyId) return
 
+    // Seçili gruba göre mesaj gönder
     const { error } = await supabase
       .from('company_chat_messages')
       .insert({
         company_id: companyId,
         sender_id: currentUserId,
-        message: newMessage.trim()
+        message: newMessage.trim(),
+        chat_group: selectedGroup === 'all' ? null : selectedGroup
       })
 
     if (error) {
@@ -147,17 +172,36 @@ export default function CompanyChat() {
       {isOpen && (
         <div className="fixed bottom-6 right-6 w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col z-50 border border-gray-200">
           {/* Header */}
-          <div className="bg-blue-600 text-white p-4 rounded-t-lg flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" />
-              <h3 className="font-bold">Şirket Sohbeti</h3>
+          <div className="bg-blue-600 text-white p-4 rounded-t-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5" />
+                <h3 className="font-bold">Şirket Sohbeti</h3>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="hover:bg-blue-700 rounded p-1"
+              >
+                <Minimize2 className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="hover:bg-blue-700 rounded p-1"
-            >
-              <Minimize2 className="w-5 h-5" />
-            </button>
+
+            {/* Grup Seçici */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-blue-100">Grup:</span>
+              <select
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="flex-1 px-2 py-1 text-sm text-gray-900 rounded border-0 focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="all">Tüm Mesajlar</option>
+                {userChatGroup && <option value={userChatGroup}>Kendi Grubum ({userChatGroup})</option>}
+                {userChatGroup !== 'ÜRETIM' && <option value="ÜRETIM">ÜRETIM</option>}
+                {userChatGroup !== 'YÖNETİM' && <option value="YÖNETİM">YÖNETİM</option>}
+                {userChatGroup !== 'SİSTEM' && <option value="SİSTEM">SİSTEM</option>}
+                {userChatGroup !== 'SATINALMA' && <option value="SATINALMA">SATINALMA</option>}
+              </select>
+            </div>
           </div>
 
           {/* Messages */}

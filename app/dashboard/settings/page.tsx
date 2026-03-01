@@ -38,6 +38,7 @@ interface User {
   is_active: boolean
   created_at: string
   last_login: string | null
+  chat_group: string | null
 }
 
 interface Role {
@@ -228,7 +229,7 @@ export default function SettingsPage() {
       const userIsSuperAdmin = roleData?.name === 'Super Admin'
       let usersQuery = supabase
         .from('profiles')
-        .select('id, full_name, email, is_active, created_at, role_id, last_login, company_id')
+        .select('id, full_name, email, is_active, created_at, role_id, last_login, company_id, chat_group')
 
       if (!userIsSuperAdmin) {
         usersQuery = usersQuery.eq('company_id', finalCompanyId)
@@ -261,6 +262,7 @@ export default function SettingsPage() {
               company_name: companyData?.name || 'Bilinmiyor',
               is_active: u.is_active,
               created_at: u.created_at,
+              chat_group: u.chat_group,
               last_login: u.last_login,
             }
           })
@@ -361,6 +363,22 @@ export default function SettingsPage() {
       if (error) throw error
 
       alert('✅ Rol başarıyla güncellendi!')
+      loadData()
+    } catch (error: any) {
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleChatGroupChange = async (userId: string, newChatGroup: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ chat_group: newChatGroup === '' ? null : newChatGroup })
+        .eq('id', userId)
+
+      if (error) throw error
+
+      alert('✅ Chat grubu başarıyla güncellendi!')
       loadData()
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
@@ -911,6 +929,7 @@ export default function SettingsPage() {
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Şirket</th>
                       )}
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Rol</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Chat Grubu</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Durum</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Son Giriş</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kayıt Tarihi</th>
@@ -990,6 +1009,25 @@ export default function SettingsPage() {
                             ) : (
                               <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">
                                 {user.role_name}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {isSuperAdmin ? (
+                              <select
+                                value={user.chat_group || ''}
+                                onChange={(e) => handleChatGroupChange(user.id, e.target.value)}
+                                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              >
+                                <option value="">Grup Seçilmedi</option>
+                                <option value="ÜRETIM">ÜRETIM</option>
+                                <option value="YÖNETİM">YÖNETİM</option>
+                                <option value="SİSTEM">SİSTEM</option>
+                                <option value="SATINALMA">SATINALMA</option>
+                              </select>
+                            ) : (
+                              <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">
+                                {user.chat_group || '-'}
                               </span>
                             )}
                           </td>

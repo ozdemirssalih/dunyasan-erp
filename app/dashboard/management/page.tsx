@@ -568,31 +568,52 @@ export default function ManagementDashboard() {
 
   const loadCriticalStock = async (companyId: string) => {
     try {
-      // TÜM STOK VERİSİNİ ÇEK
+      // TÜM STOK VERİSİNİ ÇEK - unit kolonu olmayabilir, o yüzden önce tüm kolonları dene
       const { data, error } = await supabase
         .from('warehouse_items')
-        .select('item_name, current_stock, min_stock, unit')
+        .select('*')
         .eq('company_id', companyId)
 
       if (error) {
-        console.error('❌ Kritik stok hatası:', error)
+        console.error('❌ Kritik stok hatası:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        // Hata olsa bile boş array set et
+        setCriticalStock([])
         return
       }
 
       console.log('✅ Toplam stok kalemi:', data?.length || 0)
+      if (data && data.length > 0) {
+        console.log('📋 Stok kolonları:', Object.keys(data[0]))
+      }
 
       if (data && data.length > 0) {
         // Filter where current_stock <= min_stock in JavaScript
         const criticalItems = data
           .filter(item => item.current_stock <= item.min_stock)
+          .map(item => ({
+            item_name: item.item_name || item.name || 'İsimsiz',
+            current_stock: item.current_stock || 0,
+            min_stock: item.min_stock || 0,
+            unit: item.unit || item.measurement_unit || 'adet'
+          }))
           .sort((a, b) => a.current_stock - b.current_stock)
           .slice(0, 10)
 
         setCriticalStock(criticalItems)
         console.log('📊 Kritik stok:', criticalItems.length, 'ürün')
+      } else {
+        // Veri yoksa boş array set et
+        setCriticalStock([])
+        console.log('📊 Kritik stok: Henüz stok kaydı yok')
       }
     } catch (error) {
       console.error('❌ loadCriticalStock hatası:', error)
+      setCriticalStock([])
     }
   }
 

@@ -256,8 +256,9 @@ export default function ManagementDashboard() {
       .limit(100)
 
     if (data) {
-      const distribution = data.reduce((acc: any, curr) => {
-        const name = curr.project?.project_name || 'Diğer'
+      const distribution = data.reduce((acc: any, curr: any) => {
+        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+        const name = project?.project_name || 'Diğer'
         if (!acc[name]) acc[name] = 0
         acc[name] += curr.actual_production
         return acc

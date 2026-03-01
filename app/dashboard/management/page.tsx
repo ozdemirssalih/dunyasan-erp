@@ -198,18 +198,26 @@ export default function ManagementDashboard() {
   }
 
   const loadStats = async (companyId: string) => {
-    // Toplam üretim ve fire
-    const { data: productionData } = await supabase
-      .from('machine_daily_production')
-      .select('actual_production, defect_count, efficiency_rate, production_date')
-      .eq('company_id', companyId)
+    try {
+      // Toplam üretim ve fire (TÜM VERİYİ ÇEK - LIMIT YOK)
+      const { data: productionData, error: prodError } = await supabase
+        .from('machine_daily_production')
+        .select('actual_production, defect_count, efficiency_rate, production_date')
+        .eq('company_id', companyId)
 
-    const totalProduction = productionData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
-    const totalDefects = productionData?.reduce((sum, p) => sum + (p.defect_count || 0), 0) || 0
-    const avgEfficiency = productionData && productionData.length > 0
-      ? productionData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / productionData.length
-      : 0
-    const defectRate = totalProduction > 0 ? (totalDefects / totalProduction) * 100 : 0
+      if (prodError) {
+        console.error('Üretim verileri çekilirken hata:', prodError)
+        return
+      }
+
+      console.log('✅ Toplam üretim kaydı:', productionData?.length || 0)
+
+      const totalProduction = productionData?.reduce((sum, p) => sum + (p.actual_production || 0), 0) || 0
+      const totalDefects = productionData?.reduce((sum, p) => sum + (p.defect_count || 0), 0) || 0
+      const avgEfficiency = productionData && productionData.length > 0
+        ? productionData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / productionData.length
+        : 0
+      const defectRate = totalProduction > 0 ? (totalDefects / totalProduction) * 100 : 0
 
     // Bu ayki üretim
     const monthStart = new Date()
@@ -234,374 +242,511 @@ export default function ManagementDashboard() {
       new Date(p.production_date) >= weekStart
     ).reduce((sum, p) => sum + p.actual_production, 0) || 0
 
-    // Aktif tezgahlar
-    const { data: machinesData } = await supabase
-      .from('machines')
-      .select('status')
-      .eq('company_id', companyId)
+      // Aktif tezgahlar (TÜM TEZGAHLAR - LIMIT YOK)
+      const { data: machinesData, error: machError } = await supabase
+        .from('machines')
+        .select('status')
+        .eq('company_id', companyId)
 
-    const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
+      if (machError) console.error('Tezgah verileri hatası:', machError)
+      console.log('✅ Toplam tezgah:', machinesData?.length || 0)
 
-    // Bekleyen, onaylanan ve reddedilen KK
-    const { data: qcData } = await supabase
-      .from('production_to_qc_transfers')
-      .select('quantity, status')
-      .eq('company_id', companyId)
+      const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
-    const pendingQC = qcData?.filter(q => q.status === 'pending').reduce((sum, q) => sum + q.quantity, 0) || 0
-    const approvedQC = qcData?.filter(q => q.status === 'approved').length || 0
-    const rejectedQC = qcData?.filter(q => q.status === 'rejected').length || 0
+      // Bekleyen, onaylanan ve reddedilen KK (TÜM KK - LIMIT YOK)
+      const { data: qcData, error: qcError } = await supabase
+        .from('production_to_qc_transfers')
+        .select('quantity, status')
+        .eq('company_id', companyId)
 
-    // Düşük stok uyarısı
-    const { data: stockData } = await supabase
-      .from('warehouse_items')
-      .select('current_stock, min_stock')
-      .eq('company_id', companyId)
+      if (qcError) console.error('KK verileri hatası:', qcError)
+      console.log('✅ Toplam KK transfer:', qcData?.length || 0)
 
-    const lowStock = stockData?.filter(s => s.current_stock <= s.min_stock).length || 0
+      const pendingQC = qcData?.filter(q => q.status === 'pending').reduce((sum, q) => sum + (q.quantity || 0), 0) || 0
+      const approvedQC = qcData?.filter(q => q.status === 'approved').length || 0
+      const rejectedQC = qcData?.filter(q => q.status === 'rejected').length || 0
 
-    // Toplam çalışan sayısı
-    const { data: employeesData } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('company_id', companyId)
+      // Düşük stok uyarısı (TÜM STOK - LIMIT YOK)
+      const { data: stockData, error: stockError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, min_stock')
+        .eq('company_id', companyId)
 
-    const totalEmployees = employeesData?.length || 0
+      if (stockError) console.error('Stok verileri hatası:', stockError)
+      console.log('✅ Toplam stok kalemi:', stockData?.length || 0)
 
-    // Aktif proje sayısı
-    const { data: projectsData } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('company_id', companyId)
-      .eq('status', 'active')
+      const lowStock = stockData?.filter(s => s.current_stock <= s.min_stock).length || 0
 
-    const activeProjects = projectsData?.length || 0
+      // Toplam çalışan sayısı (TÜM ÇALIŞANLAR - LIMIT YOK)
+      const { data: employeesData, error: empError } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('company_id', companyId)
 
-    setStats({
-      totalProduction,
-      activeMachines,
-      totalDefects,
-      efficiency: avgEfficiency,
-      pendingQC,
-      lowStock,
-      totalEmployees,
-      activeProjects,
-      monthlyProduction,
-      defectRate,
-      approvedQC,
-      rejectedQC,
-      todayProduction,
-      weeklyProduction
-    })
+      if (empError) console.error('Çalışan verileri hatası:', empError)
+      console.log('✅ Toplam çalışan:', employeesData?.length || 0)
+
+      const totalEmployees = employeesData?.length || 0
+
+      // Aktif proje sayısı (TÜM PROJELER - LIMIT YOK)
+      const { data: projectsData, error: projError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+
+      if (projError) console.error('Proje verileri hatası:', projError)
+      console.log('✅ Aktif proje:', projectsData?.length || 0)
+
+      const activeProjects = projectsData?.length || 0
+
+      setStats({
+        totalProduction,
+        activeMachines,
+        totalDefects,
+        efficiency: avgEfficiency,
+        pendingQC,
+        lowStock,
+        totalEmployees,
+        activeProjects,
+        monthlyProduction,
+        defectRate,
+        approvedQC,
+        rejectedQC,
+        todayProduction,
+        weeklyProduction
+      })
+
+      console.log('📊 İstatistikler yüklendi:', {
+        totalProduction,
+        activeMachines,
+        totalDefects,
+        totalEmployees,
+        activeProjects
+      })
+    } catch (error) {
+      console.error('❌ loadStats hatası:', error)
+    }
   }
 
   const loadMachines = async (companyId: string) => {
-    const { data } = await supabase
-      .from('machines')
-      .select('id, machine_code, machine_name, status')
-      .eq('company_id', companyId)
-      .order('status', { ascending: false })
-      .limit(8)
+    try {
+      // TÜM TEZGAHLARI ÇEK (sonra UI'da ilk 8'ini göster)
+      const { data, error } = await supabase
+        .from('machines')
+        .select('id, machine_code, machine_name, status')
+        .eq('company_id', companyId)
+        .order('status', { ascending: false })
 
-    if (data) {
-      // Her tezgah için ortalama verimlilik ve toplam üretim hesapla
-      const machinesWithData = await Promise.all(
-        data.map(async (machine) => {
-          const { data: prodData } = await supabase
-            .from('machine_daily_production')
-            .select('efficiency_rate, actual_production')
-            .eq('machine_id', machine.id)
-            .order('production_date', { ascending: false })
-            .limit(10)
+      if (error) {
+        console.error('❌ Tezgah listesi hatası:', error)
+        return
+      }
 
-          const avgEff = prodData && prodData.length > 0
-            ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
-            : 0
+      console.log('✅ Tezgah listesi yüklendi:', data?.length || 0)
 
-          const totalProd = prodData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
+      if (data && data.length > 0) {
+        // Her tezgah için ortalama verimlilik ve toplam üretim hesapla
+        const machinesWithData = await Promise.all(
+          data.slice(0, 12).map(async (machine) => { // İlk 12 tezgah için detay çek
+            const { data: prodData, error: prodError } = await supabase
+              .from('machine_daily_production')
+              .select('efficiency_rate, actual_production')
+              .eq('machine_id', machine.id)
+              .order('production_date', { ascending: false })
+              .limit(30) // Son 30 üretim kaydı
 
-          return {
-            ...machine,
-            current_efficiency: avgEff,
-            total_production: totalProd
-          }
-        })
-      )
+            if (prodError) {
+              console.error(`Tezgah ${machine.machine_code} üretim verisi hatası:`, prodError)
+            }
 
-      setMachines(machinesWithData)
+            const avgEff = prodData && prodData.length > 0
+              ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
+              : 0
+
+            const totalProd = prodData?.reduce((sum, p) => sum + (p.actual_production || 0), 0) || 0
+
+            return {
+              ...machine,
+              current_efficiency: avgEff,
+              total_production: totalProd
+            }
+          })
+        )
+
+        setMachines(machinesWithData)
+        console.log('📊 Tezgah performansları hesaplandı')
+      }
+    } catch (error) {
+      console.error('❌ loadMachines hatası:', error)
     }
   }
 
   const loadDailyProduction = async (companyId: string) => {
-    const { data } = await supabase
-      .from('machine_daily_production')
-      .select('production_date, actual_production, defect_count, efficiency_rate')
-      .eq('company_id', companyId)
-      .gte('production_date', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
-      .order('production_date', { ascending: true })
+    try {
+      // Son 14 gün üretim verileri
+      const { data, error } = await supabase
+        .from('machine_daily_production')
+        .select('production_date, actual_production, defect_count, efficiency_rate')
+        .eq('company_id', companyId)
+        .gte('production_date', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+        .order('production_date', { ascending: true })
 
-    if (data) {
-      const grouped = data.reduce((acc: any, curr) => {
-        const date = new Date(curr.production_date).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })
-        if (!acc[date]) {
-          acc[date] = { production: 0, defects: 0, count: 0, effSum: 0 }
-        }
-        acc[date].production += curr.actual_production
-        acc[date].defects += curr.defect_count || 0
-        acc[date].effSum += curr.efficiency_rate || 0
-        acc[date].count += 1
-        return acc
-      }, {})
+      if (error) {
+        console.error('❌ Günlük üretim hatası:', error)
+        return
+      }
 
-      const chartData = Object.keys(grouped).map(date => ({
-        date,
-        production: grouped[date].production,
-        defects: grouped[date].defects,
-        efficiency: grouped[date].count > 0 ? grouped[date].effSum / grouped[date].count : 0
-      }))
+      console.log('✅ Son 14 gün üretim:', data?.length || 0, 'kayıt')
 
-      setDailyProduction(chartData)
+      if (data && data.length > 0) {
+        const grouped = data.reduce((acc: any, curr) => {
+          const date = new Date(curr.production_date).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })
+          if (!acc[date]) {
+            acc[date] = { production: 0, defects: 0, count: 0, effSum: 0 }
+          }
+          acc[date].production += curr.actual_production || 0
+          acc[date].defects += curr.defect_count || 0
+          acc[date].effSum += curr.efficiency_rate || 0
+          acc[date].count += 1
+          return acc
+        }, {})
+
+        const chartData = Object.keys(grouped).map(date => ({
+          date,
+          production: grouped[date].production,
+          defects: grouped[date].defects,
+          efficiency: grouped[date].count > 0 ? grouped[date].effSum / grouped[date].count : 0
+        }))
+
+        setDailyProduction(chartData)
+        console.log('📊 Günlük üretim grafiği hazır:', chartData.length, 'gün')
+      }
+    } catch (error) {
+      console.error('❌ loadDailyProduction hatası:', error)
     }
   }
 
   const loadProductDistribution = async (companyId: string) => {
-    const { data } = await supabase
-      .from('machine_daily_production')
-      .select(`
-        actual_production,
-        project:projects(project_name)
-      `)
-      .eq('company_id', companyId)
-      .limit(500)
+    try {
+      // TÜM ÜRETİM VERİSİNİ ÇEK (limit yok)
+      const { data, error } = await supabase
+        .from('machine_daily_production')
+        .select(`
+          actual_production,
+          project:projects(project_name)
+        `)
+        .eq('company_id', companyId)
 
-    if (data) {
-      const distribution = data.reduce((acc: any, curr: any) => {
-        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
-        const name = project?.project_name || 'Diğer'
-        if (!acc[name]) acc[name] = 0
-        acc[name] += curr.actual_production
-        return acc
-      }, {})
+      if (error) {
+        console.error('❌ Proje dağılımı hatası:', error)
+        return
+      }
 
-      const chartData = Object.keys(distribution)
-        .map(name => ({ name, value: distribution[name] }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 8)
+      console.log('✅ Proje dağılımı için veri:', data?.length || 0, 'kayıt')
 
-      setProductDistribution(chartData)
+      if (data && data.length > 0) {
+        const distribution = data.reduce((acc: any, curr: any) => {
+          const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+          const name = project?.project_name || 'Diğer'
+          if (!acc[name]) acc[name] = 0
+          acc[name] += curr.actual_production || 0
+          return acc
+        }, {})
+
+        const chartData = Object.keys(distribution)
+          .map(name => ({ name, value: distribution[name] }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 8)
+
+        setProductDistribution(chartData)
+        console.log('📊 Proje dağılımı hazır:', chartData.length, 'proje')
+      }
+    } catch (error) {
+      console.error('❌ loadProductDistribution hatası:', error)
     }
   }
 
   const loadProjectDefects = async (companyId: string) => {
-    const { data } = await supabase
-      .from('machine_daily_production')
-      .select(`
-        actual_production,
-        defect_count,
-        project:projects(project_name)
-      `)
-      .eq('company_id', companyId)
-      .limit(500)
+    try {
+      // TÜM FİRE VERİSİNİ ÇEK (limit yok)
+      const { data, error } = await supabase
+        .from('machine_daily_production')
+        .select(`
+          actual_production,
+          defect_count,
+          project:projects(project_name)
+        `)
+        .eq('company_id', companyId)
 
-    if (data) {
-      const defects: any = {}
-      data.forEach((curr: any) => {
-        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
-        const name = project?.project_name || 'Diğer'
-        if (!defects[name]) {
-          defects[name] = { defects: 0, production: 0 }
-        }
-        defects[name].defects += curr.defect_count || 0
-        defects[name].production += curr.actual_production
-      })
+      if (error) {
+        console.error('❌ Fire analizi hatası:', error)
+        return
+      }
 
-      const chartData = Object.keys(defects)
-        .map(name => ({
-          name,
-          defects: defects[name].defects,
-          production: defects[name].production,
-          rate: defects[name].production > 0 ? (defects[name].defects / defects[name].production) * 100 : 0
-        }))
-        .filter(p => p.defects > 0)
-        .sort((a, b) => b.rate - a.rate)
-        .slice(0, 6)
+      console.log('✅ Fire analizi için veri:', data?.length || 0, 'kayıt')
 
-      setProjectDefects(chartData)
+      if (data && data.length > 0) {
+        const defects: any = {}
+        data.forEach((curr: any) => {
+          const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+          const name = project?.project_name || 'Diğer'
+          if (!defects[name]) {
+            defects[name] = { defects: 0, production: 0 }
+          }
+          defects[name].defects += curr.defect_count || 0
+          defects[name].production += curr.actual_production || 0
+        })
+
+        const chartData = Object.keys(defects)
+          .map(name => ({
+            name,
+            defects: defects[name].defects,
+            production: defects[name].production,
+            rate: defects[name].production > 0 ? (defects[name].defects / defects[name].production) * 100 : 0
+          }))
+          .filter(p => p.defects > 0)
+          .sort((a, b) => b.rate - a.rate)
+          .slice(0, 6)
+
+        setProjectDefects(chartData)
+        console.log('📊 Fire analizi hazır:', chartData.length, 'proje')
+      }
+    } catch (error) {
+      console.error('❌ loadProjectDefects hatası:', error)
     }
   }
 
   const loadMachineComparison = async (companyId: string) => {
-    const { data: machinesData } = await supabase
-      .from('machines')
-      .select('id, machine_code')
-      .eq('company_id', companyId)
-      .limit(10)
+    try {
+      // TÜM TEZGAHLARI ÇEK
+      const { data: machinesData, error } = await supabase
+        .from('machines')
+        .select('id, machine_code')
+        .eq('company_id', companyId)
 
-    if (machinesData) {
-      const comparison = await Promise.all(
-        machinesData.map(async (machine) => {
-          const { data: prodData } = await supabase
-            .from('machine_daily_production')
-            .select('actual_production, efficiency_rate')
-            .eq('machine_id', machine.id)
-            .gte('production_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      if (error) {
+        console.error('❌ Tezgah karşılaştırma hatası:', error)
+        return
+      }
 
-          const totalProd = prodData?.reduce((sum, p) => sum + p.actual_production, 0) || 0
-          const avgEff = prodData && prodData.length > 0
-            ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
-            : 0
+      console.log('✅ Tezgah karşılaştırma için:', machinesData?.length || 0, 'tezgah')
 
-          return {
-            machine: machine.machine_code,
-            production: totalProd,
-            efficiency: avgEff
-          }
-        })
-      )
+      if (machinesData && machinesData.length > 0) {
+        const comparison = await Promise.all(
+          machinesData.slice(0, 15).map(async (machine) => { // İlk 15 tezgah
+            const { data: prodData, error: prodError } = await supabase
+              .from('machine_daily_production')
+              .select('actual_production, efficiency_rate')
+              .eq('machine_id', machine.id)
+              .gte('production_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
 
-      setMachineComparison(comparison.sort((a, b) => b.production - a.production))
+            if (prodError) {
+              console.error(`Tezgah ${machine.machine_code} karşılaştırma hatası:`, prodError)
+            }
+
+            const totalProd = prodData?.reduce((sum, p) => sum + (p.actual_production || 0), 0) || 0
+            const avgEff = prodData && prodData.length > 0
+              ? prodData.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / prodData.length
+              : 0
+
+            return {
+              machine: machine.machine_code,
+              production: totalProd,
+              efficiency: avgEff
+            }
+          })
+        )
+
+        setMachineComparison(comparison.sort((a, b) => b.production - a.production))
+        console.log('📊 Tezgah karşılaştırması hazır')
+      }
+    } catch (error) {
+      console.error('❌ loadMachineComparison hatası:', error)
     }
   }
 
   const loadCriticalStock = async (companyId: string) => {
-    const { data } = await supabase
-      .from('warehouse_items')
-      .select('item_name, current_stock, min_stock, unit')
-      .eq('company_id', companyId)
+    try {
+      // TÜM STOK VERİSİNİ ÇEK
+      const { data, error } = await supabase
+        .from('warehouse_items')
+        .select('item_name, current_stock, min_stock, unit')
+        .eq('company_id', companyId)
 
-    if (data) {
-      // Filter where current_stock <= min_stock in JavaScript
-      const criticalItems = data
-        .filter(item => item.current_stock <= item.min_stock)
-        .sort((a, b) => a.current_stock - b.current_stock)
-        .slice(0, 10)
+      if (error) {
+        console.error('❌ Kritik stok hatası:', error)
+        return
+      }
 
-      setCriticalStock(criticalItems)
+      console.log('✅ Toplam stok kalemi:', data?.length || 0)
+
+      if (data && data.length > 0) {
+        // Filter where current_stock <= min_stock in JavaScript
+        const criticalItems = data
+          .filter(item => item.current_stock <= item.min_stock)
+          .sort((a, b) => a.current_stock - b.current_stock)
+          .slice(0, 10)
+
+        setCriticalStock(criticalItems)
+        console.log('📊 Kritik stok:', criticalItems.length, 'ürün')
+      }
+    } catch (error) {
+      console.error('❌ loadCriticalStock hatası:', error)
     }
   }
 
   const loadTopProjects = async (companyId: string) => {
-    const { data } = await supabase
-      .from('machine_daily_production')
-      .select(`
-        actual_production,
-        defect_count,
-        efficiency_rate,
-        project:projects(project_name)
-      `)
-      .eq('company_id', companyId)
-      .limit(500)
+    try {
+      // TÜM PROJE VERİSİNİ ÇEK (limit yok)
+      const { data, error } = await supabase
+        .from('machine_daily_production')
+        .select(`
+          actual_production,
+          defect_count,
+          efficiency_rate,
+          project:projects(project_name)
+        `)
+        .eq('company_id', companyId)
 
-    if (data) {
-      const projects: any = {}
-      data.forEach((curr: any) => {
-        const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
-        const name = project?.project_name || 'Diğer'
-        if (!projects[name]) {
-          projects[name] = { production: 0, defects: 0, effSum: 0, count: 0 }
-        }
-        projects[name].production += curr.actual_production
-        projects[name].defects += curr.defect_count || 0
-        projects[name].effSum += curr.efficiency_rate || 0
-        projects[name].count += 1
-      })
+      if (error) {
+        console.error('❌ Top projeler hatası:', error)
+        return
+      }
 
-      const topList = Object.keys(projects)
-        .map(name => ({
-          project_name: name,
-          total_production: projects[name].production,
-          total_defects: projects[name].defects,
-          efficiency: projects[name].count > 0 ? projects[name].effSum / projects[name].count : 0
-        }))
-        .sort((a, b) => b.total_production - a.total_production)
-        .slice(0, 10)
+      console.log('✅ Top projeler için veri:', data?.length || 0, 'kayıt')
 
-      setTopProjects(topList)
+      if (data && data.length > 0) {
+        const projects: any = {}
+        data.forEach((curr: any) => {
+          const project = Array.isArray(curr.project) ? curr.project[0] : curr.project
+          const name = project?.project_name || 'Diğer'
+          if (!projects[name]) {
+            projects[name] = { production: 0, defects: 0, effSum: 0, count: 0 }
+          }
+          projects[name].production += curr.actual_production || 0
+          projects[name].defects += curr.defect_count || 0
+          projects[name].effSum += curr.efficiency_rate || 0
+          projects[name].count += 1
+        })
+
+        const topList = Object.keys(projects)
+          .map(name => ({
+            project_name: name,
+            total_production: projects[name].production,
+            total_defects: projects[name].defects,
+            efficiency: projects[name].count > 0 ? projects[name].effSum / projects[name].count : 0
+          }))
+          .sort((a, b) => b.total_production - a.total_production)
+          .slice(0, 10)
+
+        setTopProjects(topList)
+        console.log('📊 Top 10 proje hazır')
+      }
+    } catch (error) {
+      console.error('❌ loadTopProjects hatası:', error)
     }
   }
 
   const loadRecentActivities = async (companyId: string) => {
-    const activities: RecentActivity[] = []
+    try {
+      const activities: RecentActivity[] = []
 
-    // Son üretim kayıtları
-    const { data: prodData } = await supabase
-      .from('machine_daily_production')
-      .select(`
-        id,
-        actual_production,
-        defect_count,
-        created_at,
-        machine:machines(machine_name),
-        project:projects(project_name)
-      `)
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(10)
+      // Son üretim kayıtları (daha fazla kayıt çek)
+      const { data: prodData, error: prodError } = await supabase
+        .from('machine_daily_production')
+        .select(`
+          id,
+          actual_production,
+          defect_count,
+          created_at,
+          machine:machines(machine_name),
+          project:projects(project_name)
+        `)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(20) // 10'dan 20'ye çıkarıldı
 
-    if (prodData) {
-      prodData.forEach((p: any) => {
-        const machine = Array.isArray(p.machine) ? p.machine[0] : p.machine
-        const project = Array.isArray(p.project) ? p.project[0] : p.project
-        activities.push({
-          id: p.id,
-          type: 'production',
-          description: `${machine?.machine_name || 'Tezgah'} - ${project?.project_name || 'Proje'} - ${p.actual_production} adet üretim${p.defect_count > 0 ? ` (${p.defect_count} fire)` : ''}`,
-          time: new Date(p.created_at).toLocaleString('tr-TR'),
-          status: p.defect_count > 0 && (p.defect_count / p.actual_production) > 0.1 ? 'warning' : 'success'
+      if (prodError) {
+        console.error('❌ Son üretim kayıtları hatası:', prodError)
+      }
+
+      if (prodData) {
+        prodData.forEach((p: any) => {
+          const machine = Array.isArray(p.machine) ? p.machine[0] : p.machine
+          const project = Array.isArray(p.project) ? p.project[0] : p.project
+          activities.push({
+            id: p.id,
+            type: 'production',
+            description: `${machine?.machine_name || 'Tezgah'} - ${project?.project_name || 'Proje'} - ${p.actual_production || 0} adet üretim${p.defect_count > 0 ? ` (${p.defect_count} fire)` : ''}`,
+            time: new Date(p.created_at).toLocaleString('tr-TR'),
+            status: p.defect_count > 0 && (p.defect_count / p.actual_production) > 0.1 ? 'warning' : 'success'
+          })
         })
-      })
-    }
+      }
 
-    // Son KK transferleri
-    const { data: qcData } = await supabase
-      .from('production_to_qc_transfers')
-      .select('id, quantity, status, created_at')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(8)
+      // Son KK transferleri (daha fazla kayıt çek)
+      const { data: qcData, error: qcError } = await supabase
+        .from('production_to_qc_transfers')
+        .select('id, quantity, status, created_at')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(15) // 8'den 15'e çıkarıldı
 
-    if (qcData) {
-      qcData.forEach(q => {
-        activities.push({
-          id: q.id,
-          type: 'qc',
-          description: `${q.quantity} adet KK'ya gönderildi - ${
-            q.status === 'approved' ? '✓ Onaylandı' :
-            q.status === 'pending' ? '⏳ Bekliyor' :
-            q.status === 'rejected' ? '✗ Reddedildi' : q.status
-          }`,
-          time: new Date(q.created_at).toLocaleString('tr-TR'),
-          status: q.status === 'approved' ? 'success' : q.status === 'pending' ? 'warning' : 'error'
+      if (qcError) {
+        console.error('❌ Son KK transferleri hatası:', qcError)
+      }
+
+      if (qcData) {
+        qcData.forEach(q => {
+          activities.push({
+            id: q.id,
+            type: 'qc',
+            description: `${q.quantity || 0} adet KK'ya gönderildi - ${
+              q.status === 'approved' ? '✓ Onaylandı' :
+              q.status === 'pending' ? '⏳ Bekliyor' :
+              q.status === 'rejected' ? '✗ Reddedildi' : q.status
+            }`,
+            time: new Date(q.created_at).toLocaleString('tr-TR'),
+            status: q.status === 'approved' ? 'success' : q.status === 'pending' ? 'warning' : 'error'
+          })
         })
-      })
-    }
+      }
 
-    // Depo işlemleri
-    const { data: warehouseData } = await supabase
-      .from('warehouse_qc_requests')
-      .select('id, quantity, status, created_at')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(5)
+      // Depo işlemleri (daha fazla kayıt çek)
+      const { data: warehouseData, error: warehouseError } = await supabase
+        .from('warehouse_qc_requests')
+        .select('id, quantity, status, created_at')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(10) // 5'ten 10'a çıkarıldı
 
-    if (warehouseData) {
-      warehouseData.forEach(w => {
-        activities.push({
-          id: w.id,
-          type: 'warehouse',
-          description: `${w.quantity} adet depo girişi - ${
-            w.status === 'approved' ? '✓ Onaylandı' :
-            w.status === 'pending' ? '⏳ Bekliyor' :
-            w.status === 'rejected' ? '✗ Reddedildi' : w.status
-          }`,
-          time: new Date(w.created_at).toLocaleString('tr-TR'),
-          status: w.status === 'approved' ? 'success' : w.status === 'pending' ? 'warning' : 'error'
+      if (warehouseError) {
+        console.error('❌ Son depo işlemleri hatası:', warehouseError)
+      }
+
+      if (warehouseData) {
+        warehouseData.forEach(w => {
+          activities.push({
+            id: w.id,
+            type: 'warehouse',
+            description: `${w.quantity || 0} adet depo girişi - ${
+              w.status === 'approved' ? '✓ Onaylandı' :
+              w.status === 'pending' ? '⏳ Bekliyor' :
+              w.status === 'rejected' ? '✗ Reddedildi' : w.status
+            }`,
+            time: new Date(w.created_at).toLocaleString('tr-TR'),
+            status: w.status === 'approved' ? 'success' : w.status === 'pending' ? 'warning' : 'error'
+          })
         })
-      })
-    }
+      }
 
-    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    setRecentActivities(activities.slice(0, 15))
+      activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      setRecentActivities(activities.slice(0, 15))
+      console.log('📊 Son işlemler hazır:', activities.length, 'işlem')
+    } catch (error) {
+      console.error('❌ loadRecentActivities hatası:', error)
+    }
   }
 
   if (loading) {

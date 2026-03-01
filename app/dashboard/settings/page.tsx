@@ -38,7 +38,7 @@ interface User {
   is_active: boolean
   created_at: string
   last_login: string | null
-  chat_group: string | null
+  chat_group: string[] | null
 }
 
 interface Role {
@@ -369,16 +369,32 @@ export default function SettingsPage() {
     }
   }
 
-  const handleChatGroupChange = async (userId: string, newChatGroup: string) => {
+  const handleChatGroupChange = async (userId: string, group: string, isChecked: boolean) => {
     try {
+      // Mevcut kullanıcıyı bul
+      const user = users.find(u => u.id === userId)
+      if (!user) return
+
+      let newGroups: string[] = user.chat_group ? [...user.chat_group] : []
+
+      if (isChecked) {
+        // Grup ekle
+        if (!newGroups.includes(group)) {
+          newGroups.push(group)
+        }
+      } else {
+        // Grup çıkar
+        newGroups = newGroups.filter(g => g !== group)
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({ chat_group: newChatGroup === '' ? null : newChatGroup })
+        .update({ chat_group: newGroups.length > 0 ? newGroups : null })
         .eq('id', userId)
 
       if (error) throw error
 
-      alert('✅ Chat grubu başarıyla güncellendi!')
+      alert('✅ Chat grupları güncellendi!')
       loadData()
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
@@ -1014,21 +1030,31 @@ export default function SettingsPage() {
                           </td>
                           <td className="px-6 py-4">
                             {isSuperAdmin ? (
-                              <select
-                                value={user.chat_group || ''}
-                                onChange={(e) => handleChatGroupChange(user.id, e.target.value)}
-                                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                              >
-                                <option value="">Grup Seçilmedi</option>
-                                <option value="ÜRETIM">ÜRETIM</option>
-                                <option value="YÖNETİM">YÖNETİM</option>
-                                <option value="SİSTEM">SİSTEM</option>
-                                <option value="SATINALMA">SATINALMA</option>
-                              </select>
+                              <div className="flex flex-wrap gap-2">
+                                {['ÜRETIM', 'YÖNETİM', 'SİSTEM', 'SATINALMA'].map((group) => (
+                                  <label key={group} className="flex items-center gap-1 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={user.chat_group?.includes(group) || false}
+                                      onChange={(e) => handleChatGroupChange(user.id, group, e.target.checked)}
+                                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs text-gray-700">{group}</span>
+                                  </label>
+                                ))}
+                              </div>
                             ) : (
-                              <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">
-                                {user.chat_group || '-'}
-                              </span>
+                              <div className="flex flex-wrap gap-1">
+                                {user.chat_group && user.chat_group.length > 0 ? (
+                                  user.chat_group.map((group) => (
+                                    <span key={group} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                      {group}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-500 text-sm">-</span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="px-6 py-4">

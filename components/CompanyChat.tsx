@@ -22,7 +22,7 @@ export default function CompanyChat() {
   const [newMessage, setNewMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [companyId, setCompanyId] = useState<string>('')
-  const [userChatGroup, setUserChatGroup] = useState<string | null>(null)
+  const [userChatGroups, setUserChatGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [unreadCount, setUnreadCount] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -64,12 +64,10 @@ export default function CompanyChat() {
     if (!profile?.company_id) return
 
     setCompanyId(profile.company_id)
-    setUserChatGroup(profile.chat_group)
+    setUserChatGroups(profile.chat_group || [])
 
-    // Eğer kullanıcının grubu varsa, varsayılan olarak o grubu seç
-    if (profile.chat_group) {
-      setSelectedGroup(profile.chat_group)
-    }
+    // Varsayılan olarak Genel Chat'i seç
+    setSelectedGroup('all')
 
     // Load existing messages
     await loadMessages(profile.company_id)
@@ -111,9 +109,12 @@ export default function CompanyChat() {
       `)
       .eq('company_id', companyId)
 
-    // Grup filtresi (kullanıcı kendi grubunun mesajlarını görür)
-    // 'all' seçiliyse veya grup yoksa tüm mesajları göster
-    if (selectedGroup !== 'all') {
+    // Grup filtresi
+    if (selectedGroup === 'all') {
+      // Genel Chat - chat_group = NULL
+      query = query.is('chat_group', null)
+    } else {
+      // Seçili grup mesajları
       query = query.eq('chat_group', selectedGroup)
     }
 
@@ -129,6 +130,12 @@ export default function CompanyChat() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !companyId) return
+
+    // Seçili grup kullanıcının gruplarından biri mi veya genel chat mi kontrol et
+    if (selectedGroup !== 'all' && !userChatGroups.includes(selectedGroup)) {
+      alert('Bu gruba mesaj gönderme yetkiniz yok!')
+      return
+    }
 
     // Seçili gruba göre mesaj gönder
     const { error } = await supabase
@@ -188,18 +195,18 @@ export default function CompanyChat() {
 
             {/* Grup Seçici */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-blue-100">Grup:</span>
+              <span className="text-xs text-blue-100">Kanal:</span>
               <select
                 value={selectedGroup}
                 onChange={(e) => setSelectedGroup(e.target.value)}
                 className="flex-1 px-2 py-1 text-sm text-gray-900 rounded border-0 focus:ring-2 focus:ring-blue-300"
               >
-                <option value="all">Tüm Mesajlar</option>
-                {userChatGroup && <option value={userChatGroup}>Kendi Grubum ({userChatGroup})</option>}
-                {userChatGroup !== 'ÜRETIM' && <option value="ÜRETIM">ÜRETIM</option>}
-                {userChatGroup !== 'YÖNETİM' && <option value="YÖNETİM">YÖNETİM</option>}
-                {userChatGroup !== 'SİSTEM' && <option value="SİSTEM">SİSTEM</option>}
-                {userChatGroup !== 'SATINALMA' && <option value="SATINALMA">SATINALMA</option>}
+                <option value="all">🌍 Genel Chat</option>
+                {userChatGroups.map((group) => (
+                  <option key={group} value={group}>
+                    📁 {group}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

@@ -468,12 +468,15 @@ export default function ManagementDashboard() {
       .from('warehouse_items')
       .select('item_name, current_stock, min_stock, unit')
       .eq('company_id', companyId)
-      .lte('current_stock', supabase.raw('min_stock'))
-      .order('current_stock', { ascending: true })
-      .limit(10)
 
     if (data) {
-      setCriticalStock(data)
+      // Filter where current_stock <= min_stock in JavaScript
+      const criticalItems = data
+        .filter(item => item.current_stock <= item.min_stock)
+        .sort((a, b) => a.current_stock - b.current_stock)
+        .slice(0, 10)
+
+      setCriticalStock(criticalItems)
     }
   }
 

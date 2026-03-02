@@ -41,7 +41,8 @@ export default function InventoryPage() {
   const [isAddMode, setIsAddMode] = useState(false) // Yeni ekleme modu
 
   // Kategoriler ve tedarikçiler (dropdown için)
-  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([])
+  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]) // Depo kategorileri
+  const [toolTypes, setToolTypes] = useState<string[]>([]) // Takımhane kategorileri (tool_type)
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
 
   // Form: TAM DÜZENLEME - tüm alanlar + source
@@ -265,6 +266,13 @@ export default function InventoryPage() {
         source: 'toolroom',
       }))
 
+      // Takımhane kategorilerini çıkar (unique tool_type'lar)
+      const uniqueToolTypes = Array.from(
+        new Set(toolsData?.map((t: any) => t.tool_type).filter(Boolean) || [])
+      )
+      console.log('🔧 Takımhane kategorileri:', uniqueToolTypes.length, 'adet')
+      setToolTypes(uniqueToolTypes)
+
       const combinedItems = [...whItems, ...invItems, ...prodItems, ...toolItems]
       console.log('📊 TOPLAM KAYIT:', combinedItems.length, {
         depo: whItems.length,
@@ -378,18 +386,26 @@ export default function InventoryPage() {
           if (error) throw error
         }
       } else if (targetSource === 'warehouse') {
-        const data = {
+        const data: any = {
           company_id: companyId,
           code: form.code,
           name: form.name,
-          category_id: form.categoryId || null,
           current_stock: form.quantity,
           unit: form.unit,
           min_stock: form.min_stock,
           unit_price: form.unit_price,
-          location: form.location || null,
-          supplier_id: form.supplierId || null,
           is_active: true,
+        }
+
+        // Optional alanlar - sadece değer varsa ekle
+        if (form.categoryId && form.categoryId.trim() !== '') {
+          data.category_id = form.categoryId
+        }
+        if (form.location && form.location.trim() !== '') {
+          data.location = form.location
+        }
+        if (form.supplierId && form.supplierId.trim() !== '') {
+          data.supplier_id = form.supplierId
         }
 
         if (isAddMode) {
@@ -777,7 +793,7 @@ export default function InventoryPage() {
                     {/* Kategori - Kaynağa göre dinamik */}
                     {form.source === 'warehouse' ? (
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori (Depo)</label>
                         <select
                           value={form.categoryId}
                           onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
@@ -788,6 +804,32 @@ export default function InventoryPage() {
                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                           ))}
                         </select>
+                        <p className="text-xs text-gray-400 mt-1">Depoda tanımlı kategorilerden seçin</p>
+                      </div>
+                    ) : form.source === 'toolroom' ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Takım Tipi</label>
+                        <select
+                          value={form.category}
+                          onChange={(e) => setForm({ ...form, category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">Takım Tipi Seçin</option>
+                          {toolTypes.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                          <option value="__new__">➕ Yeni Tip Ekle</option>
+                        </select>
+                        {form.category === '__new__' && (
+                          <input
+                            type="text"
+                            placeholder="Yeni takım tipi girin"
+                            onChange={(e) => setForm({ ...form, category: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none mt-2"
+                            autoFocus
+                          />
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">Mevcut tiplerden seçin veya yeni tip ekleyin</p>
                       </div>
                     ) : (
                       <div>
@@ -797,7 +839,7 @@ export default function InventoryPage() {
                           value={form.category}
                           onChange={(e) => setForm({ ...form, category: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                          placeholder="Kategori"
+                          placeholder="Kategori girin"
                         />
                       </div>
                     )}

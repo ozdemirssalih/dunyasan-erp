@@ -984,7 +984,7 @@ export default function WarehousePage() {
                         <td className="px-6 py-4 text-sm text-gray-900">{item.name}</td>
                         <td className="px-6 py-4">
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                            {item.category_name}
+                            {item.category}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -1050,7 +1050,7 @@ export default function WarehousePage() {
                         <h3 className="font-bold text-gray-800">{item.name}</h3>
                         <p className="text-sm text-gray-500">{item.code}</p>
                         <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                          {item.category_name}
+                          {item.category}
                         </span>
                       </div>
                       {isLowStock && (
@@ -1436,7 +1436,7 @@ export default function WarehousePage() {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h4 className="font-bold text-gray-800">{req.item_name}</h4>
-                        <p className="text-sm text-gray-500">{req.category_name}</p>
+                        <p className="text-sm text-gray-500">{req.category}</p>
                       </div>
                       <div className="flex gap-2">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${urgencyColors[req.urgency] || 'bg-gray-100 text-gray-700'}`}>
@@ -1512,7 +1512,7 @@ export default function WarehousePage() {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h4 className="font-bold text-gray-800">{req.item_name}</h4>
-                        <p className="text-sm text-gray-500">{req.item_code} - {req.category_name}</p>
+                        <p className="text-sm text-gray-500">{req.item_code} - {req.category}</p>
                       </div>
                       <div className="flex gap-2">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${urgencyColors[req.urgency] || 'bg-gray-100 text-gray-700'}`}>

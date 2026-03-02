@@ -217,9 +217,21 @@ export default function InventoryPage() {
         source: 'inventory',
       }))
 
-      // 3. production_inventory
+      // 3. production_inventory (warehouse_items ile JOIN - kod/isim için)
       const { data: prodData, error: prodError } = await supabase
-        .from('production_inventory').select('*').eq('company_id', cid)
+        .from('production_inventory')
+        .select(`
+          *,
+          warehouse_items!item_id (
+            id,
+            code,
+            name,
+            category,
+            unit,
+            description
+          )
+        `)
+        .eq('company_id', cid)
 
       if (prodError) console.error('❌ Üretim verileri hatası:', prodError)
       console.log('✅ Üretim (production_inventory) verileri:', prodData?.length || 0, 'kayıt')
@@ -231,18 +243,16 @@ export default function InventoryPage() {
       const prodItems: UnifiedItem[] = (prodData || []).map((item: any) => ({
         id: `prod-${item.id}`,
         rawId: item.id,
-        code: item.item_code || item.code || item.product_code || 'KOD-YOK',
-        name: item.item_name || item.name || item.product_name || 'İsimsiz',
-        category: item.category || // ← Önce category (TEXT) kolonundan al
-                  (item.item_type === 'raw_material' ? 'Hammadde' :
-                   item.item_type === 'finished_product' ? 'Bitmiş Ürün' :
-                   item.item_type === 'scrap' ? 'Fire/Hurda' : 'Yarı Mamül'), // ← Fallback
-        quantity: item.current_stock || item.quantity || 0,
-        unit: item.unit || item.measurement_unit || 'adet',
-        min_stock: item.min_stock || 0,
-        unit_price: item.unit_price || null,
+        code: item.warehouse_items?.code || 'KOD-YOK',
+        name: item.warehouse_items?.name || 'İsimsiz',
+        category: item.category || item.warehouse_items?.category || 'Hammadde',
+        quantity: item.current_stock || 0,
+        unit: item.warehouse_items?.unit || 'adet',
+        min_stock: 0,
+        unit_price: null,
         location: null,
         supplier: null,
+        description: item.warehouse_items?.description || null,
         source: 'production',
       }))
 

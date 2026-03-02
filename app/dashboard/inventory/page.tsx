@@ -233,9 +233,10 @@ export default function InventoryPage() {
         rawId: item.id,
         code: item.item_code || item.code || item.product_code || 'KOD-YOK',
         name: item.item_name || item.name || item.product_name || 'İsimsiz',
-        category: item.item_type === 'raw_material' ? 'Hammadde' :
-                  item.item_type === 'finished_product' ? 'Bitmiş Ürün' :
-                  item.item_type ? 'Yarı Mamul' : 'Üretim',
+        category: item.category || // ← Önce category (TEXT) kolonundan al
+                  (item.item_type === 'raw_material' ? 'Hammadde' :
+                   item.item_type === 'finished_product' ? 'Bitmiş Ürün' :
+                   item.item_type === 'scrap' ? 'Fire/Hurda' : 'Yarı Mamül'), // ← Fallback
         quantity: item.current_stock || item.quantity || 0,
         unit: item.unit || item.measurement_unit || 'adet',
         min_stock: item.min_stock || 0,

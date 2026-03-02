@@ -25,6 +25,11 @@ interface UnifiedItem {
   unit_price: number | null
   location: string | null
   supplier: string | null
+  supplierId?: string | null
+  model?: string | null  // Takımhane için
+  notes?: string | null  // Takımhane için
+  status?: string | null // Takımhane için (available, maintenance, broken, lost)
+  description?: string | null // Depo için
   source: 'inventory' | 'warehouse' | 'production' | 'toolroom'
 }
 
@@ -178,6 +183,8 @@ export default function InventoryPage() {
           unit_price: item.unit_price || item.price || null,
           location: item.location || item.shelf_location || null,
           supplier: supplierName || item.supplier_name || item.supplier || null,
+          supplierId: item.supplier_id || null,
+          description: item.description || null,
           source: 'warehouse',
         }
       })
@@ -238,9 +245,13 @@ export default function InventoryPage() {
         source: 'production',
       }))
 
-      // 4. tools (takımhane) (supplier join'siz - hata veriyorsa)
+      // 4. tools (takımhane) - supplier join ile (takımhane sayfasındaki gibi)
       const { data: toolsData, error: toolError } = await supabase
-        .from('tools').select('*').eq('company_id', cid).eq('is_active', true)
+        .from('tools')
+        .select('*, supplier:suppliers(id, company_name)')
+        .eq('company_id', cid)
+        .eq('is_active', true)
+        .order('tool_code')
 
       if (toolError) console.error('❌ Takımhane verileri hatası:', toolError)
       console.log('✅ Takımhane (tools) verileri:', toolsData?.length || 0, 'kayıt')
@@ -256,11 +267,15 @@ export default function InventoryPage() {
         name: item.tool_name || item.name || item.item_name || 'İsimsiz',
         category: item.tool_type || item.category || 'Takım',
         quantity: item.quantity || item.current_stock || 0,
-        unit: item.unit || 'Adet',
+        unit: 'Adet', // Takımhane'de her zaman Adet
         min_stock: item.min_quantity || item.min_stock || 0,
         unit_price: item.unit_price || item.price || 0,
         location: item.location || null,
-        supplier: item.supplier_name || item.supplier || null,
+        supplier: item.supplier?.company_name || item.supplier_name || item.supplier || null,
+        supplierId: item.supplier_id || null,
+        model: item.model || null,
+        notes: item.notes || null,
+        status: item.status || null,
         source: 'toolroom',
       }))
 
@@ -311,25 +326,31 @@ export default function InventoryPage() {
     if (item.source !== 'inventory' && item.source !== 'toolroom' && item.source !== 'warehouse') return
     setIsAddMode(false)
     setEditingItem(item)
+
+    // Takımhane için lokasyon parsing (A-1 formatından letter ve number çıkar)
+    const locParts = (item.location || '').split('-')
+    const location_letter = item.source === 'toolroom' && locParts.length === 2 ? locParts[0] : ''
+    const location_number = item.source === 'toolroom' && locParts.length === 2 ? locParts[1] : ''
+
     // TAM DÜZENLEME - tüm alanları doldur
     setForm({
       source: item.source,
       code: item.code || '',
       name: item.name || '',
-      description: '', // Düzenleme modunda veritabanından çekilecek
+      description: item.description || '', // Depo için
       category: item.category || '',
       quantity: item.quantity || 0,
       unit: item.unit || 'adet',
       min_stock: item.min_stock || 0,
-      max_stock: 0, // Düzenleme modunda veritabanından çekilecek
+      max_stock: 0, // Düzenleme modunda veritabanından çekilecek (depo için)
       unit_price: item.unit_price || 0,
       location: item.location || '',
-      location_letter: '', // Düzenleme modunda parse edilecek
-      location_number: '', // Düzenleme modunda parse edilecek
+      location_letter,
+      location_number,
       supplier: item.supplier || '',
-      supplierId: '',
-      model: '', // Düzenleme modunda veritabanından çekilecek
-      notes: '', // Düzenleme modunda veritabanından çekilecek
+      supplierId: item.supplierId || '',
+      model: item.model || '', // Takımhane için
+      notes: item.notes || '', // Takımhane için
     })
     setShowModal(true)
   }
@@ -365,21 +386,21 @@ export default function InventoryPage() {
           if (error) throw error
         }
       } else if (targetSource === 'toolroom') {
-        // TAKIMHANE - Depodaki gibi detaylı
+        // TAKIMHANE - Takımhane sayfasındaki gibi TAM uyumlu
         const location = form.location_letter && form.location_number
           ? `${form.location_letter}-${form.location_number}`
-          : form.location || null
+          : null
 
         const data: any = {
           company_id: companyId,
-          tool_code: form.code,
-          tool_name: form.name,
+          tool_code: form.code.trim(),
+          tool_name: form.name.trim(),
           tool_type: form.category || null,
           quantity: form.quantity,
-          unit: 'Adet',
           min_quantity: form.min_stock,
           unit_price: form.unit_price,
           location,
+          status: editingItem?.status || 'available', // Yeni ekleme: available, düzenleme: mevcut status
           is_active: true,
         }
 
@@ -388,10 +409,10 @@ export default function InventoryPage() {
           data.supplier_id = form.supplierId
         }
         if (form.model && form.model.trim() !== '') {
-          data.model = form.model
+          data.model = form.model.trim()
         }
         if (form.notes && form.notes.trim() !== '') {
-          data.notes = form.notes
+          data.notes = form.notes.trim()
         }
 
         if (isAddMode) {

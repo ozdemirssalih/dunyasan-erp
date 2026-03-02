@@ -253,18 +253,27 @@ export default function ManagementDashboard() {
 
       const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
-      // Bekleyen, onaylanan ve reddedilen KK (TÜM KK - LIMIT YOK)
-      const { data: qcData, error: qcError } = await supabase
-        .from('production_to_qc_transfers')
-        .select('quantity, status')
+      // KK deposundaki toplam ürün sayısı
+      const { data: qcInventoryData, error: qcInventoryError } = await supabase
+        .from('quality_control_inventory')
+        .select('id')
         .eq('company_id', companyId)
 
-      if (qcError) console.error('KK verileri hatası:', qcError)
-      console.log('✅ Toplam KK transfer:', qcData?.length || 0)
+      if (qcInventoryError) console.error('KK inventory hatası:', qcInventoryError)
+      console.log('✅ KK deposundaki ürün sayısı:', qcInventoryData?.length || 0)
 
-      const pendingQC = qcData?.filter(q => q.status === 'pending').reduce((sum, q) => sum + (q.quantity || 0), 0) || 0
-      const approvedQC = qcData?.filter(q => q.status === 'approved').length || 0
-      const rejectedQC = qcData?.filter(q => q.status === 'rejected').length || 0
+      const pendingQC = qcInventoryData?.length || 0
+
+      // Onaylanan ve reddedilen KK transferleri
+      const { data: qcTransferData, error: qcTransferError } = await supabase
+        .from('production_to_qc_transfers')
+        .select('status')
+        .eq('company_id', companyId)
+
+      if (qcTransferError) console.error('KK transfer hatası:', qcTransferError)
+
+      const approvedQC = qcTransferData?.filter(q => q.status === 'approved').length || 0
+      const rejectedQC = qcTransferData?.filter(q => q.status === 'rejected').length || 0
 
       // Düşük stok uyarısı (TÜM STOK - LIMIT YOK)
       const { data: stockData, error: stockError } = await supabase
@@ -879,9 +888,9 @@ export default function ManagementDashboard() {
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="text-4xl font-bold mb-2">{stats.pendingQC.toLocaleString()}</div>
-          <div className="text-sm text-orange-100 font-semibold">Bekleyen KK</div>
+          <div className="text-sm text-orange-100 font-semibold">KK Bekliyor</div>
           <div className="mt-3 pt-3 border-t border-orange-400 text-xs text-orange-100">
-            Kontrol bekliyor
+            Toplam ürün sayısı
           </div>
         </div>
 
@@ -1297,8 +1306,8 @@ export default function ManagementDashboard() {
               <Clock className="w-10 h-10" />
               <div className="text-3xl font-bold">{stats.pendingQC.toLocaleString()}</div>
             </div>
-            <div className="text-sm font-semibold">Bekleyen Kontroller</div>
-            <div className="text-xs text-white/70 mt-2">Adet bazında toplam</div>
+            <div className="text-sm font-semibold">KK'da Bekleyen</div>
+            <div className="text-xs text-white/70 mt-2">Toplam ürün sayısı</div>
           </div>
           <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between mb-3">

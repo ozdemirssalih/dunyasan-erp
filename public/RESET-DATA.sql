@@ -79,82 +79,106 @@ BEGIN
         RAISE NOTICE '⊘ company_chat_messages tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- === ÜRETİM TAKİP KAYITLARI ===
+    -- === ÜRETİM TAKİP KAYITLARI VE GEÇMİŞİ ===
 
-    -- Üretim takip kayıtlarını sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_tracking') THEN
-        DELETE FROM production_tracking;
-        RAISE NOTICE '✓ production_tracking tablosu temizlendi';
+    -- Üretim çıktıları
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_outputs') THEN
+        DELETE FROM production_outputs;
+        RAISE NOTICE '✓ production_outputs tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ production_tracking tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_outputs tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Üretim emirlerini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_orders') THEN
-        DELETE FROM production_orders;
-        RAISE NOTICE '✓ production_orders tablosu temizlendi';
+    -- Fire kayıtları
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_scrap_records') THEN
+        DELETE FROM production_scrap_records;
+        RAISE NOTICE '✓ production_scrap_records tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ production_orders tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_scrap_records tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Üretim geçmişini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_history') THEN
-        DELETE FROM production_history;
-        RAISE NOTICE '✓ production_history tablosu temizlendi';
+    -- Üretimden tezgaha transferler
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_to_machine_transfers') THEN
+        DELETE FROM production_to_machine_transfers;
+        RAISE NOTICE '✓ production_to_machine_transfers tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ production_history tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_to_machine_transfers tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- === KALİTE KONTROL TEST SONUÇLARI ===
-
-    -- Kalite test sonuçlarını sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'quality_test_results') THEN
-        DELETE FROM quality_test_results;
-        RAISE NOTICE '✓ quality_test_results tablosu temizlendi';
+    -- Üretimden depoya transferler
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_to_warehouse_transfers') THEN
+        DELETE FROM production_to_warehouse_transfers;
+        RAISE NOTICE '✓ production_to_warehouse_transfers tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ quality_test_results tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_to_warehouse_transfers tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Kalite incelemelerini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'quality_inspections') THEN
-        DELETE FROM quality_inspections;
-        RAISE NOTICE '✓ quality_inspections tablosu temizlendi';
+    -- Malzeme talepleri
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_material_requests') THEN
+        DELETE FROM production_material_requests;
+        RAISE NOTICE '✓ production_material_requests tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ quality_inspections tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_material_requests tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Kalite geçmişini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'quality_history') THEN
-        DELETE FROM quality_history;
-        RAISE NOTICE '✓ quality_history tablosu temizlendi';
+    -- Malzeme atamaları
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_material_assignments') THEN
+        DELETE FROM production_material_assignments;
+        RAISE NOTICE '✓ production_material_assignments tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ quality_history tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ production_material_assignments tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- === DEPO TRANSFER GEÇMİŞİ ===
-
-    -- Depo transferlerini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'warehouse_transfers') THEN
-        DELETE FROM warehouse_transfers;
-        RAISE NOTICE '✓ warehouse_transfers tablosu temizlendi';
+    -- Tezgah envanteri
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'machine_inventory') THEN
+        DELETE FROM machine_inventory;
+        RAISE NOTICE '✓ machine_inventory tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ warehouse_transfers tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ machine_inventory tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Depo hareketlerini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'warehouse_movements') THEN
-        DELETE FROM warehouse_movements;
-        RAISE NOTICE '✓ warehouse_movements tablosu temizlendi';
+    -- === KALİTE KONTROL TEST SONUÇLARI VE GEÇMİŞİ ===
+
+    -- Depo QC talepleri
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'warehouse_qc_requests') THEN
+        DELETE FROM warehouse_qc_requests;
+        RAISE NOTICE '✓ warehouse_qc_requests tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ warehouse_movements tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ warehouse_qc_requests tablosu bulunamadı (atlanıyor)';
     END IF;
 
-    -- Depo transfer geçmişini sil
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'warehouse_transfer_history') THEN
-        DELETE FROM warehouse_transfer_history;
-        RAISE NOTICE '✓ warehouse_transfer_history tablosu temizlendi';
+    -- QC'den depoya transferler
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'qc_to_warehouse_transfers') THEN
+        DELETE FROM qc_to_warehouse_transfers;
+        RAISE NOTICE '✓ qc_to_warehouse_transfers tablosu temizlendi';
     ELSE
-        RAISE NOTICE '⊘ warehouse_transfer_history tablosu bulunamadı (atlanıyor)';
+        RAISE NOTICE '⊘ qc_to_warehouse_transfers tablosu bulunamadı (atlanıyor)';
+    END IF;
+
+    -- Üretimden QC'ye transferler
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'production_to_qc_transfers') THEN
+        DELETE FROM production_to_qc_transfers;
+        RAISE NOTICE '✓ production_to_qc_transfers tablosu temizlendi';
+    ELSE
+        RAISE NOTICE '⊘ production_to_qc_transfers tablosu bulunamadı (atlanıyor)';
+    END IF;
+
+    -- Kalite kontrol envanteri
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'quality_control_inventory') THEN
+        DELETE FROM quality_control_inventory;
+        RAISE NOTICE '✓ quality_control_inventory tablosu temizlendi';
+    ELSE
+        RAISE NOTICE '⊘ quality_control_inventory tablosu bulunamadı (atlanıyor)';
+    END IF;
+
+    -- === DEPO TRANSFER GEÇMİŞİ VE İŞLEMLERİ ===
+
+    -- Depo işlemleri (transactions - tüm giriş/çıkış geçmişi)
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'warehouse_transactions') THEN
+        DELETE FROM warehouse_transactions;
+        RAISE NOTICE '✓ warehouse_transactions tablosu temizlendi';
+    ELSE
+        RAISE NOTICE '⊘ warehouse_transactions tablosu bulunamadı (atlanıyor)';
     END IF;
 
     -- (Opsiyonel) Makine bakım kayıtlarını sil

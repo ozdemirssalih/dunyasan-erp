@@ -95,7 +95,25 @@ export default function InventoryPage() {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
 
-      // 1. warehouse_items (join'ler olmadan - hata veriyorsa)
+      // Önce kategorileri çek (warehouse_categories)
+      const { data: categoriesData } = await supabase
+        .from('warehouse_categories')
+        .select('id, name')
+        .eq('company_id', cid)
+
+      console.log('📁 Depo kategorileri:', categoriesData?.length || 0, 'adet')
+      const categoryMap = new Map(categoriesData?.map(c => [c.id, c.name]) || [])
+
+      // Suppliers (tedarikçiler) - ayrı çek
+      const { data: suppliersData } = await supabase
+        .from('suppliers')
+        .select('id, company_name')
+        .eq('company_id', cid)
+
+      console.log('🏢 Tedarikçiler:', suppliersData?.length || 0, 'adet')
+      const supplierMap = new Map(suppliersData?.map(s => [s.id, s.company_name]) || [])
+
+      // 1. warehouse_items (join'ler olmadan - sonra map ile eşleştir)
       const { data: whData, error: whError } = await supabase
         .from('warehouse_items')
         .select('*')
@@ -123,19 +141,25 @@ export default function InventoryPage() {
         // İsim alanı: farklı kolon isimleri dene
         const name = item.name || item.item_name || item.product_name || 'İsimsiz'
 
+        // Kategori ve tedarikçi bilgisini map'lerden al
+        const categoryId = item.category_id || item.warehouse_category_id
+        const supplierId = item.supplier_id
+        const categoryName = categoryId ? categoryMap.get(categoryId) : null
+        const supplierName = supplierId ? supplierMap.get(supplierId) : null
+
         return {
           id: `wh-${item.id}`,
           rawId: item.id,
           code,
           name,
-          category: item.category_name || item.category || 'Depo',
-          categoryId: item.category_id || item.categoryId,
+          category: categoryName || item.category_name || item.category || 'Kategorisiz',
+          categoryId: categoryId,
           quantity: item.current_stock || item.quantity || 0,
           unit: item.unit || item.measurement_unit || 'adet',
           min_stock: item.min_stock || item.min_quantity || 0,
           unit_price: item.unit_price || item.price || null,
           location: item.location || item.shelf_location || null,
-          supplier: item.supplier_name || item.supplier || null,
+          supplier: supplierName || item.supplier_name || item.supplier || null,
           source: 'warehouse',
         }
       })
@@ -238,9 +262,9 @@ export default function InventoryPage() {
     }
   }
 
-  // Inventory ve toolroom kalemleri düzenlenebilir
+  // Inventory, toolroom VE WAREHOUSE kalemleri düzenlenebilir
   const openEditModal = (item: UnifiedItem) => {
-    if (item.source !== 'inventory' && item.source !== 'toolroom') return
+    if (item.source !== 'inventory' && item.source !== 'toolroom' && item.source !== 'warehouse') return
     setEditingItem(item)
     setForm({
       min_stock: item.min_stock,
@@ -249,10 +273,10 @@ export default function InventoryPage() {
     setShowModal(true)
   }
 
-  // inventory ve toolroom tablosunda min_stock ve unit_price güncellenir
+  // inventory, toolroom VE warehouse tablosunda min_stock ve unit_price güncellenir
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingItem || (editingItem.source !== 'inventory' && editingItem.source !== 'toolroom')) return
+    if (!editingItem || (editingItem.source !== 'inventory' && editingItem.source !== 'toolroom' && editingItem.source !== 'warehouse')) return
     setModalLoading(true)
 
     try {
@@ -265,6 +289,14 @@ export default function InventoryPage() {
       } else if (editingItem.source === 'toolroom') {
         const { error } = await supabase.from('tools').update({
           unit_price: form.unit_price,
+          min_quantity: form.min_stock,
+        }).eq('id', editingItem.rawId)
+        if (error) throw error
+      } else if (editingItem.source === 'warehouse') {
+        // DEPO KALEMLERİ İÇİN GÜNCELLEME
+        const { error } = await supabase.from('warehouse_items').update({
+          unit_price: form.unit_price,
+          min_stock: form.min_stock,
         }).eq('id', editingItem.rawId)
         if (error) throw error
       }
@@ -488,7 +520,7 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-500">{item.location || '—'}</td>
                       <td className="px-5 py-3.5">
-                        {(item.source === 'inventory' || item.source === 'toolroom') ? (
+                        {(item.source === 'inventory' || item.source === 'toolroom' || item.source === 'warehouse') ? (
                           <button
                             onClick={() => openEditModal(item)}
                             className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
@@ -543,7 +575,7 @@ export default function InventoryPage() {
               </div>
 
               <form onSubmit={handleSave} className="space-y-4">
-                {editingItem.source === 'inventory' && (
+                {(editingItem.source === 'inventory' || editingItem.source === 'warehouse') && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Min. Stok Seviyesi</label>
                     <input

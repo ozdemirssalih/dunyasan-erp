@@ -641,10 +641,20 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
+      // Sadece gerekli alanları gönder (category TEXT olarak)
       const itemData = {
-        ...itemForm,
         company_id: companyId,
+        code: itemForm.code.trim(),
+        name: itemForm.name.trim(),
+        description: itemForm.description.trim(),
+        category: itemForm.category || null,  // ← TEXT olarak category
+        unit: itemForm.unit,
+        min_stock: itemForm.min_stock,
+        max_stock: itemForm.max_stock,
+        unit_price: itemForm.unit_price,
+        location: itemForm.location.trim() || null,
         created_by: currentUserId,
+        is_active: true,
       }
 
       if (editingItem) {

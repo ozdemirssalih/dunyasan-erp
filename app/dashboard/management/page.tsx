@@ -253,15 +253,19 @@ export default function ManagementDashboard() {
 
       const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
-      // KK deposundaki toplam ADET (quantity toplamı)
+      // KK deposundaki toplam ADET (current_stock toplamı, pozitif değerler)
       const { data: qcInventoryData, error: qcInventoryError } = await supabase
         .from('quality_control_inventory')
-        .select('quantity')
+        .select('current_stock')
         .eq('company_id', companyId)
 
       if (qcInventoryError) console.error('KK inventory hatası:', qcInventoryError)
 
-      const totalQcQuantity = qcInventoryData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+      // Sadece pozitif current_stock değerlerini topla (negatif = çıkış yapılmış)
+      const totalQcQuantity = qcInventoryData?.reduce((sum, item) => {
+        const stock = item.current_stock || 0
+        return stock > 0 ? sum + stock : sum
+      }, 0) || 0
       console.log('✅ KK deposundaki toplam adet:', totalQcQuantity, 'adet')
 
       const pendingQC = totalQcQuantity

@@ -95,10 +95,10 @@ export default function InventoryPage() {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
 
-      // 1. warehouse_items
+      // 1. warehouse_items (join'ler olmadan - hata veriyorsa)
       const { data: whData, error: whError } = await supabase
         .from('warehouse_items')
-        .select('*, category:warehouse_categories(id, name), supplier:suppliers(company_name)')
+        .select('*')
         .eq('company_id', cid)
         .eq('is_active', true)
 
@@ -128,23 +128,23 @@ export default function InventoryPage() {
           rawId: item.id,
           code,
           name,
-          category: item.category?.name || 'Depo',
-          categoryId: item.category?.id,
+          category: item.category_name || item.category || 'Depo',
+          categoryId: item.category_id || item.categoryId,
           quantity: item.current_stock || item.quantity || 0,
           unit: item.unit || item.measurement_unit || 'adet',
           min_stock: item.min_stock || item.min_quantity || 0,
           unit_price: item.unit_price || item.price || null,
           location: item.location || item.shelf_location || null,
-          supplier: item.supplier?.company_name || null,
+          supplier: item.supplier_name || item.supplier || null,
           source: 'warehouse',
         }
       })
 
       console.log('📦 Depo kalemlerine dönüştürüldü:', whItems.length)
 
-      // 2. inventory tablosu
+      // 2. inventory tablosu (supplier join'siz - hata veriyorsa)
       const { data: invData, error: invError } = await supabase
-        .from('inventory').select('*, supplier:suppliers(company_name)').eq('company_id', cid)
+        .from('inventory').select('*').eq('company_id', cid)
 
       if (invError) console.error('❌ Stok verileri hatası:', invError)
       console.log('✅ Stok (inventory) verileri:', invData?.length || 0, 'kayıt')
@@ -164,7 +164,7 @@ export default function InventoryPage() {
         min_stock: item.min_stock_level || item.min_stock || 0,
         unit_price: item.unit_cost || item.unit_price || null,
         location: item.location || null,
-        supplier: item.supplier?.company_name || null,
+        supplier: item.supplier_name || item.supplier || null,
         source: 'inventory',
       }))
 
@@ -196,9 +196,9 @@ export default function InventoryPage() {
         source: 'production',
       }))
 
-      // 4. tools (takımhane)
+      // 4. tools (takımhane) (supplier join'siz - hata veriyorsa)
       const { data: toolsData, error: toolError } = await supabase
-        .from('tools').select('*, supplier:suppliers(company_name)').eq('company_id', cid).eq('is_active', true)
+        .from('tools').select('*').eq('company_id', cid).eq('is_active', true)
 
       if (toolError) console.error('❌ Takımhane verileri hatası:', toolError)
       console.log('✅ Takımhane (tools) verileri:', toolsData?.length || 0, 'kayıt')
@@ -218,7 +218,7 @@ export default function InventoryPage() {
         min_stock: item.min_quantity || item.min_stock || 0,
         unit_price: item.unit_price || item.price || 0,
         location: item.location || null,
-        supplier: item.supplier?.company_name || null,
+        supplier: item.supplier_name || item.supplier || null,
         source: 'toolroom',
       }))
 

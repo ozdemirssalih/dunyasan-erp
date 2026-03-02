@@ -6,7 +6,8 @@ import PermissionGuard from '@/components/PermissionGuard'
 
 type SourceFilter = 'all' | 'inventory' | 'warehouse' | 'production' | 'toolroom'
 
-// ── Sabit Konfigürasyonlar (Takımhane ile aynı) ───────────────
+// ── Sabit Konfigürasyonlar ───────────────
+const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
 const TOOL_TYPES = ['Kesici Takım', 'Ölçüm Aleti', 'Kumpas', 'Mikrometre', 'Matkap', 'Freze', 'Parmak Freze', 'Pafta', 'Diğer']
 const LOCATION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 const LOCATION_NUMBERS = Array.from({ length: 20 }, (_, i) => String(i + 1))
@@ -45,10 +46,10 @@ export default function InventoryPage() {
   const [modalLoading, setModalLoading] = useState(false)
   const [isAddMode, setIsAddMode] = useState(false) // Yeni ekleme modu
 
-  // Kategoriler ve tedarikçiler (dropdown için)
-  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]) // Depo kategorileri (warehouse_categories'den)
+  // Tedarikçiler (dropdown için)
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
-  // Takımhane kategorileri TOOL_TYPES sabit listesinden gelecek (state gerekmez)
+  // Depo kategorileri WAREHOUSE_CATEGORIES sabit listesinden gelecek
+  // Takımhane kategorileri TOOL_TYPES sabit listesinden gelecek
 
   // Form: TAM DÜZENLEME - tüm alanlar + source (DEPO VE TAKİMHANEDEKİ GİBİ)
   const [form, setForm] = useState({
@@ -56,8 +57,7 @@ export default function InventoryPage() {
     code: '',
     name: '',
     description: '', // Açıklama (textarea)
-    category: '',
-    categoryId: '',
+    category: '', // Kategori (artık string - sabit listeden)
     quantity: 0,
     unit: 'adet',
     min_stock: 0,
@@ -122,18 +122,7 @@ export default function InventoryPage() {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
 
-      // Önce kategorileri çek (warehouse_categories)
-      const { data: categoriesData } = await supabase
-        .from('warehouse_categories')
-        .select('id, name')
-        .eq('company_id', cid)
-
-      console.log('📁 Depo kategorileri:', categoriesData?.length || 0, 'adet')
-      const categoryMap = new Map(categoriesData?.map(c => [c.id, c.name]) || [])
-      // State'e kaydet (dropdown için)
-      setCategories(categoriesData || [])
-
-      // Suppliers (tedarikçiler) - ayrı çek
+      // Suppliers (tedarikçiler) çek
       const { data: suppliersData } = await supabase
         .from('suppliers')
         .select('id, company_name')
@@ -172,10 +161,8 @@ export default function InventoryPage() {
         // İsim alanı: farklı kolon isimleri dene
         const name = item.name || item.item_name || item.product_name || 'İsimsiz'
 
-        // Kategori ve tedarikçi bilgisini map'lerden al
-        const categoryId = item.category_id || item.warehouse_category_id
+        // Tedarikçi bilgisini map'ten al
         const supplierId = item.supplier_id
-        const categoryName = categoryId ? categoryMap.get(categoryId) : null
         const supplierName = supplierId ? supplierMap.get(supplierId) : null
 
         return {
@@ -183,8 +170,8 @@ export default function InventoryPage() {
           rawId: item.id,
           code,
           name,
-          category: categoryName || item.category_name || item.category || 'Kategorisiz',
-          categoryId: categoryId,
+          category: item.category_name || item.category || 'Kategorisiz',
+          categoryId: item.category_id || item.warehouse_category_id,
           quantity: item.current_stock || item.quantity || 0,
           unit: item.unit || item.measurement_unit || 'adet',
           min_stock: item.min_stock || item.min_quantity || 0,
@@ -303,7 +290,6 @@ export default function InventoryPage() {
       name: '',
       description: '',
       category: '',
-      categoryId: '',
       quantity: 0,
       unit: 'adet',
       min_stock: 0,
@@ -332,7 +318,6 @@ export default function InventoryPage() {
       name: item.name || '',
       description: '', // Düzenleme modunda veritabanından çekilecek
       category: item.category || '',
-      categoryId: item.categoryId || '',
       quantity: item.quantity || 0,
       unit: item.unit || 'adet',
       min_stock: item.min_stock || 0,
@@ -433,8 +418,8 @@ export default function InventoryPage() {
         if (form.description && form.description.trim() !== '') {
           data.description = form.description
         }
-        if (form.categoryId && form.categoryId.trim() !== '') {
-          data.category_id = form.categoryId
+        if (form.category && form.category.trim() !== '') {
+          data.category = form.category
         }
         if (form.location && form.location.trim() !== '') {
           data.location = form.location
@@ -845,18 +830,17 @@ export default function InventoryPage() {
                     {/* Kategori - Kaynağa göre dinamik */}
                     {form.source === 'warehouse' ? (
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori (Depo)</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori</label>
                         <select
-                          value={form.categoryId}
-                          onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                          value={form.category}
+                          onChange={(e) => setForm({ ...form, category: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         >
-                          <option value="">Kategori Seçin</option>
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          <option value="">Seçin...</option>
+                          {WAREHOUSE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
                           ))}
                         </select>
-                        <p className="text-xs text-gray-400 mt-1">Depoda tanımlı kategorilerden seçin</p>
                       </div>
                     ) : form.source === 'toolroom' ? (
                       <div>

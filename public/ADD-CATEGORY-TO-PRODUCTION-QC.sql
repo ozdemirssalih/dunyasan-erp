@@ -31,11 +31,11 @@ BEGIN
         ADD COLUMN IF NOT EXISTS category TEXT;
 
         -- QC'deki ürünlerin category bilgisini production_inventory'den al
-        -- item_code veya product_code ile eşleştir
+        -- item_id ile eşleştir (production_inventory'nin id'si)
         UPDATE quality_control_inventory qc
         SET category = pi.category
         FROM production_inventory pi
-        WHERE (qc.item_code = pi.item_code OR qc.product_code = pi.item_code)
+        WHERE qc.item_id = pi.id
           AND qc.category IS NULL
           AND pi.category IS NOT NULL;
 

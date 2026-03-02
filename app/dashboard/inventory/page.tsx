@@ -38,19 +38,21 @@ export default function InventoryPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState<UnifiedItem | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [isAddMode, setIsAddMode] = useState(false) // Yeni ekleme modu
 
   // Kategoriler ve tedarikçiler (dropdown için)
   const [categories, setCategories] = useState<Array<{id: string, name: string}>>([])
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
 
-  // Form: TAM DÜZENLEME - tüm alanlar
+  // Form: TAM DÜZENLEME - tüm alanlar + source
   const [form, setForm] = useState({
+    source: 'warehouse' as 'warehouse' | 'inventory' | 'toolroom', // Kaynak seçimi
     code: '',
     name: '',
     category: '',
     categoryId: '',
     quantity: 0,
-    unit: '',
+    unit: 'adet',
     min_stock: 0,
     unit_price: 0,
     location: '',
@@ -279,12 +281,35 @@ export default function InventoryPage() {
     }
   }
 
-  // Inventory, toolroom VE WAREHOUSE kalemleri düzenlenebilir
+  // YENİ STOK KALEMİ EKLE
+  const openAddModal = () => {
+    setIsAddMode(true)
+    setEditingItem(null)
+    setForm({
+      source: 'warehouse', // Varsayılan kaynak
+      code: '',
+      name: '',
+      category: '',
+      categoryId: '',
+      quantity: 0,
+      unit: 'adet',
+      min_stock: 0,
+      unit_price: 0,
+      location: '',
+      supplier: '',
+      supplierId: '',
+    })
+    setShowModal(true)
+  }
+
+  // MEVCUT STOK KALEMİNİ DÜZENLE
   const openEditModal = (item: UnifiedItem) => {
     if (item.source !== 'inventory' && item.source !== 'toolroom' && item.source !== 'warehouse') return
+    setIsAddMode(false)
     setEditingItem(item)
     // TAM DÜZENLEME - tüm alanları doldur
     setForm({
+      source: item.source,
       code: item.code || '',
       name: item.name || '',
       category: item.category || '',
@@ -300,15 +325,18 @@ export default function InventoryPage() {
     setShowModal(true)
   }
 
-  // TAM DÜZENLEME - Tüm alanları güncelle
+  // KAYDET - Yeni Ekleme veya Güncelleme
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingItem || (editingItem.source !== 'inventory' && editingItem.source !== 'toolroom' && editingItem.source !== 'warehouse')) return
+    if (!companyId) return
     setModalLoading(true)
 
     try {
-      if (editingItem.source === 'inventory') {
-        const { error } = await supabase.from('inventory').update({
+      const targetSource = isAddMode ? form.source : editingItem?.source
+
+      if (targetSource === 'inventory') {
+        const data = {
+          company_id: companyId,
           product_code: form.code,
           product_name: form.name,
           category: form.category,
@@ -318,10 +346,18 @@ export default function InventoryPage() {
           unit_cost: form.unit_price,
           location: form.location || null,
           supplier: form.supplier || null,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
-      } else if (editingItem.source === 'toolroom') {
-        const { error } = await supabase.from('tools').update({
+        }
+
+        if (isAddMode) {
+          const { error } = await supabase.from('inventory').insert(data)
+          if (error) throw error
+        } else if (editingItem) {
+          const { error } = await supabase.from('inventory').update(data).eq('id', editingItem.rawId)
+          if (error) throw error
+        }
+      } else if (targetSource === 'toolroom') {
+        const data = {
+          company_id: companyId,
           tool_code: form.code,
           tool_name: form.name,
           tool_type: form.category,
@@ -331,11 +367,19 @@ export default function InventoryPage() {
           unit_price: form.unit_price,
           location: form.location || null,
           supplier: form.supplier || null,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
-      } else if (editingItem.source === 'warehouse') {
-        // DEPO KALEMLERİ İÇİN TAM GÜNCELLEME
-        const { error } = await supabase.from('warehouse_items').update({
+          is_active: true,
+        }
+
+        if (isAddMode) {
+          const { error } = await supabase.from('tools').insert(data)
+          if (error) throw error
+        } else if (editingItem) {
+          const { error } = await supabase.from('tools').update(data).eq('id', editingItem.rawId)
+          if (error) throw error
+        }
+      } else if (targetSource === 'warehouse') {
+        const data = {
+          company_id: companyId,
           code: form.code,
           name: form.name,
           category_id: form.categoryId || null,
@@ -345,12 +389,21 @@ export default function InventoryPage() {
           unit_price: form.unit_price,
           location: form.location || null,
           supplier_id: form.supplierId || null,
-        }).eq('id', editingItem.rawId)
-        if (error) throw error
+          is_active: true,
+        }
+
+        if (isAddMode) {
+          const { error } = await supabase.from('warehouse_items').insert(data)
+          if (error) throw error
+        } else if (editingItem) {
+          const { error } = await supabase.from('warehouse_items').update(data).eq('id', editingItem.rawId)
+          if (error) throw error
+        }
       }
 
       setShowModal(false)
       setEditingItem(null)
+      setIsAddMode(false)
       loadData()
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
@@ -404,11 +457,24 @@ export default function InventoryPage() {
             <h2 className="text-3xl font-bold text-gray-800">Stok & Hammadde</h2>
             <p className="text-gray-500 text-sm mt-1">Tüm stoklar: Depo · Envanter · Üretim · Takımhane</p>
           </div>
-          <div className="flex gap-2 text-sm">
-            <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-semibold">{whCount} Depo</span>
-            <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">{invCount} Stok</span>
-            <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">{prodCount} Üretim</span>
-            <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full font-semibold">{toolCount} Takımhane</span>
+          <div className="flex items-center gap-3">
+            {/* Yeni Ekle Butonu */}
+            <button
+              onClick={openAddModal}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors shadow-sm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Yeni Stok Kalemi
+            </button>
+            {/* Stats */}
+            <div className="flex gap-2 text-sm">
+              <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-semibold">{whCount} Depo</span>
+              <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">{invCount} Stok</span>
+              <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">{prodCount} Üretim</span>
+              <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full font-semibold">{toolCount} Takımhane</span>
+            </div>
           </div>
         </div>
 
@@ -599,19 +665,24 @@ export default function InventoryPage() {
         </div>
 
         {/* Modal: TAM DÜZENLEME - Tüm Alanlar */}
-        {showModal && editingItem && (
+        {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-xl p-7 max-w-2xl w-full shadow-2xl my-8">
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800">
-                    Stok Kalemini Düzenle
+                    {isAddMode ? '➕ Yeni Stok Kalemi Ekle' : '✏️ Stok Kalemini Düzenle'}
                   </h3>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {editingItem.source === 'warehouse' && '🏭 Depo'}
-                    {editingItem.source === 'inventory' && '📦 Stok'}
-                    {editingItem.source === 'toolroom' && '🔧 Takımhane'}
-                    {' • '}ID: {editingItem.rawId}
+                    {!isAddMode && editingItem && (
+                      <>
+                        {editingItem.source === 'warehouse' && '🏭 Depo'}
+                        {editingItem.source === 'inventory' && '📦 Stok'}
+                        {editingItem.source === 'toolroom' && '🔧 Takımhane'}
+                        {' • '}ID: {editingItem.rawId}
+                      </>
+                    )}
+                    {isAddMode && 'Tüm bölümlerin stokları merkezi olarak yönetiliyor'}
                   </p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -622,6 +693,53 @@ export default function InventoryPage() {
               </div>
 
               <form onSubmit={handleSave} className="space-y-4">
+                {/* KAYNAK SEÇİMİ (Sadece yeni ekleme modunda) */}
+                {isAddMode && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <label className="block text-sm font-bold text-gray-800 mb-2">
+                      Kaynak Seç <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, source: 'warehouse' })}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          form.source === 'warehouse'
+                            ? 'border-purple-500 bg-purple-100 text-purple-700 font-bold'
+                            : 'border-gray-300 bg-white text-gray-600 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">🏭</div>
+                        <div className="text-sm">Depo</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, source: 'inventory' })}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          form.source === 'inventory'
+                            ? 'border-blue-500 bg-blue-100 text-blue-700 font-bold'
+                            : 'border-gray-300 bg-white text-gray-600 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">📦</div>
+                        <div className="text-sm">Stok</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, source: 'toolroom' })}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          form.source === 'toolroom'
+                            ? 'border-orange-500 bg-orange-100 text-orange-700 font-bold'
+                            : 'border-gray-300 bg-white text-gray-600 hover:border-orange-300'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">🔧</div>
+                        <div className="text-sm">Takımhane</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* İki Kolon Layout */}
                 <div className="grid grid-cols-2 gap-4">
                   {/* Sol Kolon */}
@@ -656,8 +774,8 @@ export default function InventoryPage() {
                       />
                     </div>
 
-                    {/* Kategori */}
-                    {editingItem.source === 'warehouse' ? (
+                    {/* Kategori - Kaynağa göre dinamik */}
+                    {form.source === 'warehouse' ? (
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1.5">Kategori</label>
                         <select
@@ -756,8 +874,8 @@ export default function InventoryPage() {
                   </div>
                 </div>
 
-                {/* Tedarikçi (Tam Genişlik) */}
-                {editingItem.source === 'warehouse' ? (
+                {/* Tedarikçi (Tam Genişlik) - Kaynağa göre dinamik */}
+                {form.source === 'warehouse' ? (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tedarikçi</label>
                     <select

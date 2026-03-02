@@ -237,6 +237,7 @@ export default function InventoryPage() {
       case 'warehouse': return { label: 'Depo', bg: 'bg-purple-100 text-purple-700' }
       case 'inventory': return { label: 'Stok', bg: 'bg-blue-100 text-blue-700' }
       case 'production': return { label: 'Üretim', bg: 'bg-green-100 text-green-700' }
+      case 'toolroom': return { label: 'Takımhane', bg: 'bg-orange-100 text-orange-700' }
       default: return { label: source, bg: 'bg-gray-100 text-gray-700' }
     }
   }
@@ -315,45 +316,65 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Filtreler */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-3 items-center shadow-sm">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Kod, isim veya kategori ara..."
-            className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          />
-          <div className="flex gap-1">
-            {[
-              { key: 'all', label: 'Tümü' },
-              { key: 'warehouse', label: 'Depo' },
-              { key: 'inventory', label: 'Stok' },
-              { key: 'production', label: 'Üretim' },
-              { key: 'toolroom', label: 'Takımhane' },
-            ].map(f => (
-              <button
-                key={f.key}
-                onClick={() => setSourceFilter(f.key as SourceFilter)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  sourceFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+        {/* Sekmeler (Tabs) - DAHA BELIRGIN */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="border-b border-gray-200 px-6 pt-4">
+            <div className="flex gap-2 -mb-px overflow-x-auto">
+              {[
+                { key: 'all', label: 'Tümü', icon: '📊', count: allItems.length, color: 'border-gray-500 text-gray-700' },
+                { key: 'warehouse', label: 'Depo', icon: '🏭', count: whCount, color: 'border-purple-500 text-purple-700' },
+                { key: 'toolroom', label: 'Takımhane', icon: '🔧', count: toolCount, color: 'border-orange-500 text-orange-700' },
+                { key: 'inventory', label: 'Stok', icon: '📦', count: invCount, color: 'border-blue-500 text-blue-700' },
+                { key: 'production', label: 'Üretim', icon: '⚙️', count: prodCount, color: 'border-green-500 text-green-700' },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setSourceFilter(f.key as SourceFilter)}
+                  className={`px-5 py-3 border-b-4 font-semibold transition-all whitespace-nowrap ${
+                    sourceFilter === f.key
+                      ? `${f.color} border-b-4`
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="mr-2">{f.icon}</span>
+                  {f.label}
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                    sourceFilter === f.key ? 'bg-white bg-opacity-30' : 'bg-gray-100'
+                  }`}>
+                    {f.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="all">Tüm Kategoriler</option>
-            {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-          <button onClick={loadData} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm transition-colors">
-            ↻ Yenile
-          </button>
+
+          {/* Filtre Alanları */}
+          <div className="p-4 flex flex-wrap gap-3 items-center bg-gray-50">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="🔍 Kod, isim veya kategori ara..."
+              className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+            >
+              <option value="all">📂 Tüm Kategoriler</option>
+              {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <button
+              onClick={loadData}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Yenile
+            </button>
+          </div>
         </div>
 
         {/* Tablo */}

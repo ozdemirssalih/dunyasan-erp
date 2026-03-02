@@ -96,22 +96,36 @@ export default function InventoryPage() {
       setCompanyId(cid)
 
       // 1. warehouse_items
-      const { data: whData } = await supabase
+      const { data: whData, error: whError } = await supabase
         .from('warehouse_items')
         .select('*, category:warehouse_categories(id, name), supplier:suppliers(company_name)')
         .eq('company_id', cid)
         .eq('is_active', true)
         .order('code')
 
+      if (whError) {
+        console.error('❌ Depo verileri hatası:', {
+          message: whError.message,
+          details: whError.details,
+          hint: whError.hint,
+          code: whError.code
+        })
+      }
+
+      console.log('✅ Depo verileri:', whData?.length || 0, 'kayıt')
+      if (whData && whData.length > 0) {
+        console.log('📋 İlk depo kaydı:', whData[0])
+      }
+
       const whItems: UnifiedItem[] = (whData || []).map((item: any) => ({
         id: `wh-${item.id}`,
         rawId: item.id,
-        code: item.code,
-        name: item.name,
+        code: item.code || item.item_code || 'KOD-YOK',
+        name: item.name || item.item_name || 'İsimsiz',
         category: item.category?.name || 'Depo',
         categoryId: item.category?.id,
-        quantity: item.current_stock,
-        unit: item.unit,
+        quantity: item.current_stock || 0,
+        unit: item.unit || item.measurement_unit || 'adet',
         min_stock: item.min_stock || 0,
         unit_price: item.unit_price,
         location: item.location,
@@ -119,9 +133,14 @@ export default function InventoryPage() {
         source: 'warehouse',
       }))
 
+      console.log('📦 Depo kalemlerine dönüştürüldü:', whItems.length)
+
       // 2. inventory tablosu
-      const { data: invData } = await supabase
+      const { data: invData, error: invError } = await supabase
         .from('inventory').select('*, supplier:suppliers(company_name)').eq('company_id', cid).order('product_code')
+
+      if (invError) console.error('❌ Stok verileri hatası:', invError)
+      console.log('✅ Stok (inventory) verileri:', invData?.length || 0, 'kayıt')
 
       const invItems: UnifiedItem[] = (invData || []).map((item: any) => ({
         id: `inv-${item.id}`,
@@ -139,8 +158,11 @@ export default function InventoryPage() {
       }))
 
       // 3. production_inventory
-      const { data: prodData } = await supabase
+      const { data: prodData, error: prodError } = await supabase
         .from('production_inventory').select('*').eq('company_id', cid).order('item_code')
+
+      if (prodError) console.error('❌ Üretim verileri hatası:', prodError)
+      console.log('✅ Üretim (production_inventory) verileri:', prodData?.length || 0, 'kayıt')
 
       const prodItems: UnifiedItem[] = (prodData || []).map((item: any) => ({
         id: `prod-${item.id}`,
@@ -159,8 +181,11 @@ export default function InventoryPage() {
       }))
 
       // 4. tools (takımhane)
-      const { data: toolsData } = await supabase
+      const { data: toolsData, error: toolError } = await supabase
         .from('tools').select('*, supplier:suppliers(company_name)').eq('company_id', cid).eq('is_active', true).order('tool_code')
+
+      if (toolError) console.error('❌ Takımhane verileri hatası:', toolError)
+      console.log('✅ Takımhane (tools) verileri:', toolsData?.length || 0, 'kayıt')
 
       const toolItems: UnifiedItem[] = (toolsData || []).map((item: any) => ({
         id: `tool-${item.id}`,
@@ -177,9 +202,17 @@ export default function InventoryPage() {
         source: 'toolroom',
       }))
 
-      setAllItems([...whItems, ...invItems, ...prodItems, ...toolItems])
+      const combinedItems = [...whItems, ...invItems, ...prodItems, ...toolItems]
+      console.log('📊 TOPLAM KAYIT:', combinedItems.length, {
+        depo: whItems.length,
+        stok: invItems.length,
+        üretim: prodItems.length,
+        takımhane: toolItems.length
+      })
+
+      setAllItems(combinedItems)
     } catch (error) {
-      console.error('Error loading data:', error)
+      console.error('❌ Error loading data:', error)
     } finally {
       setLoading(false)
     }

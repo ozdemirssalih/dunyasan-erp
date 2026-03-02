@@ -6,6 +6,11 @@ import PermissionGuard from '@/components/PermissionGuard'
 
 type SourceFilter = 'all' | 'inventory' | 'warehouse' | 'production' | 'toolroom'
 
+// ── Sabit Konfigürasyonlar (Takımhane ile aynı) ───────────────
+const TOOL_TYPES = ['Kesici Takım', 'Ölçüm Aleti', 'Kumpas', 'Mikrometre', 'Matkap', 'Freze', 'Parmak Freze', 'Pafta', 'Diğer']
+const LOCATION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
+const LOCATION_NUMBERS = Array.from({ length: 20 }, (_, i) => String(i + 1))
+
 interface UnifiedItem {
   id: string
   rawId: string // gerçek veritabanı id'si
@@ -41,9 +46,9 @@ export default function InventoryPage() {
   const [isAddMode, setIsAddMode] = useState(false) // Yeni ekleme modu
 
   // Kategoriler ve tedarikçiler (dropdown için)
-  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]) // Depo kategorileri
-  const [toolTypes, setToolTypes] = useState<string[]>([]) // Takımhane kategorileri (tool_type)
+  const [categories, setCategories] = useState<Array<{id: string, name: string}>>([]) // Depo kategorileri (warehouse_categories'den)
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
+  // Takımhane kategorileri TOOL_TYPES sabit listesinden gelecek (state gerekmez)
 
   // Form: TAM DÜZENLEME - tüm alanlar + source (DEPO VE TAKİMHANEDEKİ GİBİ)
   const [form, setForm] = useState({
@@ -271,13 +276,6 @@ export default function InventoryPage() {
         supplier: item.supplier_name || item.supplier || null,
         source: 'toolroom',
       }))
-
-      // Takımhane kategorilerini çıkar (unique tool_type'lar)
-      const uniqueToolTypes = Array.from(
-        new Set(toolsData?.map((t: any) => t.tool_type).filter(Boolean) || [])
-      )
-      console.log('🔧 Takımhane kategorileri:', uniqueToolTypes.length, 'adet')
-      setToolTypes(uniqueToolTypes)
 
       const combinedItems = [...whItems, ...invItems, ...prodItems, ...toolItems]
       console.log('📊 TOPLAM KAYIT:', combinedItems.length, {
@@ -862,28 +860,17 @@ export default function InventoryPage() {
                       </div>
                     ) : form.source === 'toolroom' ? (
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Takım Tipi</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Takım Türü</label>
                         <select
                           value={form.category}
                           onChange={(e) => setForm({ ...form, category: e.target.value })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         >
-                          <option value="">Takım Tipi Seçin</option>
-                          {toolTypes.map(type => (
+                          <option value="">Seçiniz (Opsiyonel)</option>
+                          {TOOL_TYPES.map(type => (
                             <option key={type} value={type}>{type}</option>
                           ))}
-                          <option value="__new__">➕ Yeni Tip Ekle</option>
                         </select>
-                        {form.category === '__new__' && (
-                          <input
-                            type="text"
-                            placeholder="Yeni takım tipi girin"
-                            onChange={(e) => setForm({ ...form, category: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none mt-2"
-                            autoFocus
-                          />
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">Mevcut tiplerden seçin veya yeni tip ekleyin</p>
                       </div>
                     ) : (
                       <div>
@@ -940,7 +927,7 @@ export default function InventoryPage() {
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                           >
                             <option value="">Harf</option>
-                            {['A', 'B', 'C', 'D', 'E', 'F'].map(l => (
+                            {LOCATION_LETTERS.map(l => (
                               <option key={l} value={l}>{l}</option>
                             ))}
                           </select>
@@ -950,8 +937,8 @@ export default function InventoryPage() {
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                           >
                             <option value="">Sayı</option>
-                            {[...Array(20)].map((_, i) => (
-                              <option key={i+1} value={i+1}>{i+1}</option>
+                            {LOCATION_NUMBERS.map(num => (
+                              <option key={num} value={num}>{num}</option>
                             ))}
                           </select>
                         </div>

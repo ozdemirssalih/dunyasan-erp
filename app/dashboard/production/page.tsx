@@ -282,12 +282,12 @@ export default function ProductionPage() {
     })
     console.log('📦 [RAW DATA] İlk 3 kayıt:', rawData?.slice(0, 3))
 
-    // Şimdi join ile çek
+    // Şimdi join ile çek (category artık TEXT kolonu)
     const { data, error } = await supabase
       .from('production_inventory')
       .select(`
         *,
-        item:warehouse_items(code, name, unit, category:warehouse_categories(name))
+        item:warehouse_items(code, name, unit, category)
       `)
       .eq('company_id', companyId)
       .gt('current_stock', 0)
@@ -307,7 +307,7 @@ export default function ProductionPage() {
       item_id: inv.item_id,
       item_code: inv.item?.code || '',
       item_name: inv.item?.name || '',
-      category_name: inv.item?.category?.name || '',
+      category_name: inv.category || inv.item?.category || 'Hammadde', // Önce production, sonra warehouse
       unit: inv.item?.unit || '',
       current_stock: inv.current_stock,
       item_type: inv.item_type || 'raw_material'
@@ -325,7 +325,7 @@ export default function ProductionPage() {
       .from('production_material_requests')
       .select(`
         *,
-        item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
+        item:warehouse_items(code, name, unit, category),
         requested_by:profiles!production_material_requests_requested_by_fkey(full_name)
       `)
       .eq('company_id', companyId)

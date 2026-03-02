@@ -24,11 +24,10 @@ END $$;
 ALTER TABLE warehouse_items
 ALTER COLUMN category_id DROP NOT NULL;
 
-RAISE NOTICE '✓ category_id artık nullable (opsiyonel)';
-
 -- 4. Başarı mesajı
 DO $$
 BEGIN
+    RAISE NOTICE '✓ category_id artık nullable (opsiyonel)';
     RAISE NOTICE '';
     RAISE NOTICE '✅ warehouse_items tablosu güncellendi!';
     RAISE NOTICE '';

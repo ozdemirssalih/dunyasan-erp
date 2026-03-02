@@ -7,19 +7,15 @@ import { usePermissions } from '@/lib/hooks/usePermissions'
 
 type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers'
 
-interface Category {
-  id: string
-  name: string
-  description: string
-}
+// ── Sabit Konfigürasyonlar ───────────────
+const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
 
 interface WarehouseItem {
   id: string
   code: string
   name: string
   description: string
-  category_id: string
-  category_name: string
+  category: string  // ← Artık category_id değil, direkt kategori adı
   unit: string
   current_stock: number
   min_stock: number
@@ -49,7 +45,7 @@ interface Transaction {
 interface PurchaseRequest {
   id: string
   item_name: string
-  category_name: string
+  category: string  // ← category_name yerine category
   quantity: number
   unit: string
   urgency: 'low' | 'medium' | 'high' | 'urgent'
@@ -64,7 +60,7 @@ interface ProductionRequest {
   item_id: string
   item_name: string
   item_code: string
-  category_name: string
+  category: string  // ← category_name yerine category
   quantity: number
   unit: string
   urgency: 'low' | 'medium' | 'high' | 'urgent'
@@ -82,8 +78,7 @@ export default function WarehousePage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
 
-  // Data states
-  const [categories, setCategories] = useState<Category[]>([])
+  // Data states (categories artık WAREHOUSE_CATEGORIES sabit listesinden gelecek)
   const [items, setItems] = useState<WarehouseItem[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [requests, setRequests] = useState<PurchaseRequest[]>([])
@@ -110,7 +105,7 @@ export default function WarehousePage() {
     code: '',
     name: '',
     description: '',
-    category_id: '',
+    category: '',  // ← category_id yerine category
     unit: 'adet',
     min_stock: 0,
     max_stock: 0,
@@ -138,7 +133,7 @@ export default function WarehousePage() {
   const [requestForm, setRequestForm] = useState({
     item_id: '',
     item_name: '',
-    category_id: '',
+    category: '',  // ← category_id yerine category
     quantity: 0,
     unit: 'adet',
     urgency: 'medium',
@@ -218,13 +213,7 @@ export default function WarehousePage() {
 
       setCompanyId(finalCompanyId)
 
-      // Load categories
-      const { data: categoriesData } = await supabase
-        .from('warehouse_categories')
-        .select('*')
-        .order('name')
-
-      setCategories(categoriesData || [])
+      // Categories artık WAREHOUSE_CATEGORIES sabit listesinden gelecek (warehouse_categories tablosundan çekilmiyor)
 
       // Load suppliers
       const { data: suppliersData } = await supabase
@@ -272,10 +261,7 @@ export default function WarehousePage() {
 
     const { data, error } = await supabase
       .from('warehouse_items')
-      .select(`
-        *,
-        category:warehouse_categories(name)
-      `)
+      .select('*')  // ← warehouse_categories join'i kaldırıldı, category artık direkt TEXT olarak saklanıyor
       .eq('company_id', companyId)
       .eq('is_active', true)
       .order('code')
@@ -284,7 +270,7 @@ export default function WarehousePage() {
 
     const itemsData = data?.map((item: any) => ({
       ...item,
-      category_name: item.category?.name || 'Bilinmiyor'
+      category: item.category || 'Bilinmiyor'  // ← Artık category direkt TEXT olarak geliyor
     })) || []
 
     console.log('✅ [WAREHOUSE] Items state güncelleniyor:', itemsData.length, 'kayıt')
@@ -329,9 +315,8 @@ export default function WarehousePage() {
       .from('purchase_requests')
       .select(`
         *,
-        category:warehouse_categories(name),
         requested_by:profiles!purchase_requests_requested_by_fkey(full_name)
-      `)
+      `)  // ← warehouse_categories join'i kaldırıldı, category artık TEXT
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })
 
@@ -342,7 +327,7 @@ export default function WarehousePage() {
     const requestsData = data?.map((r: any) => ({
       id: r.id,
       item_name: r.item_name,
-      category_name: r.category?.name || 'Diğer',
+      category: r.category || 'Diğer',  // ← Artık category direkt TEXT
       quantity: r.quantity,
       unit: r.unit,
       urgency: r.urgency,
@@ -356,13 +341,13 @@ export default function WarehousePage() {
   }
 
   const loadProductionRequests = async (companyId: string) => {
-    const { data, error } = await supabase
+    const { data, error} = await supabase
       .from('production_material_requests')
       .select(`
         *,
-        item:warehouse_items(code, name, unit, category:warehouse_categories(name)),
+        item:warehouse_items(code, name, unit, category),
         requested_by:profiles!production_material_requests_requested_by_fkey(full_name)
-      `)
+      `)  // ← warehouse_categories join'i kaldırıldı, category artık warehouse_items'ta TEXT
       .eq('company_id', companyId)
       .order('requested_at', { ascending: false })
 
@@ -375,7 +360,7 @@ export default function WarehousePage() {
       item_id: r.item_id,
       item_name: r.item?.name || '',
       item_code: r.item?.code || '',
-      category_name: r.item?.category?.name || 'Diğer',
+      category: r.item?.category || 'Diğer',  // ← Artık category direkt TEXT
       quantity: r.quantity,
       unit: r.item?.unit || '',
       urgency: r.urgency,
@@ -782,7 +767,7 @@ export default function WarehousePage() {
           company_id: companyId,
           item_id: requestForm.item_id || null,
           item_name: requestForm.item_name,
-          category_id: requestForm.category_id || null,
+          category: requestForm.category || null,
           quantity: requestForm.quantity,
           unit: requestForm.unit,
           urgency: requestForm.urgency,
@@ -807,7 +792,7 @@ export default function WarehousePage() {
       code: '',
       name: '',
       description: '',
-      category_id: '',
+      category: '',
       unit: 'adet',
       min_stock: 0,
       max_stock: 0,
@@ -841,7 +826,7 @@ export default function WarehousePage() {
     setRequestForm({
       item_id: '',
       item_name: '',
-      category_id: '',
+      category: '',
       quantity: 0,
       unit: 'adet',
       urgency: 'medium',
@@ -850,7 +835,7 @@ export default function WarehousePage() {
   }
 
   const filteredItems = items.filter(item => {
-    const matchesCategory = categoryFilter === 'all' || item.category_id === categoryFilter
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter  // ← category_id değil, category
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.code.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesLowStock = !showLowStock || item.current_stock <= item.min_stock
@@ -934,8 +919,8 @@ export default function WarehousePage() {
                 className="px-4 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="all">Tüm Kategoriler</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                {WAREHOUSE_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
 
@@ -1007,7 +992,7 @@ export default function WarehousePage() {
                                   code: item.code,
                                   name: item.name,
                                   description: item.description,
-                                  category_id: item.category_id,
+                                  category: item.category,
                                   unit: item.unit,
                                   min_stock: item.min_stock,
                                   max_stock: item.max_stock,
@@ -1100,7 +1085,7 @@ export default function WarehousePage() {
                             code: item.code,
                             name: item.name,
                             description: item.description,
-                            category_id: item.category_id,
+                            category: item.category,
                             unit: item.unit,
                             min_stock: item.min_stock,
                             max_stock: item.max_stock,
@@ -1834,14 +1819,14 @@ export default function WarehousePage() {
                       Kategori <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={itemForm.category_id}
-                      onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
+                      value={itemForm.category}
+                      onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
                       <option value="">Seçin...</option>
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      {WAREHOUSE_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
                   </div>
@@ -1928,13 +1913,13 @@ export default function WarehousePage() {
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Kategori</label>
                     <select
-                      value={requestForm.category_id}
-                      onChange={(e) => setRequestForm({ ...requestForm, category_id: e.target.value })}
+                      value={requestForm.category}
+                      onChange={(e) => setRequestForm({ ...requestForm, category: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
                       <option value="">Seçin...</option>
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      {WAREHOUSE_CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
                   </div>

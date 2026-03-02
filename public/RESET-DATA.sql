@@ -39,6 +39,9 @@ DELETE FROM machine_daily_production;
 -- Tüm kalite kontrol kayıtlarını sil
 DELETE FROM quality_control;
 
+-- Tüm şirket sohbet mesajlarını sil
+DELETE FROM company_chat_messages;
+
 -- (Opsiyonel) Makine bakım kayıtlarını sil
 -- DELETE FROM machine_maintenance;
 
@@ -63,6 +66,7 @@ BEGIN
     RAISE NOTICE '   • Tüm transferler (inventory_transfers)';
     RAISE NOTICE '   • Tüm tezgah üretim verileri (machine_daily_production)';
     RAISE NOTICE '   • Tüm kalite kontrol kayıtları (quality_control)';
+    RAISE NOTICE '   • Tüm şirket sohbet mesajları (company_chat_messages)';
     RAISE NOTICE '';
     RAISE NOTICE '📦 Korunan Veriler:';
     RAISE NOTICE '   • Ürün/malzeme tanımları';

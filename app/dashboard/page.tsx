@@ -10,7 +10,7 @@ export default function DashboardPage() {
     inProgressOrders: 0,
     activeMachines: 0,
     totalMachines: 0,
-    lowStockCount: 0,
+    qcPendingCount: 0,
   })
   const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [machines, setMachines] = useState<any[]>([])
@@ -64,6 +64,12 @@ export default function DashboardPage() {
         .select('*')
         .eq('company_id', profile.company_id)
 
+      // Get quality control inventory stats
+      const { data: qcInventory } = await supabase
+        .from('quality_control_inventory')
+        .select('*')
+        .eq('company_id', profile.company_id)
+
       // Calculate stats for each machine
       const machinesWithStats = await Promise.all(
         (machinesData || []).map(async (machine) => {
@@ -101,7 +107,7 @@ export default function DashboardPage() {
         inProgressOrders: orders?.filter(o => o.status === 'in_progress').length || 0,
         activeMachines: machinesData?.filter(m => m.status === 'active').length || 0,
         totalMachines: machinesData?.length || 0,
-        lowStockCount: inventory?.filter(i => i.quantity < i.min_stock_level).length || 0,
+        qcPendingCount: qcInventory?.length || 0,
       })
 
       // Get recent orders
@@ -186,17 +192,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Low Stock Alert */}
+        {/* QC Pending */}
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm font-medium">Düşük Stok</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">{stats.lowStockCount}</p>
-              <p className="text-orange-600 text-sm font-semibold mt-1">Uyarı</p>
+              <p className="text-gray-600 text-sm font-medium">KK'da Bekleyen</p>
+              <p className="text-3xl font-bold text-gray-800 mt-2">{stats.qcPendingCount}</p>
+              <p className="text-orange-600 text-sm font-semibold mt-1">Ürün</p>
             </div>
             <div className="bg-orange-100 rounded-full p-3">
               <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
             </div>
           </div>

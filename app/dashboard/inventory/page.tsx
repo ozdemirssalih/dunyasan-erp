@@ -101,7 +101,6 @@ export default function InventoryPage() {
         .select('*, category:warehouse_categories(id, name), supplier:suppliers(company_name)')
         .eq('company_id', cid)
         .eq('is_active', true)
-        .order('code')
 
       if (whError) {
         console.error('❌ Depo verileri hatası:', {
@@ -115,66 +114,83 @@ export default function InventoryPage() {
       console.log('✅ Depo verileri:', whData?.length || 0, 'kayıt')
       if (whData && whData.length > 0) {
         console.log('📋 İlk depo kaydı:', whData[0])
+        console.log('📋 Depo kolonları:', Object.keys(whData[0]))
       }
 
-      const whItems: UnifiedItem[] = (whData || []).map((item: any) => ({
-        id: `wh-${item.id}`,
-        rawId: item.id,
-        code: item.code || item.item_code || 'KOD-YOK',
-        name: item.name || item.item_name || 'İsimsiz',
-        category: item.category?.name || 'Depo',
-        categoryId: item.category?.id,
-        quantity: item.current_stock || 0,
-        unit: item.unit || item.measurement_unit || 'adet',
-        min_stock: item.min_stock || 0,
-        unit_price: item.unit_price,
-        location: item.location,
-        supplier: item.supplier?.company_name || null,
-        source: 'warehouse',
-      }))
+      const whItems: UnifiedItem[] = (whData || []).map((item: any) => {
+        // Kod alanı: farklı kolon isimleri dene
+        const code = item.code || item.item_code || item.product_code || item.id || 'KOD-YOK'
+        // İsim alanı: farklı kolon isimleri dene
+        const name = item.name || item.item_name || item.product_name || 'İsimsiz'
+
+        return {
+          id: `wh-${item.id}`,
+          rawId: item.id,
+          code,
+          name,
+          category: item.category?.name || 'Depo',
+          categoryId: item.category?.id,
+          quantity: item.current_stock || item.quantity || 0,
+          unit: item.unit || item.measurement_unit || 'adet',
+          min_stock: item.min_stock || item.min_quantity || 0,
+          unit_price: item.unit_price || item.price || null,
+          location: item.location || item.shelf_location || null,
+          supplier: item.supplier?.company_name || null,
+          source: 'warehouse',
+        }
+      })
 
       console.log('📦 Depo kalemlerine dönüştürüldü:', whItems.length)
 
       // 2. inventory tablosu
       const { data: invData, error: invError } = await supabase
-        .from('inventory').select('*, supplier:suppliers(company_name)').eq('company_id', cid).order('product_code')
+        .from('inventory').select('*, supplier:suppliers(company_name)').eq('company_id', cid)
 
       if (invError) console.error('❌ Stok verileri hatası:', invError)
       console.log('✅ Stok (inventory) verileri:', invData?.length || 0, 'kayıt')
+      if (invData && invData.length > 0) {
+        console.log('📋 İlk stok kaydı:', invData[0])
+        console.log('📋 Stok kolonları:', Object.keys(invData[0]))
+      }
 
       const invItems: UnifiedItem[] = (invData || []).map((item: any) => ({
         id: `inv-${item.id}`,
         rawId: item.id,
-        code: item.product_code,
-        name: item.product_name,
-        category: item.category,
-        quantity: item.quantity,
-        unit: item.unit,
-        min_stock: item.min_stock_level || 0,
-        unit_price: item.unit_cost,
-        location: item.location,
+        code: item.product_code || item.code || item.item_code || 'KOD-YOK',
+        name: item.product_name || item.name || item.item_name || 'İsimsiz',
+        category: item.category || 'Stok',
+        quantity: item.quantity || item.current_stock || 0,
+        unit: item.unit || item.measurement_unit || 'adet',
+        min_stock: item.min_stock_level || item.min_stock || 0,
+        unit_price: item.unit_cost || item.unit_price || null,
+        location: item.location || null,
         supplier: item.supplier?.company_name || null,
         source: 'inventory',
       }))
 
       // 3. production_inventory
       const { data: prodData, error: prodError } = await supabase
-        .from('production_inventory').select('*').eq('company_id', cid).order('item_code')
+        .from('production_inventory').select('*').eq('company_id', cid)
 
       if (prodError) console.error('❌ Üretim verileri hatası:', prodError)
       console.log('✅ Üretim (production_inventory) verileri:', prodData?.length || 0, 'kayıt')
+      if (prodData && prodData.length > 0) {
+        console.log('📋 İlk üretim kaydı:', prodData[0])
+        console.log('📋 Üretim kolonları:', Object.keys(prodData[0]))
+      }
 
       const prodItems: UnifiedItem[] = (prodData || []).map((item: any) => ({
         id: `prod-${item.id}`,
         rawId: item.id,
-        code: item.item_code,
-        name: item.item_name,
+        code: item.item_code || item.code || item.product_code || 'KOD-YOK',
+        name: item.item_name || item.name || item.product_name || 'İsimsiz',
         category: item.item_type === 'raw_material' ? 'Hammadde' :
-                  item.item_type === 'finished_product' ? 'Bitmiş Ürün' : 'Yarı Mamul',
-        quantity: item.current_stock,
-        unit: item.unit,
-        min_stock: 0,
-        unit_price: null,
+                  item.item_type === 'finished_product' ? 'Bitmiş Ürün' :
+                  item.item_type ? 'Yarı Mamul' : 'Üretim',
+        quantity: item.current_stock || item.quantity || 0,
+        unit: item.unit || item.measurement_unit || 'adet',
+        min_stock: item.min_stock || 0,
+        unit_price: item.unit_price || null,
         location: null,
         supplier: null,
         source: 'production',
@@ -182,22 +198,26 @@ export default function InventoryPage() {
 
       // 4. tools (takımhane)
       const { data: toolsData, error: toolError } = await supabase
-        .from('tools').select('*, supplier:suppliers(company_name)').eq('company_id', cid).eq('is_active', true).order('tool_code')
+        .from('tools').select('*, supplier:suppliers(company_name)').eq('company_id', cid).eq('is_active', true)
 
       if (toolError) console.error('❌ Takımhane verileri hatası:', toolError)
       console.log('✅ Takımhane (tools) verileri:', toolsData?.length || 0, 'kayıt')
+      if (toolsData && toolsData.length > 0) {
+        console.log('📋 İlk takımhane kaydı:', toolsData[0])
+        console.log('📋 Takımhane kolonları:', Object.keys(toolsData[0]))
+      }
 
       const toolItems: UnifiedItem[] = (toolsData || []).map((item: any) => ({
         id: `tool-${item.id}`,
         rawId: item.id,
-        code: item.tool_code,
-        name: item.tool_name,
-        category: item.tool_type || 'Takım',
-        quantity: item.quantity,
-        unit: 'Adet',
-        min_stock: item.min_quantity || 0,
-        unit_price: item.unit_price || 0,
-        location: item.location,
+        code: item.tool_code || item.code || item.item_code || 'KOD-YOK',
+        name: item.tool_name || item.name || item.item_name || 'İsimsiz',
+        category: item.tool_type || item.category || 'Takım',
+        quantity: item.quantity || item.current_stock || 0,
+        unit: item.unit || 'Adet',
+        min_stock: item.min_quantity || item.min_stock || 0,
+        unit_price: item.unit_price || item.price || 0,
+        location: item.location || null,
         supplier: item.supplier?.company_name || null,
         source: 'toolroom',
       }))

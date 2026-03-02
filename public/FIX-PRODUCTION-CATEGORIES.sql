@@ -1,5 +1,4 @@
--- Tüm production_inventory kayıtlarının category değerini güncelle
--- Eğer category NULL ise, item_type'a göre doldur
+-- Boş category değerlerini item_type'a göre doldur
 
 UPDATE production_inventory
 SET category = CASE
@@ -10,20 +9,20 @@ SET category = CASE
 END
 WHERE category IS NULL OR category = '';
 
--- Eğer item_type de NULL ise, varsayılan olarak 'Hammadde' yap
+-- Eğer item_type de NULL/boş ise, varsayılan 'Hammadde' yap
 UPDATE production_inventory
 SET category = 'Hammadde'
 WHERE (category IS NULL OR category = '')
   AND (item_type IS NULL OR item_type = '');
 
--- Kontrol et
+-- Kontrol: Tüm kayıtları göster (category ile birlikte)
 SELECT
     id,
-    COALESCE(item_code, code, product_code, 'KOD-YOK') as kod,
-    COALESCE(item_name, name, product_name, 'İsimsiz') as isim,
+    item_id,
     item_type,
     category,
-    current_stock
+    current_stock,
+    notes
 FROM production_inventory
-ORDER BY id DESC
-LIMIT 10;
+ORDER BY created_at DESC
+LIMIT 20;

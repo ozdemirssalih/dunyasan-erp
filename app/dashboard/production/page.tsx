@@ -1275,29 +1275,20 @@ export default function ProductionPage() {
 
             {/* Bitmiş Ürünler - Günlük Üretim Kayıtları */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-purple-50 border-b border-gray-200 flex justify-between items-center">
+              <div className="px-6 py-4 bg-purple-50 border-b border-gray-200">
                 <div>
                   <h3 className="text-lg font-bold text-purple-800 flex items-center gap-2">
                     <Package className="w-5 h-5" />
-                    Bitmiş Ürünler (Tezgahtan Gelen Kayıtlar)
+                    Bitmiş Ürünler
                   </h3>
                   <p className="text-sm text-purple-600 mt-1">Günlük üretim kayıtları - KK veya Depoya gönderilebilir</p>
                 </div>
-                {canCreate('production') && (
-                  <button
-                    onClick={() => setShowManualStockModal(true)}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-                  >
-                    + Manuel Stok Ekle
-                  </button>
-                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tezgah</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Vardiya</th>
@@ -1323,10 +1314,6 @@ export default function ProductionPage() {
                         <tr key={output.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm text-gray-900">
                             {new Date(output.production_date).toLocaleDateString('tr-TR')}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">{output.machine_name}</div>
-                            <div className="text-xs text-gray-500">{output.machine_code}</div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm font-medium text-gray-900">{output.output_item_name}</div>

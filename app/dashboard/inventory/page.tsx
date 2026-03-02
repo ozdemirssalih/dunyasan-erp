@@ -45,20 +45,26 @@ export default function InventoryPage() {
   const [toolTypes, setToolTypes] = useState<string[]>([]) // Takımhane kategorileri (tool_type)
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
 
-  // Form: TAM DÜZENLEME - tüm alanlar + source
+  // Form: TAM DÜZENLEME - tüm alanlar + source (DEPO VE TAKİMHANEDEKİ GİBİ)
   const [form, setForm] = useState({
     source: 'warehouse' as 'warehouse' | 'inventory' | 'toolroom', // Kaynak seçimi
     code: '',
     name: '',
+    description: '', // Açıklama (textarea)
     category: '',
     categoryId: '',
     quantity: 0,
     unit: 'adet',
     min_stock: 0,
+    max_stock: 0, // Max stok (depo için)
     unit_price: 0,
     location: '',
+    location_letter: '', // Takımhane için
+    location_number: '', // Takımhane için
     supplier: '',
     supplierId: '',
+    model: '', // Model/Seri (takımhane için)
+    notes: '', // Notlar (textarea - takımhane için)
   })
 
   useEffect(() => { loadData() }, [])
@@ -297,15 +303,21 @@ export default function InventoryPage() {
       source: 'warehouse', // Varsayılan kaynak
       code: '',
       name: '',
+      description: '',
       category: '',
       categoryId: '',
       quantity: 0,
       unit: 'adet',
       min_stock: 0,
+      max_stock: 0,
       unit_price: 0,
       location: '',
+      location_letter: '',
+      location_number: '',
       supplier: '',
       supplierId: '',
+      model: '',
+      notes: '',
     })
     setShowModal(true)
   }
@@ -320,15 +332,21 @@ export default function InventoryPage() {
       source: item.source,
       code: item.code || '',
       name: item.name || '',
+      description: '', // Düzenleme modunda veritabanından çekilecek
       category: item.category || '',
       categoryId: item.categoryId || '',
       quantity: item.quantity || 0,
       unit: item.unit || 'adet',
       min_stock: item.min_stock || 0,
+      max_stock: 0, // Düzenleme modunda veritabanından çekilecek
       unit_price: item.unit_price || 0,
       location: item.location || '',
+      location_letter: '', // Düzenleme modunda parse edilecek
+      location_number: '', // Düzenleme modunda parse edilecek
       supplier: item.supplier || '',
-      supplierId: '', // Not stored in UnifiedItem, will be looked up if needed
+      supplierId: '',
+      model: '', // Düzenleme modunda veritabanından çekilecek
+      notes: '', // Düzenleme modunda veritabanından çekilecek
     })
     setShowModal(true)
   }
@@ -364,18 +382,33 @@ export default function InventoryPage() {
           if (error) throw error
         }
       } else if (targetSource === 'toolroom') {
-        const data = {
+        // TAKIMHANE - Depodaki gibi detaylı
+        const location = form.location_letter && form.location_number
+          ? `${form.location_letter}-${form.location_number}`
+          : form.location || null
+
+        const data: any = {
           company_id: companyId,
           tool_code: form.code,
           tool_name: form.name,
-          tool_type: form.category,
+          tool_type: form.category || null,
           quantity: form.quantity,
-          unit: form.unit,
+          unit: 'Adet',
           min_quantity: form.min_stock,
           unit_price: form.unit_price,
-          location: form.location || null,
-          supplier: form.supplier || null,
+          location,
           is_active: true,
+        }
+
+        // Optional alanlar
+        if (form.supplierId && form.supplierId.trim() !== '') {
+          data.supplier_id = form.supplierId
+        }
+        if (form.model && form.model.trim() !== '') {
+          data.model = form.model
+        }
+        if (form.notes && form.notes.trim() !== '') {
+          data.notes = form.notes
         }
 
         if (isAddMode) {
@@ -386,6 +419,7 @@ export default function InventoryPage() {
           if (error) throw error
         }
       } else if (targetSource === 'warehouse') {
+        // DEPO - Depodaki gibi detaylı
         const data: any = {
           company_id: companyId,
           code: form.code,
@@ -398,6 +432,9 @@ export default function InventoryPage() {
         }
 
         // Optional alanlar - sadece değer varsa ekle
+        if (form.description && form.description.trim() !== '') {
+          data.description = form.description
+        }
         if (form.categoryId && form.categoryId.trim() !== '') {
           data.category_id = form.categoryId
         }
@@ -406,6 +443,9 @@ export default function InventoryPage() {
         }
         if (form.supplierId && form.supplierId.trim() !== '') {
           data.supplier_id = form.supplierId
+        }
+        if (form.max_stock && form.max_stock > 0) {
+          data.max_stock = form.max_stock
         }
 
         if (isAddMode) {
@@ -790,6 +830,20 @@ export default function InventoryPage() {
                       />
                     </div>
 
+                    {/* Açıklama (DEPO için - col-span-2) */}
+                    {form.source === 'warehouse' && (
+                      <div className="col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Açıklama</label>
+                        <textarea
+                          value={form.description}
+                          onChange={(e) => setForm({ ...form, description: e.target.value })}
+                          rows={2}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                          placeholder="Ürün açıklaması..."
+                        />
+                      </div>
+                    )}
+
                     {/* Kategori - Kaynağa göre dinamik */}
                     {form.source === 'warehouse' ? (
                       <div>
@@ -844,17 +898,76 @@ export default function InventoryPage() {
                       </div>
                     )}
 
-                    {/* Lokasyon */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lokasyon</label>
-                      <input
-                        type="text"
-                        value={form.location}
-                        onChange={(e) => setForm({ ...form, location: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="Raf/konum"
-                      />
-                    </div>
+                    {/* Tedarikçi - Sol Kolon (warehouse/toolroom için dropdown) */}
+                    {form.source === 'warehouse' || form.source === 'toolroom' ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tedarikçi</label>
+                        <select
+                          value={form.supplierId}
+                          onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">Seçiniz (Opsiyonel)</option>
+                          {suppliers.map(sup => (
+                            <option key={sup.id} value={sup.id}>{sup.company_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    {/* Model/Seri (TAKIMHANE için) */}
+                    {form.source === 'toolroom' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Model / Seri</label>
+                        <input
+                          type="text"
+                          value={form.model}
+                          onChange={(e) => setForm({ ...form, model: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="CoroMill 390..."
+                        />
+                      </div>
+                    )}
+
+                    {/* Lokasyon (TAKIMHANE için 2 dropdown / Diğerleri için input) */}
+                    {form.source === 'toolroom' ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lokasyon</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={form.location_letter}
+                            onChange={(e) => setForm({ ...form, location_letter: e.target.value })}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          >
+                            <option value="">Harf</option>
+                            {['A', 'B', 'C', 'D', 'E', 'F'].map(l => (
+                              <option key={l} value={l}>{l}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={form.location_number}
+                            onChange={(e) => setForm({ ...form, location_number: e.target.value })}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          >
+                            <option value="">Sayı</option>
+                            {[...Array(20)].map((_, i) => (
+                              <option key={i+1} value={i+1}>{i+1}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Konum / Raf</label>
+                        <input
+                          type="text"
+                          value={form.location}
+                          onChange={(e) => setForm({ ...form, location: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="Örn: A-12-3"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Sağ Kolon */}
@@ -875,17 +988,51 @@ export default function InventoryPage() {
                       />
                     </div>
 
-                    {/* Birim */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim</label>
-                      <input
-                        type="text"
-                        value={form.unit}
-                        onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="adet, kg, m, vb."
-                      />
-                    </div>
+                    {/* Birim (DROPDOWN - Depodaki gibi / Takımhane sabit Adet) */}
+                    {form.source === 'toolroom' ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim</label>
+                        <input
+                          type="text"
+                          value="Adet"
+                          disabled
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    ) : form.source === 'warehouse' ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                          Birim <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={form.unit}
+                          onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                          required
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="adet">Adet</option>
+                          <option value="kg">Kg</option>
+                          <option value="lt">Lt</option>
+                          <option value="m">Metre</option>
+                          <option value="m2">m²</option>
+                          <option value="m3">m³</option>
+                          <option value="paket">Paket</option>
+                          <option value="kutu">Kutu</option>
+                          <option value="koli">Koli</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim</label>
+                        <input
+                          type="text"
+                          value={form.unit}
+                          onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="adet, kg, m, vb."
+                        />
+                      </div>
+                    )}
 
                     {/* Min Stok */}
                     <div>
@@ -899,6 +1046,21 @@ export default function InventoryPage() {
                       />
                       <p className="text-xs text-gray-400 mt-1">Altına düşünce uyarı</p>
                     </div>
+
+                    {/* Max Stok (SADECE DEPO için) */}
+                    {form.source === 'warehouse' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Max. Stok Seviyesi</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={form.max_stock}
+                          onChange={(e) => setForm({ ...form, max_stock: parseInt(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Maksimum stok limiti</p>
+                      </div>
+                    )}
 
                     {/* Birim Fiyat */}
                     <div>
@@ -916,22 +1078,22 @@ export default function InventoryPage() {
                   </div>
                 </div>
 
-                {/* Tedarikçi (Tam Genişlik) - Kaynağa göre dinamik */}
-                {form.source === 'warehouse' ? (
+                {/* Notlar (TAKIMHANE için - Tam Genişlik) */}
+                {form.source === 'toolroom' && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tedarikçi</label>
-                    <select
-                      value={form.supplierId}
-                      onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">Tedarikçi Seçin</option>
-                      {suppliers.map(sup => (
-                        <option key={sup.id} value={sup.id}>{sup.company_name}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Notlar</label>
+                    <textarea
+                      value={form.notes}
+                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      placeholder="Ek bilgiler..."
+                    />
                   </div>
-                ) : (
+                )}
+
+                {/* Tedarikçi (Sadece STOK/INVENTORY için - Tam Genişlik) */}
+                {form.source === 'inventory' && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tedarikçi</label>
                     <input

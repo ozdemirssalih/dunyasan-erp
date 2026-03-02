@@ -30,15 +30,14 @@ BEGIN
         ALTER TABLE quality_control_inventory
         ADD COLUMN IF NOT EXISTS category TEXT;
 
-        -- Mevcut item_type'lardan category'ye dönüştür
-        UPDATE quality_control_inventory
-        SET category = CASE
-            WHEN item_type = 'raw_material' THEN 'Hammadde'
-            WHEN item_type = 'finished_product' THEN 'Bitmiş Ürün'
-            WHEN item_type = 'scrap' THEN 'Fire/Hurda'
-            ELSE 'Yarı Mamül'
-        END
-        WHERE category IS NULL;
+        -- QC'deki ürünlerin category bilgisini production_inventory'den al
+        -- item_code veya product_code ile eşleştir
+        UPDATE quality_control_inventory qc
+        SET category = pi.category
+        FROM production_inventory pi
+        WHERE (qc.item_code = pi.item_code OR qc.product_code = pi.item_code)
+          AND qc.category IS NULL
+          AND pi.category IS NOT NULL;
 
         RAISE NOTICE '✓ quality_control_inventory tablosu güncellendi';
     ELSE
@@ -58,11 +57,14 @@ BEGIN
     RAISE NOTICE '📋 Değişiklikler:';
     RAISE NOTICE '   - production_inventory: category (TEXT) kolonu eklendi';
     RAISE NOTICE '   - quality_control_inventory: category (TEXT) kolonu eklendi';
-    RAISE NOTICE '   - item_type değerleri category''ye dönüştürüldü:';
+    RAISE NOTICE '';
+    RAISE NOTICE '🔄 Veri Dönüşümleri:';
+    RAISE NOTICE '   - Production: item_type → category';
     RAISE NOTICE '     • raw_material → Hammadde';
     RAISE NOTICE '     • finished_product → Bitmiş Ürün';
     RAISE NOTICE '     • scrap → Fire/Hurda';
     RAISE NOTICE '     • (diğer) → Yarı Mamül';
+    RAISE NOTICE '   - QC: production_inventory''den item_code ile eşleştirilerek kopyalandı';
     RAISE NOTICE '';
     RAISE NOTICE '⚙️  item_type kolonu korundu (geriye uyumluluk)';
     RAISE NOTICE '';

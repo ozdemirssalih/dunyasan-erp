@@ -253,16 +253,18 @@ export default function ManagementDashboard() {
 
       const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
-      // KK deposundaki toplam ürün sayısı
+      // KK deposundaki toplam ADET (quantity toplamı)
       const { data: qcInventoryData, error: qcInventoryError } = await supabase
         .from('quality_control_inventory')
-        .select('id')
+        .select('quantity')
         .eq('company_id', companyId)
 
       if (qcInventoryError) console.error('KK inventory hatası:', qcInventoryError)
-      console.log('✅ KK deposundaki ürün sayısı:', qcInventoryData?.length || 0)
 
-      const pendingQC = qcInventoryData?.length || 0
+      const totalQcQuantity = qcInventoryData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+      console.log('✅ KK deposundaki toplam adet:', totalQcQuantity, 'adet')
+
+      const pendingQC = totalQcQuantity
 
       // Onaylanan ve reddedilen KK transferleri
       const { data: qcTransferData, error: qcTransferError } = await supabase
@@ -890,7 +892,7 @@ export default function ManagementDashboard() {
           <div className="text-4xl font-bold mb-2">{stats.pendingQC.toLocaleString()}</div>
           <div className="text-sm text-orange-100 font-semibold">KK Bekliyor</div>
           <div className="mt-3 pt-3 border-t border-orange-400 text-xs text-orange-100">
-            Toplam ürün sayısı
+            Adet bazlı toplam
           </div>
         </div>
 
@@ -1307,7 +1309,7 @@ export default function ManagementDashboard() {
               <div className="text-3xl font-bold">{stats.pendingQC.toLocaleString()}</div>
             </div>
             <div className="text-sm font-semibold">KK'da Bekleyen</div>
-            <div className="text-xs text-white/70 mt-2">Toplam ürün sayısı</div>
+            <div className="text-xs text-white/70 mt-2">Adet bazlı toplam</div>
           </div>
           <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between mb-3">

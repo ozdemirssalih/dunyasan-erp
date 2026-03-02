@@ -20,14 +20,20 @@ BEGIN
     END IF;
 END $$;
 
--- 3. Başarı mesajı
+-- 3. category_id kolonunu NULLABLE yap (NOT NULL constraint'i kaldır)
+ALTER TABLE warehouse_items
+ALTER COLUMN category_id DROP NOT NULL;
+
+RAISE NOTICE '✓ category_id artık nullable (opsiyonel)';
+
+-- 4. Başarı mesajı
 DO $$
 BEGIN
     RAISE NOTICE '';
-    RAISE NOTICE '✅ warehouse_items tablosuna category (TEXT) kolonu eklendi!';
+    RAISE NOTICE '✅ warehouse_items tablosu güncellendi!';
     RAISE NOTICE '';
-    RAISE NOTICE '📋 Artık:';
-    RAISE NOTICE '   - category kolonu sabit listeden seçilen değeri saklar';
-    RAISE NOTICE '   - category_id kolonu opsiyonel (geriye uyumluluk için)';
+    RAISE NOTICE '📋 Değişiklikler:';
+    RAISE NOTICE '   - category (TEXT) kolonu eklendi - sabit listeden değer saklar';
+    RAISE NOTICE '   - category_id artık NULLABLE - geriye uyumluluk için korundu';
     RAISE NOTICE '';
 END $$;

@@ -314,7 +314,7 @@ export default function InvoicesPage() {
       // If check payment, show check modal
       if (formData.payment_type === 'check') {
         setCheckData({ ...checkData, amount: totals.grandTotal })
-        setShowCheckModal = true
+        setShowCheckModal(true)
         // Will save check after modal
       }
 

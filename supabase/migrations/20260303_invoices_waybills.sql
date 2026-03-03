@@ -1,21 +1,3 @@
--- Önce customers tablosunun var olduğundan emin olalım (yoksa oluştur)
-CREATE TABLE IF NOT EXISTS customers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  customer_name VARCHAR(255) NOT NULL,
-  tax_number VARCHAR(50),
-  tax_office VARCHAR(100),
-  address TEXT,
-  city VARCHAR(100),
-  country VARCHAR(100) DEFAULT 'Türkiye',
-  phone VARCHAR(50),
-  email VARCHAR(255),
-  contact_person VARCHAR(255),
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Suppliers tablosunun var olduğundan emin olalım (yoksa oluştur)
 CREATE TABLE IF NOT EXISTS suppliers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,7 +24,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   invoice_number VARCHAR(100) NOT NULL,
   invoice_type VARCHAR(20) NOT NULL CHECK (invoice_type IN ('sales', 'purchase')),
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES customer_companies(id) ON DELETE SET NULL,
   supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
   invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
   due_date DATE,
@@ -62,7 +44,7 @@ CREATE TABLE IF NOT EXISTS waybills (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   waybill_number VARCHAR(100) NOT NULL,
   waybill_type VARCHAR(20) NOT NULL CHECK (waybill_type IN ('outgoing', 'incoming')),
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES customer_companies(id) ON DELETE SET NULL,
   supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
   waybill_date DATE NOT NULL DEFAULT CURRENT_DATE,
   status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'cancelled')),

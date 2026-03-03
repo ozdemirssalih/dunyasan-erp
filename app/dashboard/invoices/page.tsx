@@ -87,16 +87,16 @@ export default function InvoicesPage() {
     const [invoicesData, waybillsData, customersData, suppliersData] = await Promise.all([
       supabase
         .from('invoices')
-        .select('*, customer:customers(customer_name), supplier:suppliers(company_name)')
+        .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
         .eq('company_id', companyId)
         .order('invoice_date', { ascending: false }),
       supabase
         .from('waybills')
-        .select('*, customer:customers(customer_name), supplier:suppliers(company_name)')
+        .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
         .eq('company_id', companyId)
         .order('waybill_date', { ascending: false }),
       supabase
-        .from('customers')
+        .from('customer_companies')
         .select('*')
         .eq('company_id', companyId)
         .order('customer_name'),

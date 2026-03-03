@@ -164,7 +164,7 @@ export function CategoriesTab() {
   }
 
   return (
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -437,6 +437,6 @@ export function CategoriesTab() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   )
 }

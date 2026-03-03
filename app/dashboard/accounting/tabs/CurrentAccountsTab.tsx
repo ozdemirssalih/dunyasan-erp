@@ -251,7 +251,7 @@ export function CurrentAccountsTab() {
   }
 
   return (
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -764,6 +764,6 @@ export function CurrentAccountsTab() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   )
 }

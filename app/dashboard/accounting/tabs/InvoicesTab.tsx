@@ -349,8 +349,8 @@ export function InvoicesTab() {
   }
 
   return (
-      <div className="p-8">
-        {/* Header */}
+    <div className="p-8">
+      {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white mb-2">Faturalar</h1>
@@ -712,6 +712,6 @@ export function InvoicesTab() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   )
 }

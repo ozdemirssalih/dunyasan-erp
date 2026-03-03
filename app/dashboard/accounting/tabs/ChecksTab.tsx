@@ -287,8 +287,8 @@ export function ChecksTab() {
   }
 
   return (
-      <div className="p-8">
-        {/* Header */}
+    <div className="p-8">
+      {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white mb-2">Çek Yönetimi</h1>
@@ -706,6 +706,6 @@ export function ChecksTab() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   )
 }

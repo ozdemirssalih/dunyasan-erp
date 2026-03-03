@@ -267,8 +267,8 @@ export function PaymentAccountsTab() {
   }
 
   return (
-      <div className="space-y-6">
-        {/* Header */}
+    <div className="space-y-6">
+      {/* Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Kasa & Banka Hesapları</h1>
@@ -715,6 +715,6 @@ export function PaymentAccountsTab() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   )
 }

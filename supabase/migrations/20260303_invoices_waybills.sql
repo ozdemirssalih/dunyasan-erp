@@ -1,3 +1,41 @@
+-- Önce customers tablosunun var olduğundan emin olalım (yoksa oluştur)
+CREATE TABLE IF NOT EXISTS customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  customer_name VARCHAR(255) NOT NULL,
+  tax_number VARCHAR(50),
+  tax_office VARCHAR(100),
+  address TEXT,
+  city VARCHAR(100),
+  country VARCHAR(100) DEFAULT 'Türkiye',
+  phone VARCHAR(50),
+  email VARCHAR(255),
+  contact_person VARCHAR(255),
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Suppliers tablosunun var olduğundan emin olalım (yoksa oluştur)
+CREATE TABLE IF NOT EXISTS suppliers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  company_name VARCHAR(255) NOT NULL,
+  tax_number VARCHAR(50),
+  tax_office VARCHAR(100),
+  address TEXT,
+  city VARCHAR(100),
+  country VARCHAR(100) DEFAULT 'Türkiye',
+  phone VARCHAR(50),
+  email VARCHAR(255),
+  contact_person VARCHAR(255),
+  payment_terms VARCHAR(100),
+  is_active BOOLEAN DEFAULT true,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Faturalar Tablosu (Invoices)
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

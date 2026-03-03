@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { CreditCard, Plus, X, Save, Building2, TrendingUp, AlertCircle, ArrowRightLeft } from 'lucide-react'
 
@@ -40,7 +40,6 @@ interface PaymentAccount {
 }
 
 export default function ChecksPage() {
-  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [checks, setChecks] = useState<Check[]>([])
   const [currentAccounts, setCurrentAccounts] = useState<CurrentAccount[]>([])

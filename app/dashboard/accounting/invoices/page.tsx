@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { FileText, Plus, Trash2, Save, X, Search, Calendar } from 'lucide-react'
 
@@ -58,7 +58,6 @@ interface Invoice {
 }
 
 export default function InvoicesPage() {
-  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [invoices, setInvoices] = useState<Invoice[]>([])
 

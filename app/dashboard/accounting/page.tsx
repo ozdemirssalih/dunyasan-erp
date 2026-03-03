@@ -8,7 +8,7 @@ import {
   BarChart3, TrendingUp, TrendingDown, Wallet, DollarSign,
   Tag, Users, FileText, CreditCard, Calendar, Plus, Edit2,
   Trash2, X, Save, Search, Filter, ArrowUpRight, ArrowDownRight,
-  Building2
+  Building2, Download, ArrowLeftRight
 } from 'lucide-react'
 
 // ── Tab Türleri ───────────────
@@ -144,6 +144,7 @@ export default function AccountingPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showCheckModal, setShowCheckModal] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
 
   // Filter states
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'year' | 'all'>('month')
@@ -158,6 +159,17 @@ export default function AccountingPage() {
   })
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
 
+  // Form states - Account
+  const [accountForm, setAccountForm] = useState({
+    name: '',
+    type: 'cash' as 'cash' | 'bank',
+    currency: 'TRY',
+    current_balance: '',
+    iban: '',
+    bank_name: ''
+  })
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+
   // Form states - Transaction
   const [transactionForm, setTransactionForm] = useState({
     transaction_type: 'income' as 'income' | 'expense',
@@ -166,6 +178,43 @@ export default function AccountingPage() {
     transaction_date: new Date().toISOString().split('T')[0],
     category_id: '',
     payment_account_id: ''
+  })
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
+
+  // Form states - Invoice
+  const [invoiceForm, setInvoiceForm] = useState({
+    invoice_number: '',
+    invoice_type: 'sales' as 'sales' | 'purchase',
+    customer_id: '',
+    supplier_id: '',
+    invoice_date: new Date().toISOString().split('T')[0],
+    due_date: '',
+    total_amount: '',
+    tax_amount: '',
+    status: 'draft' as 'draft' | 'approved' | 'paid' | 'cancelled'
+  })
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
+
+  // Form states - Check
+  const [checkForm, setCheckForm] = useState({
+    check_number: '',
+    check_type: 'received' as 'received' | 'issued',
+    customer_id: '',
+    supplier_id: '',
+    amount: '',
+    due_date: '',
+    status: 'portfolio' as 'portfolio' | 'deposited' | 'collected' | 'bounced' | 'cancelled',
+    bank_name: ''
+  })
+  const [editingCheckId, setEditingCheckId] = useState<string | null>(null)
+
+  // Form states - Transfer
+  const [transferForm, setTransferForm] = useState({
+    from_account_id: '',
+    to_account_id: '',
+    amount: '',
+    description: '',
+    transfer_date: new Date().toISOString().split('T')[0]
   })
 
   // ── useEffect Hooks ───────────────
@@ -309,7 +358,7 @@ export default function AccountingPage() {
       `)
       .eq('company_id', companyId)
       .order('transaction_date', { ascending: false })
-      .limit(100)
+      .limit(200)
 
     setTransactions(data || [])
   }
@@ -427,6 +476,66 @@ export default function AccountingPage() {
     }
   }
 
+  // ── CRUD Functions - Account ───────────────
+  const handleSaveAccount = async () => {
+    if (!accountForm.name.trim() || !companyId) {
+      alert('Hesap adı zorunludur!')
+      return
+    }
+
+    try {
+      if (editingAccountId) {
+        await supabase
+          .from('payment_accounts')
+          .update({
+            name: accountForm.name,
+            type: accountForm.type,
+            currency: accountForm.currency,
+            iban: accountForm.iban || null,
+            bank_name: accountForm.bank_name || null
+          })
+          .eq('id', editingAccountId)
+      } else {
+        await supabase
+          .from('payment_accounts')
+          .insert({
+            company_id: companyId,
+            name: accountForm.name,
+            type: accountForm.type,
+            currency: accountForm.currency,
+            current_balance: parseFloat(accountForm.current_balance) || 0,
+            iban: accountForm.iban || null,
+            bank_name: accountForm.bank_name || null,
+            is_active: true
+          })
+      }
+
+      setShowAccountModal(false)
+      setAccountForm({ name: '', type: 'cash', currency: 'TRY', current_balance: '', iban: '', bank_name: '' })
+      setEditingAccountId(null)
+      loadAccounts()
+    } catch (error) {
+      console.error('Error saving account:', error)
+      alert('Hesap kaydedilirken hata oluştu!')
+    }
+  }
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm('Bu hesabı silmek istediğinizden emin misiniz?')) return
+
+    try {
+      await supabase
+        .from('payment_accounts')
+        .update({ is_active: false })
+        .eq('id', id)
+
+      loadAccounts()
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      alert('Hesap silinirken hata oluştu!')
+    }
+  }
+
   // ── CRUD Functions - Transaction ───────────────
   const handleSaveTransaction = async () => {
     if (!transactionForm.amount || !transactionForm.category_id || !transactionForm.payment_account_id || !companyId) {
@@ -435,32 +544,46 @@ export default function AccountingPage() {
     }
 
     try {
-      await supabase
-        .from('accounting_transactions')
-        .insert({
-          company_id: companyId,
-          transaction_type: transactionForm.transaction_type,
-          amount: parseFloat(transactionForm.amount),
-          description: transactionForm.description,
-          transaction_date: transactionForm.transaction_date,
-          category_id: transactionForm.category_id,
-          payment_account_id: transactionForm.payment_account_id,
-          created_by: currentUserId
-        })
-
-      // Update payment account balance
-      const account = accounts.find(a => a.id === transactionForm.payment_account_id)
-      if (account) {
-        const amountChange = transactionForm.transaction_type === 'income'
-          ? parseFloat(transactionForm.amount)
-          : -parseFloat(transactionForm.amount)
-
+      if (editingTransactionId) {
         await supabase
-          .from('payment_accounts')
+          .from('accounting_transactions')
           .update({
-            current_balance: parseFloat(account.current_balance.toString()) + amountChange
+            transaction_type: transactionForm.transaction_type,
+            amount: parseFloat(transactionForm.amount),
+            description: transactionForm.description,
+            transaction_date: transactionForm.transaction_date,
+            category_id: transactionForm.category_id,
+            payment_account_id: transactionForm.payment_account_id
           })
-          .eq('id', account.id)
+          .eq('id', editingTransactionId)
+      } else {
+        await supabase
+          .from('accounting_transactions')
+          .insert({
+            company_id: companyId,
+            transaction_type: transactionForm.transaction_type,
+            amount: parseFloat(transactionForm.amount),
+            description: transactionForm.description,
+            transaction_date: transactionForm.transaction_date,
+            category_id: transactionForm.category_id,
+            payment_account_id: transactionForm.payment_account_id,
+            created_by: currentUserId
+          })
+
+        // Update payment account balance
+        const account = accounts.find(a => a.id === transactionForm.payment_account_id)
+        if (account) {
+          const amountChange = transactionForm.transaction_type === 'income'
+            ? parseFloat(transactionForm.amount)
+            : -parseFloat(transactionForm.amount)
+
+          await supabase
+            .from('payment_accounts')
+            .update({
+              current_balance: parseFloat(account.current_balance.toString()) + amountChange
+            })
+            .eq('id', account.id)
+        }
       }
 
       setShowTransactionModal(false)
@@ -472,10 +595,235 @@ export default function AccountingPage() {
         category_id: '',
         payment_account_id: ''
       })
+      setEditingTransactionId(null)
       loadOverviewData()
     } catch (error) {
       console.error('Error saving transaction:', error)
       alert('İşlem kaydedilirken hata oluştu!')
+    }
+  }
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm('Bu işlemi silmek istediğinizden emin misiniz?')) return
+
+    try {
+      await supabase
+        .from('accounting_transactions')
+        .delete()
+        .eq('id', id)
+
+      loadTransactions()
+      loadAccounts()
+    } catch (error) {
+      console.error('Error deleting transaction:', error)
+      alert('İşlem silinirken hata oluştu!')
+    }
+  }
+
+  // ── CRUD Functions - Invoice ───────────────
+  const handleSaveInvoice = async () => {
+    if (!invoiceForm.invoice_number || !invoiceForm.total_amount || !companyId) {
+      alert('Fatura numarası ve tutar zorunludur!')
+      return
+    }
+
+    try {
+      if (editingInvoiceId) {
+        await supabase
+          .from('invoices')
+          .update({
+            invoice_number: invoiceForm.invoice_number,
+            invoice_type: invoiceForm.invoice_type,
+            customer_id: invoiceForm.customer_id || null,
+            supplier_id: invoiceForm.supplier_id || null,
+            invoice_date: invoiceForm.invoice_date,
+            due_date: invoiceForm.due_date || null,
+            total_amount: parseFloat(invoiceForm.total_amount),
+            tax_amount: parseFloat(invoiceForm.tax_amount) || 0,
+            status: invoiceForm.status
+          })
+          .eq('id', editingInvoiceId)
+      } else {
+        await supabase
+          .from('invoices')
+          .insert({
+            company_id: companyId,
+            invoice_number: invoiceForm.invoice_number,
+            invoice_type: invoiceForm.invoice_type,
+            customer_id: invoiceForm.customer_id || null,
+            supplier_id: invoiceForm.supplier_id || null,
+            invoice_date: invoiceForm.invoice_date,
+            due_date: invoiceForm.due_date || null,
+            total_amount: parseFloat(invoiceForm.total_amount),
+            tax_amount: parseFloat(invoiceForm.tax_amount) || 0,
+            status: invoiceForm.status
+          })
+      }
+
+      setShowInvoiceModal(false)
+      setInvoiceForm({
+        invoice_number: '',
+        invoice_type: 'sales',
+        customer_id: '',
+        supplier_id: '',
+        invoice_date: new Date().toISOString().split('T')[0],
+        due_date: '',
+        total_amount: '',
+        tax_amount: '',
+        status: 'draft'
+      })
+      setEditingInvoiceId(null)
+      loadInvoices()
+    } catch (error) {
+      console.error('Error saving invoice:', error)
+      alert('Fatura kaydedilirken hata oluştu!')
+    }
+  }
+
+  const handleDeleteInvoice = async (id: string) => {
+    if (!confirm('Bu faturayı silmek istediğinizden emin misiniz?')) return
+
+    try {
+      await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id)
+
+      loadInvoices()
+    } catch (error) {
+      console.error('Error deleting invoice:', error)
+      alert('Fatura silinirken hata oluştu!')
+    }
+  }
+
+  // ── CRUD Functions - Check ───────────────
+  const handleSaveCheck = async () => {
+    if (!checkForm.check_number || !checkForm.amount || !companyId) {
+      alert('Çek numarası ve tutar zorunludur!')
+      return
+    }
+
+    try {
+      if (editingCheckId) {
+        await supabase
+          .from('checks')
+          .update({
+            check_number: checkForm.check_number,
+            check_type: checkForm.check_type,
+            customer_id: checkForm.customer_id || null,
+            supplier_id: checkForm.supplier_id || null,
+            amount: parseFloat(checkForm.amount),
+            due_date: checkForm.due_date,
+            status: checkForm.status,
+            bank_name: checkForm.bank_name || null
+          })
+          .eq('id', editingCheckId)
+      } else {
+        await supabase
+          .from('checks')
+          .insert({
+            company_id: companyId,
+            check_number: checkForm.check_number,
+            check_type: checkForm.check_type,
+            customer_id: checkForm.customer_id || null,
+            supplier_id: checkForm.supplier_id || null,
+            amount: parseFloat(checkForm.amount),
+            due_date: checkForm.due_date,
+            status: checkForm.status,
+            bank_name: checkForm.bank_name || null
+          })
+      }
+
+      setShowCheckModal(false)
+      setCheckForm({
+        check_number: '',
+        check_type: 'received',
+        customer_id: '',
+        supplier_id: '',
+        amount: '',
+        due_date: '',
+        status: 'portfolio',
+        bank_name: ''
+      })
+      setEditingCheckId(null)
+      loadChecks()
+    } catch (error) {
+      console.error('Error saving check:', error)
+      alert('Çek kaydedilirken hata oluştu!')
+    }
+  }
+
+  const handleDeleteCheck = async (id: string) => {
+    if (!confirm('Bu çeki silmek istediğinizden emin misiniz?')) return
+
+    try {
+      await supabase
+        .from('checks')
+        .delete()
+        .eq('id', id)
+
+      loadChecks()
+    } catch (error) {
+      console.error('Error deleting check:', error)
+      alert('Çek silinirken hata oluştu!')
+    }
+  }
+
+  // ── Transfer Function ───────────────
+  const handleTransfer = async () => {
+    if (!transferForm.from_account_id || !transferForm.to_account_id || !transferForm.amount || !companyId) {
+      alert('Tüm alanları doldurunuz!')
+      return
+    }
+
+    if (transferForm.from_account_id === transferForm.to_account_id) {
+      alert('Aynı hesaplar arası transfer yapılamaz!')
+      return
+    }
+
+    try {
+      const amount = parseFloat(transferForm.amount)
+      const fromAccount = accounts.find(a => a.id === transferForm.from_account_id)
+      const toAccount = accounts.find(a => a.id === transferForm.to_account_id)
+
+      if (!fromAccount || !toAccount) return
+
+      // Update balances
+      await supabase
+        .from('payment_accounts')
+        .update({ current_balance: parseFloat(fromAccount.current_balance.toString()) - amount })
+        .eq('id', fromAccount.id)
+
+      await supabase
+        .from('payment_accounts')
+        .update({ current_balance: parseFloat(toAccount.current_balance.toString()) + amount })
+        .eq('id', toAccount.id)
+
+      // Record transfer
+      await supabase
+        .from('account_transfers')
+        .insert({
+          company_id: companyId,
+          from_account_id: transferForm.from_account_id,
+          to_account_id: transferForm.to_account_id,
+          amount: amount,
+          description: transferForm.description,
+          transfer_date: transferForm.transfer_date,
+          created_by: currentUserId
+        })
+
+      setShowTransferModal(false)
+      setTransferForm({
+        from_account_id: '',
+        to_account_id: '',
+        amount: '',
+        description: '',
+        transfer_date: new Date().toISOString().split('T')[0]
+      })
+      loadAccounts()
+    } catch (error) {
+      console.error('Error transferring:', error)
+      alert('Transfer sırasında hata oluştu!')
     }
   }
 
@@ -490,6 +838,34 @@ export default function AccountingPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR')
+  }
+
+  const getStatusLabel = (status: string) => {
+    const labels: { [key: string]: string } = {
+      draft: 'Taslak',
+      approved: 'Onaylandı',
+      paid: 'Ödendi',
+      cancelled: 'İptal',
+      portfolio: 'Portföy',
+      deposited: 'Bankaya Yatırıldı',
+      collected: 'Tahsil Edildi',
+      bounced: 'Karşılıksız'
+    }
+    return labels[status] || status
+  }
+
+  const getStatusColor = (status: string) => {
+    const colors: { [key: string]: string } = {
+      draft: 'bg-gray-100 text-gray-800',
+      approved: 'bg-blue-100 text-blue-800',
+      paid: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+      portfolio: 'bg-yellow-100 text-yellow-800',
+      deposited: 'bg-blue-100 text-blue-800',
+      collected: 'bg-green-100 text-green-800',
+      bounced: 'bg-red-100 text-red-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
   }
 
   // ── Tab Configuration ───────────────
@@ -637,13 +1013,13 @@ export default function AccountingPage() {
                 </div>
 
                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                  <div className="text-sm text-gray-600 mb-1">Müşteriler</div>
-                  <div className="text-xl font-semibold text-blue-600">{stats.totalCustomers}</div>
+                  <div className="text-sm text-gray-600 mb-1">Bekleyen Fatura</div>
+                  <div className="text-xl font-semibold text-orange-600">{stats.pendingInvoices}</div>
                 </div>
 
                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                  <div className="text-sm text-gray-600 mb-1">Tedarikçiler</div>
-                  <div className="text-xl font-semibold text-blue-600">{stats.totalSuppliers}</div>
+                  <div className="text-sm text-gray-600 mb-1">Portföy Çek</div>
+                  <div className="text-xl font-semibold text-blue-600">{stats.portfolioChecks}</div>
                 </div>
               </div>
 
@@ -699,6 +1075,115 @@ export default function AccountingPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TRANSACTIONS TAB */}
+          {activeTab === 'transactions' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">İşlemler</h2>
+                {canCreate('accounting') && (
+                  <button
+                    onClick={() => {
+                      setEditingTransactionId(null)
+                      setTransactionForm({
+                        transaction_type: 'income',
+                        amount: '',
+                        description: '',
+                        transaction_date: new Date().toISOString().split('T')[0],
+                        category_id: '',
+                        payment_account_id: ''
+                      })
+                      setShowTransactionModal(true)
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yeni İşlem
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Açıklama</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Kategori</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Hesap</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
+                      {(canEdit('accounting') || canDelete('accounting')) && (
+                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {transactions.map((txn) => (
+                      <tr key={txn.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm text-gray-600">{formatDate(txn.transaction_date)}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            txn.transaction_type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {txn.transaction_type === 'income' ? 'Gelir' : 'Gider'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{txn.description}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{txn.category?.name || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{txn.payment_account?.name || '-'}</td>
+                        <td className={`px-6 py-4 text-sm text-right font-semibold ${
+                          txn.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {formatCurrency(parseFloat(txn.amount.toString()))}
+                        </td>
+                        {(canEdit('accounting') || canDelete('accounting')) && (
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex gap-2 justify-end">
+                              {canEdit('accounting') && (
+                                <button
+                                  onClick={() => {
+                                    setEditingTransactionId(txn.id)
+                                    setTransactionForm({
+                                      transaction_type: txn.transaction_type,
+                                      amount: txn.amount.toString(),
+                                      description: txn.description,
+                                      transaction_date: txn.transaction_date,
+                                      category_id: txn.category_id,
+                                      payment_account_id: txn.payment_account_id
+                                    })
+                                    setShowTransactionModal(true)
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 p-2"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canDelete('accounting') && (
+                                <button
+                                  onClick={() => handleDeleteTransaction(txn.id)}
+                                  className="text-gray-400 hover:text-red-600 p-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {transactions.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                          Henüz işlem bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -843,6 +1328,104 @@ export default function AccountingPage() {
             </div>
           )}
 
+          {/* ACCOUNTS TAB */}
+          {activeTab === 'accounts' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Kasa & Banka Hesapları</h2>
+                <div className="flex gap-2">
+                  {canCreate('accounting') && (
+                    <>
+                      <button
+                        onClick={() => setShowTransferModal(true)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+                      >
+                        <ArrowLeftRight className="w-4 h-4" />
+                        Transfer
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingAccountId(null)
+                          setAccountForm({ name: '', type: 'cash', currency: 'TRY', current_balance: '', iban: '', bank_name: '' })
+                          setShowAccountModal(true)
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Yeni Hesap
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {accounts.map((acc) => (
+                  <div key={acc.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Wallet className="w-5 h-5 text-blue-600" />
+                          <h3 className="text-lg font-semibold text-gray-900">{acc.name}</h3>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          acc.type === 'cash' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {acc.type === 'cash' ? 'Kasa' : 'Banka'}
+                        </span>
+                      </div>
+                      {canEdit('accounting') && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingAccountId(acc.id)
+                              setAccountForm({
+                                name: acc.name,
+                                type: acc.type,
+                                currency: acc.currency,
+                                current_balance: acc.current_balance.toString(),
+                                iban: acc.iban || '',
+                                bank_name: acc.bank_name || ''
+                              })
+                              setShowAccountModal(true)
+                            }}
+                            className="text-gray-400 hover:text-blue-600 p-2"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {canDelete('accounting') && (
+                            <button
+                              onClick={() => handleDeleteAccount(acc.id)}
+                              className="text-gray-400 hover:text-red-600 p-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-3xl font-bold text-gray-900">
+                        {formatCurrency(parseFloat(acc.current_balance.toString()))}
+                      </div>
+                      {acc.type === 'bank' && acc.bank_name && (
+                        <div className="text-sm text-gray-600">
+                          <div>{acc.bank_name}</div>
+                          {acc.iban && <div className="text-xs text-gray-500">{acc.iban}</div>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {accounts.length === 0 && (
+                  <div className="col-span-2 bg-white border border-gray-200 rounded-lg p-12 text-center text-gray-500">
+                    Henüz hesap bulunmuyor
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* CUSTOMERS TAB */}
           {activeTab === 'customers' && (
             <div>
@@ -923,13 +1506,235 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* OTHER TABS - Placeholder */}
-          {!['overview', 'categories', 'customers', 'suppliers'].includes(activeTab) && (
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-12 text-center">
-              <div className="text-xl font-medium text-gray-600 mb-2">
-                {tabs.find(t => t.id === activeTab)?.label}
+          {/* INVOICES TAB */}
+          {activeTab === 'invoices' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Faturalar</h2>
+                {canCreate('accounting') && (
+                  <button
+                    onClick={() => {
+                      setEditingInvoiceId(null)
+                      setInvoiceForm({
+                        invoice_number: '',
+                        invoice_type: 'sales',
+                        customer_id: '',
+                        supplier_id: '',
+                        invoice_date: new Date().toISOString().split('T')[0],
+                        due_date: '',
+                        total_amount: '',
+                        tax_amount: '',
+                        status: 'draft'
+                      })
+                      setShowInvoiceModal(true)
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yeni Fatura
+                  </button>
+                )}
               </div>
-              <div className="text-sm text-gray-500">Bu bölüm yakında eklenecek</div>
+
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fatura No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Vade</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
+                      {(canEdit('accounting') || canDelete('accounting')) && (
+                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{inv.invoice_number}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            inv.invoice_type === 'sales' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {inv.invoice_type === 'sales' ? 'Satış' : 'Alış'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{formatDate(inv.invoice_date)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{inv.due_date ? formatDate(inv.due_date) : '-'}</td>
+                        <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
+                          {formatCurrency(parseFloat(inv.total_amount.toString()))}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(inv.status)}`}>
+                            {getStatusLabel(inv.status)}
+                          </span>
+                        </td>
+                        {(canEdit('accounting') || canDelete('accounting')) && (
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex gap-2 justify-end">
+                              {canEdit('accounting') && (
+                                <button
+                                  onClick={() => {
+                                    setEditingInvoiceId(inv.id)
+                                    setInvoiceForm({
+                                      invoice_number: inv.invoice_number,
+                                      invoice_type: inv.invoice_type,
+                                      customer_id: inv.customer_id || '',
+                                      supplier_id: inv.supplier_id || '',
+                                      invoice_date: inv.invoice_date,
+                                      due_date: inv.due_date || '',
+                                      total_amount: inv.total_amount.toString(),
+                                      tax_amount: inv.tax_amount.toString(),
+                                      status: inv.status
+                                    })
+                                    setShowInvoiceModal(true)
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 p-2"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canDelete('accounting') && (
+                                <button
+                                  onClick={() => handleDeleteInvoice(inv.id)}
+                                  className="text-gray-400 hover:text-red-600 p-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {invoices.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                          Henüz fatura bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* CHECKS TAB */}
+          {activeTab === 'checks' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Çekler</h2>
+                {canCreate('accounting') && (
+                  <button
+                    onClick={() => {
+                      setEditingCheckId(null)
+                      setCheckForm({
+                        check_number: '',
+                        check_type: 'received',
+                        customer_id: '',
+                        supplier_id: '',
+                        amount: '',
+                        due_date: '',
+                        status: 'portfolio',
+                        bank_name: ''
+                      })
+                      setShowCheckModal(true)
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yeni Çek
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Çek No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Banka</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Vade</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
+                      {(canEdit('accounting') || canDelete('accounting')) && (
+                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {checks.map((chk) => (
+                      <tr key={chk.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{chk.check_number}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            chk.check_type === 'received' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {chk.check_type === 'received' ? 'Alınan' : 'Verilen'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{chk.bank_name || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{formatDate(chk.due_date)}</td>
+                        <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
+                          {formatCurrency(parseFloat(chk.amount.toString()))}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(chk.status)}`}>
+                            {getStatusLabel(chk.status)}
+                          </span>
+                        </td>
+                        {(canEdit('accounting') || canDelete('accounting')) && (
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex gap-2 justify-end">
+                              {canEdit('accounting') && (
+                                <button
+                                  onClick={() => {
+                                    setEditingCheckId(chk.id)
+                                    setCheckForm({
+                                      check_number: chk.check_number,
+                                      check_type: chk.check_type,
+                                      customer_id: chk.customer_id || '',
+                                      supplier_id: chk.supplier_id || '',
+                                      amount: chk.amount.toString(),
+                                      due_date: chk.due_date,
+                                      status: chk.status,
+                                      bank_name: chk.bank_name || ''
+                                    })
+                                    setShowCheckModal(true)
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 p-2"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canDelete('accounting') && (
+                                <button
+                                  onClick={() => handleDeleteCheck(chk.id)}
+                                  className="text-gray-400 hover:text-red-600 p-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {checks.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                          Henüz çek bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -1040,17 +1845,122 @@ export default function AccountingPage() {
           </div>
         )}
 
+        {/* Account Modal */}
+        {showAccountModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {editingAccountId ? 'Hesap Düzenle' : 'Yeni Hesap'}
+                  </h3>
+                  <button onClick={() => setShowAccountModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hesap Adı *</label>
+                  <input
+                    type="text"
+                    value={accountForm.name}
+                    onChange={(e) => setAccountForm({...accountForm, name: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAccountForm({...accountForm, type: 'cash'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        accountForm.type === 'cash' ? 'bg-green-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Kasa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccountForm({...accountForm, type: 'bank'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        accountForm.type === 'bank' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Banka
+                    </button>
+                  </div>
+                </div>
+
+                {!editingAccountId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Başlangıç Bakiyesi</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={accountForm.current_balance}
+                      onChange={(e) => setAccountForm({...accountForm, current_balance: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
+                )}
+
+                {accountForm.type === 'bank' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Banka Adı</label>
+                      <input
+                        type="text"
+                        value={accountForm.bank_name}
+                        onChange={(e) => setAccountForm({...accountForm, bank_name: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">IBAN</label>
+                      <input
+                        type="text"
+                        value={accountForm.iban}
+                        onChange={(e) => setAccountForm({...accountForm, iban: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => setShowAccountModal(false)}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveAccount}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Transaction Modal */}
         {showTransactionModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-gray-900">Yeni İşlem</h3>
-                  <button
-                    onClick={() => setShowTransactionModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {editingTransactionId ? 'İşlem Düzenle' : 'Yeni İşlem'}
+                  </h3>
+                  <button onClick={() => setShowTransactionModal(false)} className="text-gray-400 hover:text-gray-600">
                     <X className="w-6 h-6" />
                   </button>
                 </div>
@@ -1063,10 +1973,8 @@ export default function AccountingPage() {
                     <button
                       type="button"
                       onClick={() => setTransactionForm({...transactionForm, transaction_type: 'income'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
-                        transactionForm.transaction_type === 'income'
-                          ? 'bg-green-600 text-white border-green-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-600'
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        transactionForm.transaction_type === 'income' ? 'bg-green-600 text-white' : 'bg-white text-gray-700'
                       }`}
                     >
                       Gelir
@@ -1074,10 +1982,8 @@ export default function AccountingPage() {
                     <button
                       type="button"
                       onClick={() => setTransactionForm({...transactionForm, transaction_type: 'expense'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
-                        transactionForm.transaction_type === 'expense'
-                          ? 'bg-red-600 text-white border-red-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-600'
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        transactionForm.transaction_type === 'expense' ? 'bg-red-600 text-white' : 'bg-white text-gray-700'
                       }`}
                     >
                       Gider
@@ -1092,8 +1998,7 @@ export default function AccountingPage() {
                     step="0.01"
                     value={transactionForm.amount}
                     onChange={(e) => setTransactionForm({...transactionForm, amount: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0.00"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                   />
                 </div>
 
@@ -1102,14 +2007,12 @@ export default function AccountingPage() {
                   <select
                     value={transactionForm.category_id}
                     onChange={(e) => setTransactionForm({...transactionForm, category_id: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                   >
                     <option value="">Kategori seçin</option>
-                    {categories
-                      .filter(c => c.type === transactionForm.transaction_type)
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                    {categories.filter(c => c.type === transactionForm.transaction_type).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1118,11 +2021,11 @@ export default function AccountingPage() {
                   <select
                     value={transactionForm.payment_account_id}
                     onChange={(e) => setTransactionForm({...transactionForm, payment_account_id: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                   >
                     <option value="">Hesap seçin</option>
                     {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.current_balance.toString()))})</option>
+                      <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1133,7 +2036,7 @@ export default function AccountingPage() {
                     type="date"
                     value={transactionForm.transaction_date}
                     onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                   />
                 </div>
 
@@ -1142,9 +2045,8 @@ export default function AccountingPage() {
                   <textarea
                     value={transactionForm.description}
                     onChange={(e) => setTransactionForm({...transactionForm, description: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     rows={3}
-                    placeholder="Açıklama girin"
                   />
                 </div>
               </div>
@@ -1152,16 +2054,419 @@ export default function AccountingPage() {
               <div className="p-6 border-t border-gray-200 flex gap-3">
                 <button
                   onClick={() => setShowTransactionModal(false)}
-                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
                 >
                   İptal
                 </button>
                 <button
                   onClick={handleSaveTransaction}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Invoice Modal */}
+        {showInvoiceModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 sticky top-0 bg-white">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {editingInvoiceId ? 'Fatura Düzenle' : 'Yeni Fatura'}
+                  </h3>
+                  <button onClick={() => setShowInvoiceModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fatura No *</label>
+                  <input
+                    type="text"
+                    value={invoiceForm.invoice_number}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, invoice_number: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceForm({...invoiceForm, invoice_type: 'sales'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        invoiceForm.invoice_type === 'sales' ? 'bg-green-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Satış
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceForm({...invoiceForm, invoice_type: 'purchase'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        invoiceForm.invoice_type === 'purchase' ? 'bg-orange-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Alış
+                    </button>
+                  </div>
+                </div>
+
+                {invoiceForm.invoice_type === 'sales' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
+                    <select
+                      value={invoiceForm.customer_id}
+                      onChange={(e) => setInvoiceForm({...invoiceForm, customer_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Müşteri seçin</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.customer_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {invoiceForm.invoice_type === 'purchase' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+                    <select
+                      value={invoiceForm.supplier_id}
+                      onChange={(e) => setInvoiceForm({...invoiceForm, supplier_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Tedarikçi seçin</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>{s.company_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Tarihi *</label>
+                  <input
+                    type="date"
+                    value={invoiceForm.invoice_date}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, invoice_date: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi</label>
+                  <input
+                    type="date"
+                    value={invoiceForm.due_date}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, due_date: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Toplam Tutar *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={invoiceForm.total_amount}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, total_amount: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">KDV Tutarı</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={invoiceForm.tax_amount}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, tax_amount: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Durum *</label>
+                  <select
+                    value={invoiceForm.status}
+                    onChange={(e) => setInvoiceForm({...invoiceForm, status: e.target.value as any})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="draft">Taslak</option>
+                    <option value="approved">Onaylandı</option>
+                    <option value="paid">Ödendi</option>
+                    <option value="cancelled">İptal</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3 sticky bottom-0 bg-white">
+                <button
+                  onClick={() => setShowInvoiceModal(false)}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveInvoice}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Check Modal */}
+        {showCheckModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 sticky top-0 bg-white">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {editingCheckId ? 'Çek Düzenle' : 'Yeni Çek'}
+                  </h3>
+                  <button onClick={() => setShowCheckModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Çek No *</label>
+                  <input
+                    type="text"
+                    value={checkForm.check_number}
+                    onChange={(e) => setCheckForm({...checkForm, check_number: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCheckForm({...checkForm, check_type: 'received'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        checkForm.check_type === 'received' ? 'bg-green-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Alınan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckForm({...checkForm, check_type: 'issued'})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        checkForm.check_type === 'issued' ? 'bg-orange-600 text-white' : 'bg-white text-gray-700'
+                      }`}
+                    >
+                      Verilen
+                    </button>
+                  </div>
+                </div>
+
+                {checkForm.check_type === 'received' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
+                    <select
+                      value={checkForm.customer_id}
+                      onChange={(e) => setCheckForm({...checkForm, customer_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Müşteri seçin</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.customer_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {checkForm.check_type === 'issued' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+                    <select
+                      value={checkForm.supplier_id}
+                      onChange={(e) => setCheckForm({...checkForm, supplier_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Tedarikçi seçin</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>{s.company_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={checkForm.amount}
+                    onChange={(e) => setCheckForm({...checkForm, amount: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi *</label>
+                  <input
+                    type="date"
+                    value={checkForm.due_date}
+                    onChange={(e) => setCheckForm({...checkForm, due_date: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Banka</label>
+                  <input
+                    type="text"
+                    value={checkForm.bank_name}
+                    onChange={(e) => setCheckForm({...checkForm, bank_name: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Durum *</label>
+                  <select
+                    value={checkForm.status}
+                    onChange={(e) => setCheckForm({...checkForm, status: e.target.value as any})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="portfolio">Portföy</option>
+                    <option value="deposited">Bankaya Yatırıldı</option>
+                    <option value="collected">Tahsil Edildi</option>
+                    <option value="bounced">Karşılıksız</option>
+                    <option value="cancelled">İptal</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3 sticky bottom-0 bg-white">
+                <button
+                  onClick={() => setShowCheckModal(false)}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveCheck}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Transfer Modal */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">Hesaplar Arası Transfer</h3>
+                  <button onClick={() => setShowTransferModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Gönderen Hesap *</label>
+                  <select
+                    value={transferForm.from_account_id}
+                    onChange={(e) => setTransferForm({...transferForm, from_account_id: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="">Hesap seçin</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.current_balance.toString()))})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-center">
+                  <ArrowDownRight className="w-6 h-6 text-purple-600" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Alıcı Hesap *</label>
+                  <select
+                    value={transferForm.to_account_id}
+                    onChange={(e) => setTransferForm({...transferForm, to_account_id: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="">Hesap seçin</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.current_balance.toString()))})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={transferForm.amount}
+                    onChange={(e) => setTransferForm({...transferForm, amount: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
+                  <input
+                    type="date"
+                    value={transferForm.transfer_date}
+                    onChange={(e) => setTransferForm({...transferForm, transfer_date: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
+                  <textarea
+                    value={transferForm.description}
+                    onChange={(e) => setTransferForm({...transferForm, description: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleTransfer}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  Transfer Yap
                 </button>
               </div>
             </div>

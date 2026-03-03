@@ -351,15 +351,13 @@ export default function AccountingPage() {
               ))}
             </div>
 
-            <PermissionGuard module="accounting" permission="create">
-              <button
-                onClick={() => setShowTransactionModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Yeni İşlem
-              </button>
-            </PermissionGuard>
+            <button
+              onClick={() => setShowTransactionModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Yeni İşlem
+            </button>
           </div>
         </div>
 

@@ -259,30 +259,28 @@ export default function CurrentAccountsPage() {
             <h1 className="text-3xl font-bold text-gray-900">Cari Hesaplar</h1>
             <p className="text-gray-600 mt-1">Müşteri ve tedarikçi hesaplarını yönetin</p>
           </div>
-          <PermissionGuard module="accounting" permission="create">
-            <button
-              onClick={() => {
-                setEditingAccount(null)
-                setForm({
-                  type: 'customer',
-                  code: '',
-                  name: '',
-                  tax_office: '',
-                  tax_number: '',
-                  email: '',
-                  phone: '',
-                  address: '',
-                  credit_limit: 0,
-                  notes: '',
-                })
-                setShowModal(true)
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
-            >
-              <Plus className="w-5 h-5" />
-              Yeni Cari Hesap
-            </button>
-          </PermissionGuard>
+          <button
+            onClick={() => {
+              setEditingAccount(null)
+              setForm({
+                type: 'customer',
+                code: '',
+                name: '',
+                tax_office: '',
+                tax_number: '',
+                email: '',
+                phone: '',
+                address: '',
+                credit_limit: 0,
+                notes: '',
+              })
+              setShowModal(true)
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Yeni Cari Hesap
+          </button>
         </div>
 
         {/* Stats */}

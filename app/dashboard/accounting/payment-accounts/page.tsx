@@ -276,35 +276,33 @@ export default function PaymentAccountsPage() {
             <p className="text-gray-600 mt-1">Nakit ve banka hesaplarınızı yönetin</p>
           </div>
           <div className="flex gap-3">
-            <PermissionGuard module="accounting" permission="create">
-              <button
-                onClick={() => setShowTransferModal(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
-              >
-                <ArrowRightLeft className="w-5 h-5" />
-                Transfer
-              </button>
-              <button
-                onClick={() => {
-                  setEditingAccount(null)
-                  setForm({
-                    name: '',
-                    type: 'cash',
-                    currency: 'TRY',
-                    current_balance: 0,
-                    bank_name: '',
-                    iban: '',
-                    account_number: '',
-                    description: '',
-                  })
-                  setShowModal(true)
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Yeni Hesap
-              </button>
-            </PermissionGuard>
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+            >
+              <ArrowRightLeft className="w-5 h-5" />
+              Transfer
+            </button>
+            <button
+              onClick={() => {
+                setEditingAccount(null)
+                setForm({
+                  name: '',
+                  type: 'cash',
+                  currency: 'TRY',
+                  current_balance: 0,
+                  bank_name: '',
+                  iban: '',
+                  account_number: '',
+                  description: '',
+                })
+                setShowModal(true)
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Yeni Hesap
+            </button>
           </div>
         </div>
 

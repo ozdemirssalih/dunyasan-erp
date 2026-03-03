@@ -295,15 +295,13 @@ export default function ChecksPage() {
             <h1 className="text-2xl font-bold text-white mb-2">Çek Yönetimi</h1>
             <p className="text-gray-400">Alınan ve verilen çekleri yönetin</p>
           </div>
-          <PermissionGuard module="accounting" permission="create">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Yeni Çek
-            </button>
-          </PermissionGuard>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Yeni Çek
+          </button>
         </div>
 
         {/* Tabs */}

@@ -172,19 +172,17 @@ export default function CategoriesPage() {
             <h1 className="text-3xl font-bold text-gray-900">Gelir/Gider Kategorileri</h1>
             <p className="text-gray-600 mt-1">İşlem kategorilerini yönetin</p>
           </div>
-          <PermissionGuard module="accounting" permission="create">
-            <button
-              onClick={() => {
-                setEditingCategory(null)
-                setForm({ name: '', type: 'income', description: '', color: '#3B82F6' })
-                setShowModal(true)
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
-            >
-              <Plus className="w-5 h-5" />
-              Yeni Kategori
-            </button>
-          </PermissionGuard>
+          <button
+            onClick={() => {
+              setEditingCategory(null)
+              setForm({ name: '', type: 'income', description: '', color: '#3B82F6' })
+              setShowModal(true)
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Yeni Kategori
+          </button>
         </div>
 
         {/* Stats */}

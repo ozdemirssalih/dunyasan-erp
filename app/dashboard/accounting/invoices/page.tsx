@@ -357,15 +357,13 @@ export default function InvoicesPage() {
             <h1 className="text-2xl font-bold text-white mb-2">Faturalar</h1>
             <p className="text-gray-400">Satış ve alış faturalarını yönetin</p>
           </div>
-          <PermissionGuard module="accounting" permission="create">
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Yeni Fatura
-            </button>
-          </PermissionGuard>
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Yeni Fatura
+          </button>
         </div>
 
         {/* Invoices List */}

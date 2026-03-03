@@ -348,8 +348,32 @@ export default function AccountingPage() {
     setSuppliers(data || [])
   }
 
+  const getDateRangeForPeriod = () => {
+    const now = new Date()
+    let startDate = new Date()
+
+    switch (periodFilter) {
+      case 'today':
+        startDate.setHours(0, 0, 0, 0)
+        break
+      case 'week':
+        startDate.setDate(now.getDate() - 7)
+        break
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1)
+        break
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1)
+        break
+      case 'all':
+        return null
+    }
+
+    return startDate.toISOString().split('T')[0]
+  }
+
   const loadTransactions = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('accounting_transactions')
       .select(`
         *,
@@ -357,6 +381,13 @@ export default function AccountingPage() {
         payment_account:payment_accounts(name)
       `)
       .eq('company_id', companyId)
+
+    const startDate = getDateRangeForPeriod()
+    if (startDate) {
+      query = query.gte('transaction_date', startDate)
+    }
+
+    const { data } = await query
       .order('transaction_date', { ascending: false })
       .limit(200)
 
@@ -364,10 +395,17 @@ export default function AccountingPage() {
   }
 
   const loadInvoices = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('invoices')
       .select('*')
       .eq('company_id', companyId)
+
+    const startDate = getDateRangeForPeriod()
+    if (startDate) {
+      query = query.gte('invoice_date', startDate)
+    }
+
+    const { data } = await query
       .order('invoice_date', { ascending: false })
       .limit(100)
 
@@ -375,10 +413,17 @@ export default function AccountingPage() {
   }
 
   const loadChecks = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('checks')
       .select('*')
       .eq('company_id', companyId)
+
+    const startDate = getDateRangeForPeriod()
+    if (startDate) {
+      query = query.gte('due_date', startDate)
+    }
+
+    const { data } = await query
       .order('due_date', { ascending: false })
       .limit(100)
 

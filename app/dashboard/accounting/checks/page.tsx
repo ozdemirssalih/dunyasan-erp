@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import PermissionGuard from '@/components/permission-guard'
+import PermissionGuard from '@/components/PermissionGuard'
 import { CreditCard, Plus, X, Save, Building2, TrendingUp, AlertCircle, ArrowRightLeft } from 'lucide-react'
 
 interface Check {

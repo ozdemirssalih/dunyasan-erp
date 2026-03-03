@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import PermissionGuard from '@/components/permission-guard'
+import PermissionGuard from '@/components/PermissionGuard'
 import { FileText, Plus, Trash2, Save, X, Search, Calendar } from 'lucide-react'
 
 interface WarehouseItem {

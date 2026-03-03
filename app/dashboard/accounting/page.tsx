@@ -7,11 +7,12 @@ import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
   BarChart3, TrendingUp, TrendingDown, Wallet, DollarSign,
   Tag, Users, FileText, CreditCard, Calendar, Plus, Edit2,
-  Trash2, X, Save, Search, Filter, ArrowUpRight, ArrowDownRight
+  Trash2, X, Save, Search, Filter, ArrowUpRight, ArrowDownRight,
+  Building2
 } from 'lucide-react'
 
 // ── Tab Türleri ───────────────
-type Tab = 'overview' | 'transactions' | 'categories' | 'accounts' | 'current-accounts' | 'invoices' | 'checks'
+type Tab = 'overview' | 'transactions' | 'categories' | 'accounts' | 'customers' | 'suppliers' | 'invoices' | 'checks'
 
 // ── Interface Tanımlamaları ───────────────
 interface Category {
@@ -34,16 +35,26 @@ interface PaymentAccount {
   is_active: boolean
 }
 
-interface CurrentAccount {
+interface Customer {
   id: string
-  code: string
-  name: string
-  type: 'customer' | 'supplier'
-  tax_number: string | null
-  phone: string | null
-  email: string | null
-  address: string | null
-  current_balance: number
+  customer_name: string
+  contact_person?: string
+  phone?: string
+  email?: string
+  address?: string
+  tax_number?: string
+  tax_office?: string
+}
+
+interface Supplier {
+  id: string
+  company_name: string
+  contact_person?: string
+  phone?: string
+  email?: string
+  tax_number?: string
+  address?: string
+  category?: string
   is_active: boolean
 }
 
@@ -63,25 +74,25 @@ interface Invoice {
   id: string
   invoice_number: string
   invoice_type: 'sales' | 'purchase'
-  current_account_id: string
+  customer_id?: string
+  supplier_id?: string
   invoice_date: string
   due_date: string | null
   total_amount: number
   tax_amount: number
   status: 'draft' | 'approved' | 'paid' | 'cancelled'
-  current_accounts?: { name: string }
 }
 
 interface Check {
   id: string
   check_number: string
   check_type: 'received' | 'issued'
-  current_account_id: string
+  customer_id?: string
+  supplier_id?: string
   amount: number
   due_date: string
   status: 'portfolio' | 'deposited' | 'collected' | 'bounced' | 'cancelled'
   bank_name: string | null
-  current_accounts?: { name: string }
 }
 
 interface Stats {
@@ -91,8 +102,8 @@ interface Stats {
   cashBalance: number
   bankBalance: number
   totalBalance: number
-  receivables: number
-  payables: number
+  totalCustomers: number
+  totalSuppliers: number
   pendingInvoices: number
   portfolioChecks: number
 }
@@ -109,7 +120,8 @@ export default function AccountingPage() {
   // Data states
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<PaymentAccount[]>([])
-  const [currentAccounts, setCurrentAccounts] = useState<CurrentAccount[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [checks, setChecks] = useState<Check[]>([])
@@ -120,8 +132,8 @@ export default function AccountingPage() {
     cashBalance: 0,
     bankBalance: 0,
     totalBalance: 0,
-    receivables: 0,
-    payables: 0,
+    totalCustomers: 0,
+    totalSuppliers: 0,
     pendingInvoices: 0,
     portfolioChecks: 0
   })
@@ -129,7 +141,6 @@ export default function AccountingPage() {
   // Modal states
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showAccountModal, setShowAccountModal] = useState(false)
-  const [showCurrentAccountModal, setShowCurrentAccountModal] = useState(false)
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showCheckModal, setShowCheckModal] = useState(false)
@@ -137,7 +148,6 @@ export default function AccountingPage() {
   // Filter states
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'year' | 'all'>('month')
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'income' | 'expense'>('all')
 
   // Form states - Category
   const [categoryForm, setCategoryForm] = useState({
@@ -212,16 +222,21 @@ export default function AccountingPage() {
         case 'accounts':
           await loadAccounts()
           break
-        case 'current-accounts':
-          await loadCurrentAccounts()
+        case 'customers':
+          await loadCustomers()
+          break
+        case 'suppliers':
+          await loadSuppliers()
           break
         case 'invoices':
           await loadInvoices()
-          await loadCurrentAccounts()
+          await loadCustomers()
+          await loadSuppliers()
           break
         case 'checks':
           await loadChecks()
-          await loadCurrentAccounts()
+          await loadCustomers()
+          await loadSuppliers()
           break
       }
     } catch (error) {
@@ -233,7 +248,8 @@ export default function AccountingPage() {
     await Promise.all([
       loadTransactions(),
       loadAccounts(),
-      loadCurrentAccounts(),
+      loadCustomers(),
+      loadSuppliers(),
       loadInvoices(),
       loadChecks()
     ])
@@ -262,15 +278,25 @@ export default function AccountingPage() {
     setAccounts(data || [])
   }
 
-  const loadCurrentAccounts = async () => {
+  const loadCustomers = async () => {
     const { data } = await supabase
-      .from('current_accounts')
+      .from('customers')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('customer_name')
+
+    setCustomers(data || [])
+  }
+
+  const loadSuppliers = async () => {
+    const { data } = await supabase
+      .from('suppliers')
       .select('*')
       .eq('company_id', companyId)
       .eq('is_active', true)
-      .order('name')
+      .order('company_name')
 
-    setCurrentAccounts(data || [])
+    setSuppliers(data || [])
   }
 
   const loadTransactions = async () => {
@@ -291,10 +317,7 @@ export default function AccountingPage() {
   const loadInvoices = async () => {
     const { data } = await supabase
       .from('invoices')
-      .select(`
-        *,
-        current_accounts(name)
-      `)
+      .select('*')
       .eq('company_id', companyId)
       .order('invoice_date', { ascending: false })
       .limit(100)
@@ -305,10 +328,7 @@ export default function AccountingPage() {
   const loadChecks = async () => {
     const { data } = await supabase
       .from('checks')
-      .select(`
-        *,
-        current_accounts(name)
-      `)
+      .select('*')
       .eq('company_id', companyId)
       .order('due_date', { ascending: false })
       .limit(100)
@@ -333,14 +353,6 @@ export default function AccountingPage() {
       .filter(a => a.type === 'bank')
       .reduce((sum, a) => sum + parseFloat(a.current_balance.toString()), 0)
 
-    const receivables = currentAccounts
-      .filter(ca => ca.type === 'customer')
-      .reduce((sum, ca) => sum + Math.max(0, parseFloat(ca.current_balance.toString())), 0)
-
-    const payables = currentAccounts
-      .filter(ca => ca.type === 'supplier')
-      .reduce((sum, ca) => sum + Math.abs(Math.min(0, parseFloat(ca.current_balance.toString()))), 0)
-
     const pending = invoices.filter(inv => inv.status === 'approved').length
     const portfolio = checks.filter(chk => chk.status === 'portfolio').length
 
@@ -351,8 +363,8 @@ export default function AccountingPage() {
       cashBalance: cash,
       bankBalance: bank,
       totalBalance: cash + bank,
-      receivables,
-      payables,
+      totalCustomers: customers.length,
+      totalSuppliers: suppliers.length,
       pendingInvoices: pending,
       portfolioChecks: portfolio
     })
@@ -480,24 +492,14 @@ export default function AccountingPage() {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  const getPeriodLabel = () => {
-    const labels = {
-      today: 'Bugün',
-      week: 'Bu Hafta',
-      month: 'Bu Ay',
-      year: 'Bu Yıl',
-      all: 'Tümü'
-    }
-    return labels[periodFilter]
-  }
-
   // ── Tab Configuration ───────────────
   const tabs = [
     { id: 'overview' as Tab, label: 'Genel Bakış', icon: BarChart3 },
     { id: 'transactions' as Tab, label: 'İşlemler', icon: DollarSign },
     { id: 'categories' as Tab, label: 'Kategoriler', icon: Tag },
     { id: 'accounts' as Tab, label: 'Kasa & Banka', icon: Wallet },
-    { id: 'current-accounts' as Tab, label: 'Cari Hesaplar', icon: Users },
+    { id: 'customers' as Tab, label: 'Müşteriler', icon: Users },
+    { id: 'suppliers' as Tab, label: 'Tedarikçiler', icon: Building2 },
     { id: 'invoices' as Tab, label: 'Faturalar', icon: FileText },
     { id: 'checks' as Tab, label: 'Çekler', icon: CreditCard },
   ]
@@ -505,10 +507,10 @@ export default function AccountingPage() {
   // ── Render Functions ───────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Yükleniyor...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     )
@@ -516,16 +518,16 @@ export default function AccountingPage() {
 
   return (
     <PermissionGuard module="accounting" permission="view">
-      <div className="min-h-screen bg-gray-900 p-8">
+      <div className="min-h-screen bg-gray-50 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">💰 Muhasebe</h1>
-          <p className="text-gray-400">Finansal yönetim ve raporlama sistemi</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">💰 Muhasebe</h1>
+          <p className="text-gray-600">Finansal yönetim ve raporlama sistemi</p>
         </div>
 
         {/* Tab Navigation */}
         <div className="mb-6 overflow-x-auto">
-          <div className="flex gap-2 bg-gray-800 rounded-lg p-2">
+          <div className="flex gap-2 bg-white rounded-lg p-2 shadow-sm border border-gray-200">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
@@ -534,8 +536,8 @@ export default function AccountingPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all whitespace-nowrap ${
                     activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
@@ -553,16 +555,16 @@ export default function AccountingPage() {
             <div className="space-y-6">
               {/* Period Filter */}
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Genel Bakış</h2>
-                <div className="flex gap-2 bg-gray-800 rounded-lg p-1">
+                <h2 className="text-2xl font-bold text-gray-900">Genel Bakış</h2>
+                <div className="flex gap-2 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
                   {(['today', 'week', 'month', 'year', 'all'] as const).map((period) => (
                     <button
                       key={period}
                       onClick={() => setPeriodFilter(period)}
                       className={`px-4 py-2 rounded font-medium transition-all ${
                         periodFilter === period
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-400 hover:text-white'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
                       {period === 'today' && 'Bugün'}
@@ -577,75 +579,83 @@ export default function AccountingPage() {
 
               {/* Main Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-xl p-6">
+                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
-                    <TrendingUp className="w-8 h-8 text-green-400" />
-                    <ArrowUpRight className="w-5 h-5 text-green-400" />
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <TrendingUp className="w-6 h-6 text-green-600" />
+                    </div>
+                    <ArrowUpRight className="w-4 h-4 text-green-500" />
                   </div>
-                  <div className="text-sm text-green-400 mb-1">Toplam Gelir</div>
-                  <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalIncome)}</div>
+                  <div className="text-sm text-gray-600 mb-1">Toplam Gelir</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalIncome)}</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30 rounded-xl p-6">
+                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
-                    <TrendingDown className="w-8 h-8 text-red-400" />
-                    <ArrowDownRight className="w-5 h-5 text-red-400" />
+                    <div className="p-2 bg-red-100 rounded-lg">
+                      <TrendingDown className="w-6 h-6 text-red-600" />
+                    </div>
+                    <ArrowDownRight className="w-4 h-4 text-red-500" />
                   </div>
-                  <div className="text-sm text-red-400 mb-1">Toplam Gider</div>
-                  <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalExpense)}</div>
+                  <div className="text-sm text-gray-600 mb-1">Toplam Gider</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalExpense)}</div>
                 </div>
 
-                <div className={`bg-gradient-to-br ${stats.netProfit >= 0 ? 'from-blue-500/20 to-blue-600/20 border-blue-500/30' : 'from-orange-500/20 to-orange-600/20 border-orange-500/30'} border rounded-xl p-6`}>
+                <div className={`bg-white border ${stats.netProfit >= 0 ? 'border-blue-200' : 'border-orange-200'} rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow`}>
                   <div className="flex items-center justify-between mb-3">
-                    <DollarSign className={`w-8 h-8 ${stats.netProfit >= 0 ? 'text-blue-400' : 'text-orange-400'}`} />
+                    <div className={`p-2 ${stats.netProfit >= 0 ? 'bg-blue-100' : 'bg-orange-100'} rounded-lg`}>
+                      <DollarSign className={`w-6 h-6 ${stats.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'}`} />
+                    </div>
                   </div>
-                  <div className={`text-sm ${stats.netProfit >= 0 ? 'text-blue-400' : 'text-orange-400'} mb-1`}>
+                  <div className={`text-sm ${stats.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'} mb-1`}>
                     Net {stats.netProfit >= 0 ? 'Kar' : 'Zarar'}
                   </div>
-                  <div className="text-3xl font-bold text-white">{formatCurrency(Math.abs(stats.netProfit))}</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(Math.abs(stats.netProfit))}</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-xl p-6">
+                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
-                    <Wallet className="w-8 h-8 text-purple-400" />
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Wallet className="w-6 h-6 text-purple-600" />
+                    </div>
                   </div>
-                  <div className="text-sm text-purple-400 mb-1">Toplam Bakiye</div>
-                  <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalBalance)}</div>
+                  <div className="text-sm text-gray-600 mb-1">Toplam Bakiye</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalBalance)}</div>
                 </div>
               </div>
 
               {/* Secondary Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-1">Kasa</div>
-                  <div className="text-xl font-semibold text-white">{formatCurrency(stats.cashBalance)}</div>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div className="text-sm text-gray-600 mb-1">Kasa</div>
+                  <div className="text-xl font-semibold text-gray-900">{formatCurrency(stats.cashBalance)}</div>
                 </div>
 
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-1">Banka</div>
-                  <div className="text-xl font-semibold text-white">{formatCurrency(stats.bankBalance)}</div>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div className="text-sm text-gray-600 mb-1">Banka</div>
+                  <div className="text-xl font-semibold text-gray-900">{formatCurrency(stats.bankBalance)}</div>
                 </div>
 
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-1">Alacaklar</div>
-                  <div className="text-xl font-semibold text-green-400">{formatCurrency(stats.receivables)}</div>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div className="text-sm text-gray-600 mb-1">Müşteriler</div>
+                  <div className="text-xl font-semibold text-blue-600">{stats.totalCustomers}</div>
                 </div>
 
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-1">Borçlar</div>
-                  <div className="text-xl font-semibold text-red-400">{formatCurrency(stats.payables)}</div>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div className="text-sm text-gray-600 mb-1">Tedarikçiler</div>
+                  <div className="text-xl font-semibold text-blue-600">{stats.totalSuppliers}</div>
                 </div>
               </div>
 
               {/* Recent Transactions */}
-              <div className="bg-gray-800 rounded-lg border border-gray-700">
-                <div className="p-6 border-b border-gray-700">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-white">Son İşlemler</h3>
+                    <h3 className="text-xl font-bold text-gray-900">Son İşlemler</h3>
                     {canCreate('accounting') && (
                       <button
                         onClick={() => setShowTransactionModal(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                       >
                         <Plus className="w-4 h-4" />
                         Yeni İşlem
@@ -656,24 +666,24 @@ export default function AccountingPage() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-700/50">
+                    <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-300">Tarih</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-300">Açıklama</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-300">Kategori</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-300">Hesap</th>
-                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-300">Tutar</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Açıklama</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Kategori</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Hesap</th>
+                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-700">
+                    <tbody className="divide-y divide-gray-200">
                       {transactions.slice(0, 10).map((txn) => (
-                        <tr key={txn.id} className="hover:bg-gray-700/30">
-                          <td className="px-6 py-4 text-sm text-gray-300">{formatDate(txn.transaction_date)}</td>
-                          <td className="px-6 py-4 text-sm text-white">{txn.description}</td>
-                          <td className="px-6 py-4 text-sm text-gray-400">{txn.category?.name || 'N/A'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-400">{txn.payment_account?.name || 'N/A'}</td>
+                        <tr key={txn.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm text-gray-600">{formatDate(txn.transaction_date)}</td>
+                          <td className="px-6 py-4 text-sm text-gray-900 font-medium">{txn.description}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{txn.category?.name || 'N/A'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{txn.payment_account?.name || 'N/A'}</td>
                           <td className={`px-6 py-4 text-sm text-right font-semibold ${
-                            txn.transaction_type === 'income' ? 'text-green-400' : 'text-red-400'
+                            txn.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
                           }`}>
                             {txn.transaction_type === 'income' ? '+' : '-'}{formatCurrency(parseFloat(txn.amount.toString()))}
                           </td>
@@ -693,32 +703,11 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* TRANSACTIONS TAB */}
-          {activeTab === 'transactions' && (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">İşlemler</h2>
-                {canCreate('accounting') && (
-                  <button
-                    onClick={() => setShowTransactionModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Yeni İşlem
-                  </button>
-                )}
-              </div>
-              <div className="text-center text-gray-400 py-12">
-                İşlem listesi burada görünecek
-              </div>
-            </div>
-          )}
-
           {/* CATEGORIES TAB */}
           {activeTab === 'categories' && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">Kategoriler</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Kategoriler</h2>
                 {canCreate('accounting') && (
                   <button
                     onClick={() => {
@@ -726,7 +715,7 @@ export default function AccountingPage() {
                       setCategoryForm({ name: '', type: 'income', description: '', color: '#3B82F6' })
                       setShowCategoryModal(true)
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
                   >
                     <Plus className="w-4 h-4" />
                     Yeni Kategori
@@ -736,23 +725,23 @@ export default function AccountingPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Income Categories */}
-                <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                  <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center gap-2">
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-green-600 mb-4 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5" />
                     Gelir Kategorileri ({categories.filter(c => c.type === 'income').length})
                   </h3>
                   <div className="space-y-2">
                     {categories.filter(c => c.type === 'income').map((cat) => (
-                      <div key={cat.id} className="bg-gray-700/50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-700/70 transition-colors">
+                      <div key={cat.id} className="bg-gray-50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 transition-colors border border-gray-200">
                         <div className="flex items-center gap-3">
                           <div
                             className="w-4 h-4 rounded-full"
                             style={{ backgroundColor: cat.color || '#10B981' }}
                           />
                           <div>
-                            <div className="font-medium text-white">{cat.name}</div>
+                            <div className="font-medium text-gray-900">{cat.name}</div>
                             {cat.description && (
-                              <div className="text-sm text-gray-400">{cat.description}</div>
+                              <div className="text-sm text-gray-600">{cat.description}</div>
                             )}
                           </div>
                         </div>
@@ -769,14 +758,14 @@ export default function AccountingPage() {
                                 })
                                 setShowCategoryModal(true)
                               }}
-                              className="text-gray-400 hover:text-blue-400 p-2 transition-colors"
+                              className="text-gray-400 hover:text-blue-600 p-2 transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             {canDelete('accounting') && (
                               <button
                                 onClick={() => handleDeleteCategory(cat.id)}
-                                className="text-gray-400 hover:text-red-400 p-2 transition-colors"
+                                className="text-gray-400 hover:text-red-600 p-2 transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -786,7 +775,7 @@ export default function AccountingPage() {
                       </div>
                     ))}
                     {categories.filter(c => c.type === 'income').length === 0 && (
-                      <div className="text-center text-gray-500 py-8">
+                      <div className="text-center text-gray-500 py-8 bg-gray-50 rounded-lg">
                         Henüz gelir kategorisi yok
                       </div>
                     )}
@@ -794,23 +783,23 @@ export default function AccountingPage() {
                 </div>
 
                 {/* Expense Categories */}
-                <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                  <h3 className="text-lg font-semibold text-red-400 mb-4 flex items-center gap-2">
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-red-600 mb-4 flex items-center gap-2">
                     <TrendingDown className="w-5 h-5" />
                     Gider Kategorileri ({categories.filter(c => c.type === 'expense').length})
                   </h3>
                   <div className="space-y-2">
                     {categories.filter(c => c.type === 'expense').map((cat) => (
-                      <div key={cat.id} className="bg-gray-700/50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-700/70 transition-colors">
+                      <div key={cat.id} className="bg-gray-50 rounded-lg p-4 flex items-center justify-between hover:bg-gray-100 transition-colors border border-gray-200">
                         <div className="flex items-center gap-3">
                           <div
                             className="w-4 h-4 rounded-full"
                             style={{ backgroundColor: cat.color || '#EF4444' }}
                           />
                           <div>
-                            <div className="font-medium text-white">{cat.name}</div>
+                            <div className="font-medium text-gray-900">{cat.name}</div>
                             {cat.description && (
-                              <div className="text-sm text-gray-400">{cat.description}</div>
+                              <div className="text-sm text-gray-600">{cat.description}</div>
                             )}
                           </div>
                         </div>
@@ -827,14 +816,14 @@ export default function AccountingPage() {
                                 })
                                 setShowCategoryModal(true)
                               }}
-                              className="text-gray-400 hover:text-blue-400 p-2 transition-colors"
+                              className="text-gray-400 hover:text-blue-600 p-2 transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             {canDelete('accounting') && (
                               <button
                                 onClick={() => handleDeleteCategory(cat.id)}
-                                className="text-gray-400 hover:text-red-400 p-2 transition-colors"
+                                className="text-gray-400 hover:text-red-600 p-2 transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -844,7 +833,7 @@ export default function AccountingPage() {
                       </div>
                     ))}
                     {categories.filter(c => c.type === 'expense').length === 0 && (
-                      <div className="text-center text-gray-500 py-8">
+                      <div className="text-center text-gray-500 py-8 bg-gray-50 rounded-lg">
                         Henüz gider kategorisi yok
                       </div>
                     )}
@@ -854,10 +843,90 @@ export default function AccountingPage() {
             </div>
           )}
 
+          {/* CUSTOMERS TAB */}
+          {activeTab === 'customers' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Müşteriler</h2>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Müşteri Adı</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">İletişim</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Telefon</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {customers.map((customer) => (
+                      <tr key={customer.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{customer.customer_name}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{customer.contact_person || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{customer.phone || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{customer.email || '-'}</td>
+                      </tr>
+                    ))}
+                    {customers.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                          Henüz müşteri bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SUPPLIERS TAB */}
+          {activeTab === 'suppliers' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Tedarikçiler</h2>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Firma Adı</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">İletişim</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Telefon</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Kategori</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {suppliers.map((supplier) => (
+                      <tr key={supplier.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{supplier.company_name}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{supplier.contact_person || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{supplier.phone || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{supplier.email || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{supplier.category || '-'}</td>
+                      </tr>
+                    ))}
+                    {suppliers.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                          Henüz tedarikçi bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* OTHER TABS - Placeholder */}
-          {!['overview', 'transactions', 'categories'].includes(activeTab) && (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 p-12 text-center">
-              <div className="text-xl font-medium text-gray-400 mb-2">
+          {!['overview', 'categories', 'customers', 'suppliers'].includes(activeTab) && (
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-12 text-center">
+              <div className="text-xl font-medium text-gray-600 mb-2">
                 {tabs.find(t => t.id === activeTab)?.label}
               </div>
               <div className="text-sm text-gray-500">Bu bölüm yakında eklenecek</div>
@@ -869,10 +938,10 @@ export default function AccountingPage() {
         {/* Category Modal */}
         {showCategoryModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 rounded-lg max-w-md w-full border border-gray-700">
-              <div className="p-6 border-b border-gray-700">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+              <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-white">
+                  <h3 className="text-xl font-bold text-gray-900">
                     {editingCategoryId ? 'Kategori Düzenle' : 'Yeni Kategori'}
                   </h3>
                   <button
@@ -880,7 +949,7 @@ export default function AccountingPage() {
                       setShowCategoryModal(false)
                       setEditingCategoryId(null)
                     }}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -889,26 +958,26 @@ export default function AccountingPage() {
 
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Kategori Adı *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Kategori Adı *</label>
                   <input
                     type="text"
                     value={categoryForm.name}
                     onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Kategori adı girin"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Tür *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setCategoryForm({...categoryForm, type: 'income'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
                         categoryForm.type === 'income'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:text-white'
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-600'
                       }`}
                     >
                       Gelir
@@ -916,10 +985,10 @@ export default function AccountingPage() {
                     <button
                       type="button"
                       onClick={() => setCategoryForm({...categoryForm, type: 'expense'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
                         categoryForm.type === 'expense'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:text-white'
+                          ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-600'
                       }`}
                     >
                       Gider
@@ -928,40 +997,40 @@ export default function AccountingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Açıklama</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
                   <textarea
                     value={categoryForm.description}
                     onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                     placeholder="Açıklama (opsiyonel)"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Renk</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Renk</label>
                   <input
                     type="color"
                     value={categoryForm.color}
                     onChange={(e) => setCategoryForm({...categoryForm, color: e.target.value})}
-                    className="w-full h-10 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer"
+                    className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
                   />
                 </div>
               </div>
 
-              <div className="p-6 border-t border-gray-700 flex gap-3">
+              <div className="p-6 border-t border-gray-200 flex gap-3">
                 <button
                   onClick={() => {
                     setShowCategoryModal(false)
                     setEditingCategoryId(null)
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   İptal
                 </button>
                 <button
                   onClick={handleSaveCategory}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <Save className="w-4 h-4" />
                   {editingCategoryId ? 'Güncelle' : 'Kaydet'}
@@ -974,13 +1043,13 @@ export default function AccountingPage() {
         {/* Transaction Modal */}
         {showTransactionModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 rounded-lg max-w-md w-full border border-gray-700">
-              <div className="p-6 border-b border-gray-700">
+            <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+              <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-white">Yeni İşlem</h3>
+                  <h3 className="text-xl font-bold text-gray-900">Yeni İşlem</h3>
                   <button
                     onClick={() => setShowTransactionModal(false)}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -989,15 +1058,15 @@ export default function AccountingPage() {
 
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Tür *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setTransactionForm({...transactionForm, transaction_type: 'income'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
                         transactionForm.transaction_type === 'income'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:text-white'
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-green-600'
                       }`}
                     >
                       Gelir
@@ -1005,10 +1074,10 @@ export default function AccountingPage() {
                     <button
                       type="button"
                       onClick={() => setTransactionForm({...transactionForm, transaction_type: 'expense'})}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
                         transactionForm.transaction_type === 'expense'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:text-white'
+                          ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-600'
                       }`}
                     >
                       Gider
@@ -1017,23 +1086,23 @@ export default function AccountingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Tutar *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
                   <input
                     type="number"
                     step="0.01"
                     value={transactionForm.amount}
                     onChange={(e) => setTransactionForm({...transactionForm, amount: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.00"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Kategori *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Kategori *</label>
                   <select
                     value={transactionForm.category_id}
                     onChange={(e) => setTransactionForm({...transactionForm, category_id: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Kategori seçin</option>
                     {categories
@@ -1045,11 +1114,11 @@ export default function AccountingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Hesap *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hesap *</label>
                   <select
                     value={transactionForm.payment_account_id}
                     onChange={(e) => setTransactionForm({...transactionForm, payment_account_id: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Hesap seçin</option>
                     {accounts.map(a => (
@@ -1059,37 +1128,37 @@ export default function AccountingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Tarih *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
                   <input
                     type="date"
                     value={transactionForm.transaction_date}
                     onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Açıklama</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
                   <textarea
                     value={transactionForm.description}
                     onChange={(e) => setTransactionForm({...transactionForm, description: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                     placeholder="Açıklama girin"
                   />
                 </div>
               </div>
 
-              <div className="p-6 border-t border-gray-700 flex gap-3">
+              <div className="p-6 border-t border-gray-200 flex gap-3">
                 <button
                   onClick={() => setShowTransactionModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
                 >
                   İptal
                 </button>
                 <button
                   onClick={handleSaveTransaction}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <Save className="w-4 h-4" />
                   Kaydet

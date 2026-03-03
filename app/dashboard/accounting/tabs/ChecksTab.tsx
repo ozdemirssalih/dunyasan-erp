@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import { CreditCard, Plus, X, Save, Building2, TrendingUp, AlertCircle, ArrowRightLeft } from 'lucide-react'
 
 interface Check {
@@ -287,8 +287,9 @@ export function ChecksTab() {
   }
 
   return (
-    <div className="p-8">
-      {/* Header */}
+    <PermissionGuard module="accounting" permission="view">
+      <div className="p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white mb-2">Çek Yönetimi</h1>
@@ -706,6 +707,7 @@ export function ChecksTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

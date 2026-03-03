@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import {
   TrendingUp,
   TrendingDown,
@@ -322,8 +322,9 @@ export function DashboardTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <PermissionGuard module="accounting" permission="view">
+      <div className="space-y-6">
+        {/* Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Muhasebe</h1>
@@ -683,6 +684,7 @@ export function DashboardTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

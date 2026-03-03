@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import { Plus, Edit2, Trash2, Wallet, CreditCard, X, ArrowRightLeft } from 'lucide-react'
 
 interface PaymentAccount {
@@ -267,8 +267,9 @@ export function PaymentAccountsTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <PermissionGuard module="accounting" permission="view">
+      <div className="space-y-6">
+        {/* Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Kasa & Banka Hesapları</h1>
@@ -384,7 +385,9 @@ export function PaymentAccountsTab() {
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PermissionGuard>
                           </div>
+                        </PermissionGuard>
                       </td>
                     </tr>
                   ))
@@ -447,7 +450,9 @@ export function PaymentAccountsTab() {
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PermissionGuard>
                           </div>
+                        </PermissionGuard>
                       </td>
                     </tr>
                   ))
@@ -715,6 +720,7 @@ export function PaymentAccountsTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

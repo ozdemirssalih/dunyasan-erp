@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import { Plus, Edit2, Trash2, Tag, TrendingUp, TrendingDown, X } from 'lucide-react'
 
 interface Category {
@@ -164,7 +164,8 @@ export function CategoriesTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <PermissionGuard module="accounting" permission="view">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -252,7 +253,9 @@ export function CategoriesTab() {
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PermissionGuard>
                           </div>
+                        </PermissionGuard>
                       </td>
                     </tr>
                   ))
@@ -311,7 +314,9 @@ export function CategoriesTab() {
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PermissionGuard>
                           </div>
+                        </PermissionGuard>
                       </td>
                     </tr>
                   ))
@@ -437,6 +442,7 @@ export function CategoriesTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import { Plus, Edit2, Trash2, Users, Building2, X, Eye, TrendingUp, TrendingDown } from 'lucide-react'
 
 interface CurrentAccount {
@@ -251,7 +251,8 @@ export function CurrentAccountsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <PermissionGuard module="accounting" permission="view">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -383,6 +384,8 @@ export function CurrentAccountsTab() {
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
+                              </PermissionGuard>
+                            </PermissionGuard>
                           </div>
                         </td>
                       </tr>
@@ -458,6 +461,8 @@ export function CurrentAccountsTab() {
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
+                              </PermissionGuard>
+                            </PermissionGuard>
                           </div>
                         </td>
                       </tr>
@@ -764,6 +769,7 @@ export function CurrentAccountsTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

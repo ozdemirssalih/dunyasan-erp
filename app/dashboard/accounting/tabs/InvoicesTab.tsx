@@ -1,8 +1,8 @@
 'use client'
-import PermissionGuard from '@/components/PermissionGuard'
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
 import { FileText, Plus, Trash2, Save, X, Search, Calendar } from 'lucide-react'
 
 interface WarehouseItem {
@@ -349,8 +349,9 @@ export function InvoicesTab() {
   }
 
   return (
-    <div className="p-8">
-      {/* Header */}
+    <PermissionGuard module="accounting" permission="view">
+      <div className="p-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white mb-2">Faturalar</h1>
@@ -712,6 +713,7 @@ export function InvoicesTab() {
             </div>
           </div>
         )}
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }

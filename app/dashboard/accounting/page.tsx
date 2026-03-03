@@ -17,6 +17,7 @@ import {
   DollarSign,
   PieChart,
   BarChart3,
+  X,
 } from 'lucide-react'
 
 interface Stats {
@@ -43,6 +44,7 @@ interface Transaction {
 export default function AccountingPage() {
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string>('')
   const [stats, setStats] = useState<Stats>({
     totalIncome: 0,
     totalExpense: 0,
@@ -56,6 +58,21 @@ export default function AccountingPage() {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'year'>('month')
 
+  // Modal states
+  const [showTransactionModal, setShowTransactionModal] = useState(false)
+  const [categories, setCategories] = useState<any[]>([])
+  const [paymentAccounts, setPaymentAccounts] = useState<any[]>([])
+  const [transactionForm, setTransactionForm] = useState({
+    transaction_type: 'income' as 'income' | 'expense',
+    category_id: '',
+    payment_account_id: '',
+    amount: 0,
+    description: '',
+    transaction_date: new Date().toISOString().split('T')[0],
+    reference_number: '',
+    notes: '',
+  })
+
   useEffect(() => {
     loadData()
   }, [selectedPeriod])
@@ -64,6 +81,8 @@ export default function AccountingPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      setCurrentUserId(user.id)
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -76,11 +95,35 @@ export default function AccountingPage() {
       setCompanyId(profile.company_id)
       await loadStats(profile.company_id)
       await loadRecentTransactions(profile.company_id)
+      await loadCategories(profile.company_id)
+      await loadPaymentAccounts(profile.company_id)
     } catch (error) {
       console.error('Error loading accounting data:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadCategories = async (companyId: string) => {
+    const { data } = await supabase
+      .from('accounting_categories')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('name')
+
+    setCategories(data || [])
+  }
+
+  const loadPaymentAccounts = async (companyId: string) => {
+    const { data } = await supabase
+      .from('payment_accounts')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('name')
+
+    setPaymentAccounts(data || [])
   }
 
   const loadStats = async (companyId: string) => {
@@ -203,6 +246,70 @@ export default function AccountingPage() {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
+  const handleSaveTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      // İşlemi kaydet
+      const { data: transaction, error: transactionError } = await supabase
+        .from('accounting_transactions')
+        .insert({
+          company_id: companyId,
+          transaction_type: transactionForm.transaction_type,
+          category_id: transactionForm.category_id || null,
+          payment_account_id: transactionForm.payment_account_id || null,
+          amount: transactionForm.amount,
+          description: transactionForm.description,
+          transaction_date: transactionForm.transaction_date,
+          reference_number: transactionForm.reference_number || null,
+          notes: transactionForm.notes || null,
+          created_by: currentUserId,
+        })
+        .select()
+        .single()
+
+      if (transactionError) throw transactionError
+
+      // Kasa/Banka bakiyesini güncelle
+      if (transactionForm.payment_account_id) {
+        const account = paymentAccounts.find(a => a.id === transactionForm.payment_account_id)
+        if (account) {
+          const balanceChange = transactionForm.transaction_type === 'income'
+            ? transactionForm.amount
+            : -transactionForm.amount
+
+          await supabase
+            .from('payment_accounts')
+            .update({
+              current_balance: parseFloat(account.current_balance) + balanceChange,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', transactionForm.payment_account_id)
+        }
+      }
+
+      // Modal'ı kapat ve verileri yenile
+      setShowTransactionModal(false)
+      setTransactionForm({
+        transaction_type: 'income',
+        category_id: '',
+        payment_account_id: '',
+        amount: 0,
+        description: '',
+        transaction_date: new Date().toISOString().split('T')[0],
+        reference_number: '',
+        notes: '',
+      })
+
+      await loadData()
+      alert('İşlem başarıyla kaydedildi!')
+    } catch (error: any) {
+      console.error('Error saving transaction:', error)
+      alert('Hata: ' + error.message)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -245,7 +352,10 @@ export default function AccountingPage() {
             </div>
 
             <PermissionGuard module="accounting" permission="create">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all">
+              <button
+                onClick={() => setShowTransactionModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+              >
                 <Plus className="w-5 h-5" />
                 Yeni İşlem
               </button>
@@ -407,6 +517,175 @@ export default function AccountingPage() {
             </table>
           </div>
         </div>
+
+        {/* Transaction Modal */}
+        {showTransactionModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-white">Yeni İşlem Ekle</h3>
+                <button
+                  onClick={() => setShowTransactionModal(false)}
+                  className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveTransaction} className="p-6 space-y-4">
+                {/* Transaction Type */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">İşlem Tipi *</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTransactionForm({ ...transactionForm, transaction_type: 'income' })}
+                      className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                        transactionForm.transaction_type === 'income'
+                          ? 'bg-green-600 text-white shadow-lg'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      💰 Gelir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransactionForm({ ...transactionForm, transaction_type: 'expense' })}
+                      className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                        transactionForm.transaction_type === 'expense'
+                          ? 'bg-red-600 text-white shadow-lg'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      💸 Gider
+                    </button>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Açıklama *</label>
+                  <input
+                    type="text"
+                    value={transactionForm.description}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="İşlem açıklaması"
+                    required
+                  />
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tutar (₺) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={transactionForm.amount}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tarih *</label>
+                  <input
+                    type="date"
+                    value={transactionForm.transaction_date}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, transaction_date: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Kategori</label>
+                  <select
+                    value={transactionForm.category_id}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, category_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Kategori seçin...</option>
+                    {categories
+                      .filter(cat => cat.type === transactionForm.transaction_type)
+                      .map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                  </select>
+                  {categories.filter(cat => cat.type === transactionForm.transaction_type).length === 0 && (
+                    <p className="text-sm text-orange-600 mt-1">⚠️ Önce kategori oluşturun</p>
+                  )}
+                </div>
+
+                {/* Payment Account */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Kasa/Banka</label>
+                  <select
+                    value={transactionForm.payment_account_id}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, payment_account_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Hesap seçin...</option>
+                    {paymentAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.type === 'cash' ? 'Kasa' : 'Banka'}) - {formatCurrency(parseFloat(acc.current_balance))}
+                      </option>
+                    ))}
+                  </select>
+                  {paymentAccounts.length === 0 && (
+                    <p className="text-sm text-orange-600 mt-1">⚠️ Önce kasa/banka hesabı oluşturun</p>
+                  )}
+                </div>
+
+                {/* Reference Number */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Referans No</label>
+                  <input
+                    type="text"
+                    value={transactionForm.reference_number}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, reference_number: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Dekont no, fiş no, vb."
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                  <textarea
+                    value={transactionForm.notes}
+                    onChange={(e) => setTransactionForm({ ...transactionForm, notes: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Ek notlar..."
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTransactionModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </PermissionGuard>
   )

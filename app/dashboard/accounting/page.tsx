@@ -215,7 +215,7 @@ export default function AccountingPage() {
   }
 
   return (
-    <PermissionGuard resource="accounting" action="read">
+    <PermissionGuard module="accounting" permission="view">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -244,7 +244,7 @@ export default function AccountingPage() {
               ))}
             </div>
 
-            <PermissionGuard resource="accounting" action="create">
+            <PermissionGuard module="accounting" permission="create">
               <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all">
                 <Plus className="w-5 h-5" />
                 Yeni İşlem

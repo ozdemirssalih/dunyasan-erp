@@ -33,6 +33,7 @@ export default function AccountingPageV2() {
   const [showTransactionModal, setShowTransactionModal] = useState(false)
 
   // Form state
+  const [formMode, setFormMode] = useState<'account' | 'payment'>('account') // Cari kayıt mı, ödeme mi?
   const [transactionForm, setTransactionForm] = useState({
     transaction_type: 'receivable' as TransactionType,
     amount: '',
@@ -172,19 +173,22 @@ export default function AccountingPageV2() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      if (transactionForm.transaction_type === 'receivable') {
-        // ALACAK KAYDI
-        if (!transactionForm.customer_id) {
-          return alert('Müşteri seçimi zorunludur!')
+      if (formMode === 'account') {
+        // CARİ KAYIT (ALACAK veya BORÇ)
+        if (!transactionForm.customer_id && !transactionForm.supplier_id) {
+          return alert('Müşteri veya tedarikçi seçimi zorunludur!')
         }
         if (!transactionForm.due_date) {
           return alert('Vade tarihi zorunludur!')
         }
 
+        const isReceivable = !!transactionForm.customer_id
+
         await supabase.from('current_account_transactions').insert({
           company_id: companyId,
-          transaction_type: 'receivable',
-          customer_id: transactionForm.customer_id,
+          transaction_type: isReceivable ? 'receivable' : 'payable',
+          customer_id: isReceivable ? transactionForm.customer_id : null,
+          supplier_id: !isReceivable ? transactionForm.supplier_id : null,
           amount: parseFloat(transactionForm.amount),
           paid_amount: 0,
           currency: transactionForm.currency,
@@ -192,35 +196,11 @@ export default function AccountingPageV2() {
           transaction_date: transactionForm.transaction_date,
           due_date: transactionForm.due_date,
           description: transactionForm.description,
-          reference_number: `RCV-${Date.now()}`,
+          reference_number: `${isReceivable ? 'RCV' : 'PAY'}-${Date.now()}`,
           created_by: user?.id
         })
 
-      } else if (transactionForm.transaction_type === 'payable') {
-        // BORÇ KAYDI
-        if (!transactionForm.supplier_id) {
-          return alert('Tedarikçi seçimi zorunludur!')
-        }
-        if (!transactionForm.due_date) {
-          return alert('Vade tarihi zorunludur!')
-        }
-
-        await supabase.from('current_account_transactions').insert({
-          company_id: companyId,
-          transaction_type: 'payable',
-          supplier_id: transactionForm.supplier_id,
-          amount: parseFloat(transactionForm.amount),
-          paid_amount: 0,
-          currency: transactionForm.currency,
-          status: 'unpaid',
-          transaction_date: transactionForm.transaction_date,
-          due_date: transactionForm.due_date,
-          description: transactionForm.description,
-          reference_number: `PAY-${Date.now()}`,
-          created_by: user?.id
-        })
-
-      } else if (transactionForm.transaction_type === 'payment') {
+      } else if (formMode === 'payment') {
         // ÖDEME KAYDI (Kasa işlemi)
         const amount = parseFloat(transactionForm.amount)
 
@@ -283,6 +263,7 @@ export default function AccountingPageV2() {
   }
 
   const resetForm = () => {
+    setFormMode('account')
     setTransactionForm({
       transaction_type: 'receivable',
       amount: '',
@@ -607,129 +588,74 @@ export default function AccountingPageV2() {
                 </div>
               </div>
               <div className="p-6 space-y-4">
-                {/* İşlem Türü */}
+                {/* İşlem Modu */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">İşlem Türü *</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'receivable', customer_id: '', supplier_id: '', related_account_transaction_id: ''})}
+                      onClick={() => {
+                        setFormMode('account')
+                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: '', related_account_transaction_id: ''})
+                      }}
                       className={`px-4 py-2 rounded-lg font-medium border ${
-                        transactionForm.transaction_type === 'receivable'
-                          ? 'bg-green-600 text-white border-green-600'
+                        formMode === 'account'
+                          ? 'bg-purple-600 text-white border-purple-600'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
-                      Alacak
+                      Cari Kayıt (Alacak/Borç)
                     </button>
                     <button
-                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'payable', customer_id: '', supplier_id: '', related_account_transaction_id: ''})}
+                      onClick={() => {
+                        setFormMode('payment')
+                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: '', related_account_transaction_id: '', due_date: ''})
+                      }}
                       className={`px-4 py-2 rounded-lg font-medium border ${
-                        transactionForm.transaction_type === 'payable'
-                          ? 'bg-red-600 text-white border-red-600'
-                          : 'bg-white text-gray-700 border-gray-300'
-                      }`}
-                    >
-                      Borç
-                    </button>
-                    <button
-                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'payment', customer_id: '', supplier_id: '', related_account_transaction_id: '', due_date: ''})}
-                      className={`px-4 py-2 rounded-lg font-medium border ${
-                        transactionForm.transaction_type === 'payment'
+                        formMode === 'payment'
                           ? 'bg-blue-600 text-white border-blue-600'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
-                      Ödeme
+                      Ödeme/Tahsilat
                     </button>
                   </div>
                 </div>
 
-                {/* ALACAK FORMU */}
-                {transactionForm.transaction_type === 'receivable' && (
+                {/* CARİ KAYIT FORMU */}
+                {formMode === 'account' && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri *</label>
-                      <select
-                        value={transactionForm.customer_id}
-                        onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      >
-                        <option value="">Müşteri Seçiniz...</option>
-                        {customers.map(customer => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.customer_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
+                    {/* Müşteri veya Tedarikçi Seçimi */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={transactionForm.amount}
-                          onChange={(e) => setTransactionForm({...transactionForm, amount: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Para Birimi *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri (Alacak)</label>
                         <select
-                          value={transactionForm.currency}
-                          onChange={(e) => setTransactionForm({...transactionForm, currency: e.target.value})}
+                          value={transactionForm.customer_id}
+                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: '', transaction_type: 'receivable'})}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                         >
-                          <option value="TRY">TRY - Türk Lirası</option>
-                          <option value="USD">USD - Amerikan Doları</option>
-                          <option value="EUR">EUR - Euro</option>
-                          <option value="GBP">GBP - İngiliz Sterlini</option>
+                          <option value="">Seçiniz...</option>
+                          {customers.map(customer => (
+                            <option key={customer.id} value={customer.id}>
+                              {customer.customer_name}
+                            </option>
+                          ))}
                         </select>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
-                        <input
-                          type="date"
-                          value={transactionForm.transaction_date}
-                          onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi (Borç)</label>
+                        <select
+                          value={transactionForm.supplier_id}
+                          onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: '', transaction_type: 'payable'})}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        />
+                        >
+                          <option value="">Seçiniz...</option>
+                          {suppliers.map(supplier => (
+                            <option key={supplier.id} value={supplier.id}>
+                              {supplier.company_name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Vade Günü *</label>
-                        <input
-                          type="date"
-                          value={transactionForm.due_date}
-                          onChange={(e) => setTransactionForm({...transactionForm, due_date: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* BORÇ FORMU */}
-                {transactionForm.transaction_type === 'payable' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi *</label>
-                      <select
-                        value={transactionForm.supplier_id}
-                        onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      >
-                        <option value="">Tedarikçi Seçiniz...</option>
-                        {suppliers.map(supplier => (
-                          <option key={supplier.id} value={supplier.id}>
-                            {supplier.company_name}
-                          </option>
-                        ))}
-                      </select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -783,7 +709,7 @@ export default function AccountingPageV2() {
                 )}
 
                 {/* ÖDEME FORMU */}
-                {transactionForm.transaction_type === 'payment' && (
+                {formMode === 'payment' && (
                   <>
                     <div className="grid grid-cols-2 gap-4">
                       <div>

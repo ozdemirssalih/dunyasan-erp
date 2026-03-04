@@ -15,10 +15,10 @@ export default function AccountingPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard')
 
-  // Data states
-  const [cashBalance, setCashBalance] = useState(0)
-  const [receivables, setReceivables] = useState(0) // Alacaklar
-  const [payables, setPayables] = useState(0) // Borçlar
+  // Data states - Para birimi bazında
+  const [cashBalances, setCashBalances] = useState<Record<string, number>>({})
+  const [receivables, setReceivables] = useState<Record<string, number>>({})
+  const [payables, setPayables] = useState<Record<string, number>>({})
   const [pendingPayments, setPendingPayments] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
   const [allTransactions, setAllTransactions] = useState<any[]>([])
@@ -87,18 +87,29 @@ export default function AccountingPage() {
       setAllTransactions(transactions || [])
       setRecentTransactions(transactions?.slice(0, 10) || [])
 
-      // Alacakları hesapla (credit - bize gelecek)
-      const receivablesData = transactions?.filter(t => t.transaction_type === 'credit')
-        .reduce((sum, t) => sum + parseFloat(t.amount), 0) || 0
-      setReceivables(receivablesData)
+      // Para birimi bazında hesaplamalar
+      const receivablesByCurrency: Record<string, number> = {}
+      const payablesByCurrency: Record<string, number> = {}
+      const cashByCurrency: Record<string, number> = {}
 
-      // Borçları hesapla (debit - bizim ödeyeceğimiz)
-      const payablesData = transactions?.filter(t => t.transaction_type === 'debit')
-        .reduce((sum, t) => sum + parseFloat(t.amount), 0) || 0
-      setPayables(payablesData)
+      transactions?.forEach(t => {
+        const currency = t.currency || 'TRY'
+        const amount = parseFloat(t.amount)
 
-      // Kasa bakiyesi (alacaklar - borçlar)
-      setCashBalance(receivablesData - payablesData)
+        if (t.transaction_type === 'credit') {
+          // Alacak
+          receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + amount
+          cashByCurrency[currency] = (cashByCurrency[currency] || 0) + amount
+        } else {
+          // Borç
+          payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + amount
+          cashByCurrency[currency] = (cashByCurrency[currency] || 0) - amount
+        }
+      })
+
+      setReceivables(receivablesByCurrency)
+      setPayables(payablesByCurrency)
+      setCashBalances(cashByCurrency)
 
       // Beklenen ödemeleri yükle (vadesi gelmemiş faturalar)
       const { data: invoices } = await supabase
@@ -299,8 +310,18 @@ export default function AccountingPage() {
                 <Wallet className="w-6 h-6 text-blue-600" />
               </div>
             </div>
-            <div className="text-sm text-gray-600 mb-1">Kasa Bakiyesi</div>
-            <div className="text-2xl font-bold text-gray-900">{formatCurrency(cashBalance)}</div>
+            <div className="text-sm text-gray-600 mb-2">Kasa Bakiyesi</div>
+            {Object.keys(cashBalances).length === 0 ? (
+              <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
+            ) : (
+              <div className="space-y-1">
+                {Object.entries(cashBalances).map(([currency, amount]) => (
+                  <div key={currency} className="text-lg font-bold text-gray-900">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Alacaklar */}
@@ -310,8 +331,18 @@ export default function AccountingPage() {
                 <TrendingUp className="w-6 h-6 text-green-600" />
               </div>
             </div>
-            <div className="text-sm text-gray-600 mb-1">Toplam Alacak</div>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(receivables)}</div>
+            <div className="text-sm text-gray-600 mb-2">Toplam Alacak</div>
+            {Object.keys(receivables).length === 0 ? (
+              <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
+            ) : (
+              <div className="space-y-1">
+                {Object.entries(receivables).map(([currency, amount]) => (
+                  <div key={currency} className="text-lg font-bold text-green-600">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Borçlar */}
@@ -321,8 +352,18 @@ export default function AccountingPage() {
                 <TrendingDown className="w-6 h-6 text-red-600" />
               </div>
             </div>
-            <div className="text-sm text-gray-600 mb-1">Toplam Borç</div>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(payables)}</div>
+            <div className="text-sm text-gray-600 mb-2">Toplam Borç</div>
+            {Object.keys(payables).length === 0 ? (
+              <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
+            ) : (
+              <div className="space-y-1">
+                {Object.entries(payables).map(([currency, amount]) => (
+                  <div key={currency} className="text-lg font-bold text-red-600">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Beklenen Ödemeler */}

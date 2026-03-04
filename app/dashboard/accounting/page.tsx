@@ -25,6 +25,8 @@ export default function AccountingPage() {
   const [currentAccountsData, setCurrentAccountsData] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
+  const [incomeCategories, setIncomeCategories] = useState<any[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<any[]>([])
 
   // Modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false)
@@ -35,10 +37,11 @@ export default function AccountingPage() {
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0],
-    payment_method: 'cash',
+    payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
-    supplier_id: ''
+    supplier_id: '',
+    category_id: ''
   })
 
   useEffect(() => {
@@ -131,6 +134,26 @@ export default function AccountingPage() {
       ]
 
       setCurrentAccountsData(accountsData)
+
+      // Kategorileri yükle
+      const { data: incomeCats } = await supabase
+        .from('accounting_categories')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('type', 'income')
+        .eq('is_active', true)
+        .order('name')
+
+      const { data: expenseCats } = await supabase
+        .from('accounting_categories')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('type', 'expense')
+        .eq('is_active', true)
+        .order('name')
+
+      setIncomeCategories(incomeCats || [])
+      setExpenseCategories(expenseCats || [])
     } catch (error) {
       console.error('Error loading data:', error)
     }
@@ -139,6 +162,14 @@ export default function AccountingPage() {
   const handleSaveTransaction = async () => {
     if (!transactionForm.amount || !companyId) {
       return alert('Tutar zorunludur!')
+    }
+
+    // Gelir ise müşteri, gider ise tedarikçi zorunlu
+    if (transactionForm.transaction_type === 'income' && !transactionForm.customer_id) {
+      return alert('Gelir işlemleri için müşteri seçimi zorunludur!')
+    }
+    if (transactionForm.transaction_type === 'expense' && !transactionForm.supplier_id) {
+      return alert('Gider işlemleri için tedarikçi seçimi zorunludur!')
     }
 
     try {
@@ -153,15 +184,20 @@ export default function AccountingPage() {
         document_type: 'manual',
         reference_number: `MAN-${Date.now()}`,
         created_by: user?.id,
-        currency: transactionForm.currency
+        currency: transactionForm.currency,
+        payment_method: transactionForm.payment_method
       }
 
-      // Müşteri veya tedarikçi ID'sini ekle
-      if (transactionForm.customer_id) {
+      // Gelir ise müşteri, gider ise tedarikçi
+      if (transactionForm.transaction_type === 'income') {
         transactionData.customer_id = transactionForm.customer_id
-      }
-      if (transactionForm.supplier_id) {
+      } else {
         transactionData.supplier_id = transactionForm.supplier_id
+      }
+
+      // Kategori varsa ekle
+      if (transactionForm.category_id) {
+        transactionData.category_id = transactionForm.category_id
       }
 
       await supabase.from('current_account_transactions').insert(transactionData)
@@ -175,7 +211,8 @@ export default function AccountingPage() {
         payment_method: 'cash',
         currency: 'TRY',
         customer_id: '',
-        supplier_id: ''
+        supplier_id: '',
+        category_id: ''
       })
       loadData()
     } catch (error) {
@@ -382,13 +419,21 @@ export default function AccountingPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Açıklama</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tür</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ödeme</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Para Birimi</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referans</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {allTransactions.map((transaction) => (
+                  {allTransactions.map((transaction) => {
+                    const paymentMethodLabels = {
+                      'cash': 'Nakit',
+                      'transfer': 'Havale',
+                      'check': 'Çek',
+                      'other': 'Diğer'
+                    }
+                    return (
                     <tr key={transaction.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatDate(transaction.transaction_date)}
@@ -405,6 +450,9 @@ export default function AccountingPage() {
                           {transaction.transaction_type === 'credit' ? 'Gelir' : 'Gider'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transaction.payment_method ? paymentMethodLabels[transaction.payment_method as keyof typeof paymentMethodLabels] || '-' : '-'}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
                         <span className={transaction.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'}>
                           {transaction.transaction_type === 'credit' ? '+' : '-'}
@@ -418,7 +466,8 @@ export default function AccountingPage() {
                         {transaction.reference_number || '-'}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {allTransactions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
@@ -449,7 +498,7 @@ export default function AccountingPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">İşlem Türü *</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'income'})}
+                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'income', customer_id: '', supplier_id: '', category_id: ''})}
                       className={`px-4 py-2 rounded-lg font-medium border ${
                         transactionForm.transaction_type === 'income'
                           ? 'bg-green-600 text-white border-green-600'
@@ -459,7 +508,7 @@ export default function AccountingPage() {
                       Gelir
                     </button>
                     <button
-                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'expense'})}
+                      onClick={() => setTransactionForm({...transactionForm, transaction_type: 'expense', customer_id: '', supplier_id: '', category_id: ''})}
                       className={`px-4 py-2 rounded-lg font-medium border ${
                         transactionForm.transaction_type === 'expense'
                           ? 'bg-red-600 text-white border-red-600'
@@ -498,15 +547,15 @@ export default function AccountingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {transactionForm.transaction_type === 'income' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri *</label>
                     <select
                       value={transactionForm.customer_id}
-                      onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
+                      onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     >
-                      <option value="">Seçiniz...</option>
+                      <option value="">Müşteri Seçiniz...</option>
                       {customers.map(customer => (
                         <option key={customer.id} value={customer.id}>
                           {customer.customer_name}
@@ -514,17 +563,49 @@ export default function AccountingPage() {
                       ))}
                     </select>
                   </div>
+                ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi *</label>
                     <select
                       value={transactionForm.supplier_id}
-                      onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: ''})}
+                      onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     >
-                      <option value="">Seçiniz...</option>
+                      <option value="">Tedarikçi Seçiniz...</option>
                       {suppliers.map(supplier => (
                         <option key={supplier.id} value={supplier.id}>
                           {supplier.company_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Yöntemi *</label>
+                    <select
+                      value={transactionForm.payment_method}
+                      onChange={(e) => setTransactionForm({...transactionForm, payment_method: e.target.value as any})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="cash">Nakit</option>
+                      <option value="transfer">Havale</option>
+                      <option value="check">Çek</option>
+                      <option value="other">Diğer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Kategori</label>
+                    <select
+                      value={transactionForm.category_id}
+                      onChange={(e) => setTransactionForm({...transactionForm, category_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Kategori Seçiniz...</option>
+                      {(transactionForm.transaction_type === 'income' ? incomeCategories : expenseCategories).map(category => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
                         </option>
                       ))}
                     </select>

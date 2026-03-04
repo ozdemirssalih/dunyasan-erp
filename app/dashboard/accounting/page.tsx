@@ -397,7 +397,7 @@ export default function AccountingPage() {
                       transaction.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {transaction.transaction_type === 'credit' ? '+' : '-'}
-                      {formatCurrency(parseFloat(transaction.amount))}
+                      {formatCurrency(parseFloat(transaction.amount), transaction.currency || 'TRY')}
                     </div>
                   </div>
                 </div>

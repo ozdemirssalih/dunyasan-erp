@@ -6,13 +6,14 @@ import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
   Wallet, TrendingUp, TrendingDown, Clock, AlertCircle,
-  Plus, X, Save, DollarSign, Calendar, FileText
+  Plus, X, Save, DollarSign, Calendar, FileText, History
 } from 'lucide-react'
 
 export default function AccountingPage() {
   const { canCreate } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard')
 
   // Data states
   const [cashBalance, setCashBalance] = useState(0)
@@ -20,7 +21,10 @@ export default function AccountingPage() {
   const [payables, setPayables] = useState(0) // Borçlar
   const [pendingPayments, setPendingPayments] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
+  const [allTransactions, setAllTransactions] = useState<any[]>([])
   const [currentAccountsData, setCurrentAccountsData] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [suppliers, setSuppliers] = useState<any[]>([])
 
   // Modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false)
@@ -31,7 +35,10 @@ export default function AccountingPage() {
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0],
-    payment_method: 'cash'
+    payment_method: 'cash',
+    currency: 'TRY',
+    customer_id: '',
+    supplier_id: ''
   })
 
   useEffect(() => {
@@ -67,15 +74,15 @@ export default function AccountingPage() {
     if (!companyId) return
 
     try {
-      // Cari hesap işlemlerini yükle
+      // Cari hesap işlemlerini yükle (tümü)
       const { data: transactions } = await supabase
         .from('current_account_transactions')
         .select('*')
         .eq('company_id', companyId)
         .order('transaction_date', { ascending: false })
-        .limit(10)
 
-      setRecentTransactions(transactions || [])
+      setAllTransactions(transactions || [])
+      setRecentTransactions(transactions?.slice(0, 10) || [])
 
       // Alacakları hesapla (credit - bize gelecek)
       const receivablesData = transactions?.filter(t => t.transaction_type === 'credit')
@@ -101,21 +108,26 @@ export default function AccountingPage() {
 
       setPendingPayments(invoices || [])
 
-      // Cari hesaplar özeti
-      const { data: customers } = await supabase
+      // Müşterileri ve tedarikçileri yükle
+      const { data: customersData } = await supabase
         .from('customer_companies')
         .select('id, customer_name')
         .eq('company_id', companyId)
+        .order('customer_name')
 
-      const { data: suppliers } = await supabase
+      const { data: suppliersData } = await supabase
         .from('suppliers')
         .select('id, company_name')
         .eq('company_id', companyId)
         .eq('is_active', true)
+        .order('company_name')
+
+      setCustomers(customersData || [])
+      setSuppliers(suppliersData || [])
 
       const accountsData = [
-        ...(customers || []).map(c => ({ ...c, type: 'customer', name: c.customer_name })),
-        ...(suppliers || []).map(s => ({ ...s, type: 'supplier', name: s.company_name }))
+        ...(customersData || []).map(c => ({ ...c, type: 'customer', name: c.customer_name })),
+        ...(suppliersData || []).map(s => ({ ...s, type: 'supplier', name: s.company_name }))
       ]
 
       setCurrentAccountsData(accountsData)
@@ -132,7 +144,7 @@ export default function AccountingPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      await supabase.from('current_account_transactions').insert({
+      const transactionData: any = {
         company_id: companyId,
         transaction_type: transactionForm.transaction_type === 'income' ? 'credit' : 'debit',
         amount: parseFloat(transactionForm.amount),
@@ -140,8 +152,19 @@ export default function AccountingPage() {
         transaction_date: transactionForm.transaction_date,
         document_type: 'manual',
         reference_number: `MAN-${Date.now()}`,
-        created_by: user?.id
-      })
+        created_by: user?.id,
+        currency: transactionForm.currency
+      }
+
+      // Müşteri veya tedarikçi ID'sini ekle
+      if (transactionForm.customer_id) {
+        transactionData.customer_id = transactionForm.customer_id
+      }
+      if (transactionForm.supplier_id) {
+        transactionData.supplier_id = transactionForm.supplier_id
+      }
+
+      await supabase.from('current_account_transactions').insert(transactionData)
 
       setShowTransactionModal(false)
       setTransactionForm({
@@ -149,7 +172,10 @@ export default function AccountingPage() {
         amount: '',
         description: '',
         transaction_date: new Date().toISOString().split('T')[0],
-        payment_method: 'cash'
+        payment_method: 'cash',
+        currency: 'TRY',
+        customer_id: '',
+        supplier_id: ''
       })
       loadData()
     } catch (error) {
@@ -158,8 +184,8 @@ export default function AccountingPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount)
+  const formatCurrency = (amount: number, currency: string = 'TRY') => {
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency }).format(amount)
   }
 
   const formatDate = (dateString: string) => {
@@ -181,24 +207,54 @@ export default function AccountingPage() {
     <PermissionGuard module="accounting" permission="view">
       <div className="min-h-screen bg-gray-50 p-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Muhasebe</h1>
-            <p className="text-gray-600">Gelir, gider ve cari hesap yönetimi</p>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Muhasebe</h1>
+              <p className="text-gray-600">Gelir, gider ve cari hesap yönetimi</p>
+            </div>
+            {canCreate('accounting') && (
+              <button
+                onClick={() => setShowTransactionModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Yeni İşlem
+              </button>
+            )}
           </div>
-          {canCreate('accounting') && (
+
+          {/* Tabs */}
+          <div className="flex gap-4 border-b border-gray-200">
             <button
-              onClick={() => setShowTransactionModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-colors"
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                activeTab === 'dashboard'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <Plus className="w-5 h-5" />
-              Yeni İşlem
+              Dashboard
             </button>
-          )}
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                activeTab === 'history'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Geçmiş İşlemler
+            </button>
+          </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Tab Content */}
+        {activeTab === 'dashboard' ? (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Kasa */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -311,6 +367,70 @@ export default function AccountingPage() {
             </div>
           </div>
         </div>
+          </>
+        ) : (
+          /* Geçmiş İşlemler */
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-900">Tüm İşlemler</h3>
+              <p className="text-sm text-gray-600 mt-1">Toplam {allTransactions.length} işlem</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Açıklama</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tür</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Para Birimi</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referans</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {allTransactions.map((transaction) => (
+                    <tr key={transaction.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(transaction.transaction_date)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {transaction.description || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          transaction.transaction_type === 'credit'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {transaction.transaction_type === 'credit' ? 'Gelir' : 'Gider'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                        <span className={transaction.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'}>
+                          {transaction.transaction_type === 'credit' ? '+' : '-'}
+                          {formatCurrency(parseFloat(transaction.amount), transaction.currency || 'TRY')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transaction.currency || 'TRY'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {transaction.reference_number || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {allTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        Henüz işlem bulunmuyor
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Transaction Modal */}
         {showTransactionModal && (
@@ -350,17 +470,67 @@ export default function AccountingPage() {
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={transactionForm.amount}
-                    onChange={(e) => setTransactionForm({...transactionForm, amount: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    placeholder="0.00"
-                  />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={transactionForm.amount}
+                      onChange={(e) => setTransactionForm({...transactionForm, amount: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Para Birimi *</label>
+                    <select
+                      value={transactionForm.currency}
+                      onChange={(e) => setTransactionForm({...transactionForm, currency: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="TRY">TRY - Türk Lirası</option>
+                      <option value="USD">USD - Amerikan Doları</option>
+                      <option value="EUR">EUR - Euro</option>
+                      <option value="GBP">GBP - İngiliz Sterlini</option>
+                    </select>
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
+                    <select
+                      value={transactionForm.customer_id}
+                      onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Seçiniz...</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.customer_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+                    <select
+                      value={transactionForm.supplier_id}
+                      onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: ''})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Seçiniz...</option>
+                      {suppliers.map(supplier => (
+                        <option key={supplier.id} value={supplier.id}>
+                          {supplier.company_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
                   <textarea

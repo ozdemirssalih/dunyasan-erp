@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS current_account_transactions (
 
     -- Tarih ve kullanıcı
     transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    due_date DATE, -- Vade tarihi
     created_by UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

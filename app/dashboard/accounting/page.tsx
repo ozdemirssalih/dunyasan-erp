@@ -40,6 +40,7 @@ export default function AccountingPage() {
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0],
+    due_date: '',
     payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
@@ -211,6 +212,7 @@ export default function AccountingPage() {
         amount: parseFloat(transactionForm.amount),
         description: transactionForm.description,
         transaction_date: transactionForm.transaction_date,
+        due_date: transactionForm.due_date || null,
         document_type: 'manual',
         reference_number: `MAN-${Date.now()}`,
         created_by: user?.id,
@@ -238,6 +240,7 @@ export default function AccountingPage() {
         amount: '',
         description: '',
         transaction_date: new Date().toISOString().split('T')[0],
+        due_date: '',
         payment_method: 'cash',
         currency: 'TRY',
         customer_id: '',
@@ -494,6 +497,7 @@ export default function AccountingPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vade</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Açıklama</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tür</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ödeme</th>
@@ -514,6 +518,9 @@ export default function AccountingPage() {
                     <tr key={transaction.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatDate(transaction.transaction_date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {transaction.due_date ? formatDate(transaction.due_date) : '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {transaction.description || '-'}
@@ -699,14 +706,25 @@ export default function AccountingPage() {
                     placeholder="İşlem açıklaması..."
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
-                  <input
-                    type="date"
-                    value={transactionForm.transaction_date}
-                    onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
+                    <input
+                      type="date"
+                      value={transactionForm.transaction_date}
+                      onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Vade Günü</label>
+                    <input
+                      type="date"
+                      value={transactionForm.due_date}
+                      onChange={(e) => setTransactionForm({...transactionForm, due_date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="p-6 border-t border-gray-200 flex gap-3">

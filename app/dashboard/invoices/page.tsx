@@ -313,7 +313,7 @@ export default function InvoicesPage() {
       <div className="min-h-screen bg-gray-50 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">📄 Faturalar & İrsaliyeler</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Faturalar & İrsaliyeler</h1>
           <p className="text-gray-600">Fatura ve irsaliye yönetimi</p>
         </div>
 

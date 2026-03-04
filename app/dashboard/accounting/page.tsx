@@ -20,6 +20,8 @@ export default function AccountingPageV2() {
   const [cashBalances, setCashBalances] = useState<Record<string, number>>({})
   const [totalReceivables, setTotalReceivables] = useState<Record<string, number>>({})
   const [totalPayables, setTotalPayables] = useState<Record<string, number>>({})
+  const [monthlyIncome, setMonthlyIncome] = useState<Record<string, number>>({})
+  const [monthlyExpense, setMonthlyExpense] = useState<Record<string, number>>({})
 
   // Lists
   const [recentCashTransactions, setRecentCashTransactions] = useState<any[]>([])
@@ -159,6 +161,31 @@ export default function AccountingPageV2() {
 
       setCustomers(customersData || [])
       setSuppliers(suppliersData || [])
+
+      // Bu ayki gelir/gider hesapla
+      const now = new Date()
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+      const monthlyIncomeByCurrency: Record<string, number> = {}
+      const monthlyExpenseByCurrency: Record<string, number> = {}
+
+      cashTxns?.forEach(t => {
+        const txDate = new Date(t.transaction_date)
+        if (txDate >= firstDayOfMonth && txDate <= lastDayOfMonth) {
+          const currency = t.currency || 'TRY'
+          const amount = parseFloat(t.amount)
+
+          if (t.transaction_type === 'income') {
+            monthlyIncomeByCurrency[currency] = (monthlyIncomeByCurrency[currency] || 0) + amount
+          } else {
+            monthlyExpenseByCurrency[currency] = (monthlyExpenseByCurrency[currency] || 0) + amount
+          }
+        }
+      })
+
+      setMonthlyIncome(monthlyIncomeByCurrency)
+      setMonthlyExpense(monthlyExpenseByCurrency)
 
     } catch (error) {
       console.error('Error loading data:', error)
@@ -359,7 +386,7 @@ export default function AccountingPageV2() {
         {activeTab === 'dashboard' ? (
           <>
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
               {/* Kasa Bakiyesi */}
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -421,6 +448,54 @@ export default function AccountingPageV2() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Bu Ayki Gelir */}
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-6 shadow-lg text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="text-sm text-emerald-100 mb-2">Bu Ayki Gelir</div>
+                {Object.keys(monthlyIncome).length === 0 ? (
+                  <div className="text-xl font-bold">0.00 TRY</div>
+                ) : (
+                  <div className="space-y-1">
+                    {Object.entries(monthlyIncome).map(([currency, amount]) => (
+                      <div key={currency} className="text-lg font-bold">
+                        {formatCurrency(amount, currency)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-emerald-100 text-xs mt-2">
+                  {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+
+              {/* Bu Ayki Gider */}
+              <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-xl p-6 shadow-lg text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <TrendingDown className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="text-sm text-rose-100 mb-2">Bu Ayki Gider</div>
+                {Object.keys(monthlyExpense).length === 0 ? (
+                  <div className="text-xl font-bold">0.00 TRY</div>
+                ) : (
+                  <div className="space-y-1">
+                    {Object.entries(monthlyExpense).map(([currency, amount]) => (
+                      <div key={currency} className="text-lg font-bold">
+                        {formatCurrency(amount, currency)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-rose-100 text-xs mt-2">
+                  {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+                </p>
               </div>
             </div>
 

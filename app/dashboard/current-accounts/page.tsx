@@ -119,13 +119,16 @@ export default function CurrentAccountsPage() {
           new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
         )
 
+        // Para birimini en son işlemden al, yoksa TRY
+        const mainCurrency = sortedTxs[0]?.currency || 'TRY'
+
         accountsData.push({
           id: customer.id,
           type: 'customer',
           name: customer.customer_name,
           totalReceivable,
           totalPayable: 0,
-          currency: 'TRY', // Varsayılan, gerçekte işlemlerden alınabilir
+          currency: mainCurrency,
           lastTransactionDate: sortedTxs[0]?.transaction_date,
           transactionCount: customerTxs.length,
           overdueCount
@@ -151,13 +154,16 @@ export default function CurrentAccountsPage() {
           new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
         )
 
+        // Para birimini en son işlemden al, yoksa TRY
+        const mainCurrency = sortedTxs[0]?.currency || 'TRY'
+
         accountsData.push({
           id: supplier.id,
           type: 'supplier',
           name: supplier.company_name,
           totalReceivable: 0,
           totalPayable,
-          currency: 'TRY',
+          currency: mainCurrency,
           lastTransactionDate: sortedTxs[0]?.transaction_date,
           transactionCount: supplierTxs.length,
           overdueCount

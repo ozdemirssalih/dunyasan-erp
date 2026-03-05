@@ -235,6 +235,27 @@ export default function AccountingPageV2() {
         // ÖDEME KAYDI (Kasa işlemi)
         const amount = parseFloat(transactionForm.amount)
 
+        // Validasyon: Eğer bir işlem seçildiyse, tutar kalan tutardan fazla olamaz
+        if (transactionForm.related_account_transaction_id) {
+          const { data: accountTxn } = await supabase
+            .from('current_account_transactions')
+            .select('*')
+            .eq('id', transactionForm.related_account_transaction_id)
+            .single()
+
+          if (accountTxn) {
+            const remaining = parseFloat(accountTxn.amount) - parseFloat(accountTxn.paid_amount || 0)
+            if (amount > remaining) {
+              return alert(`Ödeme tutarı kalan tutardan (${formatCurrency(remaining, accountTxn.currency)}) fazla olamaz!`)
+            }
+          }
+        }
+
+        // Validasyon: Müşteri veya tedarikçi seçilmeli
+        if (!transactionForm.customer_id && !transactionForm.supplier_id) {
+          return alert('Müşteri veya tedarikçi seçimi zorunludur!')
+        }
+
         // Kasa kaydı oluştur
         const cashData: any = {
           company_id: companyId,
@@ -284,6 +305,7 @@ export default function AccountingPageV2() {
         }
       }
 
+      alert('İşlem başarıyla kaydedildi!')
       setShowTransactionModal(false)
       resetForm()
       loadData()
@@ -826,26 +848,51 @@ export default function AccountingPageV2() {
                     </div>
 
                     {/* Açık Alacak/Borç Seçimi */}
-                    {(transactionForm.customer_id || transactionForm.supplier_id) && getUnpaidTransactions().length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Hangi {transactionForm.customer_id ? 'Alacağı' : 'Borcu'} Kapatıyorsunuz?
+                    {(transactionForm.customer_id || transactionForm.supplier_id) && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <label className="block text-sm font-bold text-blue-900 mb-3">
+                          💡 Hangi {transactionForm.customer_id ? 'Alacağı' : 'Borcu'} Kapatıyorsunuz?
                         </label>
-                        <select
-                          value={transactionForm.related_account_transaction_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, related_account_transaction_id: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Seçiniz (opsiyonel)</option>
-                          {getUnpaidTransactions().map(txn => {
-                            const remaining = parseFloat(txn.amount) - parseFloat(txn.paid_amount || 0)
-                            return (
-                              <option key={txn.id} value={txn.id}>
-                                {formatDate(txn.due_date)} - {formatCurrency(remaining, txn.currency)} - {txn.description || 'Açıklama yok'}
-                              </option>
-                            )
-                          })}
-                        </select>
+                        {getUnpaidTransactions().length > 0 ? (
+                          <>
+                            <select
+                              value={transactionForm.related_account_transaction_id}
+                              onChange={(e) => {
+                                const selectedTxn = getUnpaidTransactions().find(t => t.id === e.target.value)
+                                if (selectedTxn) {
+                                  const remaining = parseFloat(selectedTxn.amount) - parseFloat(selectedTxn.paid_amount || 0)
+                                  setTransactionForm({
+                                    ...transactionForm,
+                                    related_account_transaction_id: e.target.value,
+                                    amount: remaining.toString(),
+                                    currency: selectedTxn.currency || 'TRY'
+                                  })
+                                } else {
+                                  setTransactionForm({...transactionForm, related_account_transaction_id: e.target.value})
+                                }
+                              }}
+                              className="w-full px-4 py-2 border border-blue-300 rounded-lg text-gray-900 bg-white"
+                            >
+                              <option value="">Genel Ödeme (Belirli bir işleme bağlanmaz)</option>
+                              {getUnpaidTransactions().map(txn => {
+                                const remaining = parseFloat(txn.amount) - parseFloat(txn.paid_amount || 0)
+                                const statusLabel = txn.status === 'partial' ? '⚠️ Kısmi Ödenmiş' : '🔴 Ödenmedi'
+                                return (
+                                  <option key={txn.id} value={txn.id}>
+                                    {statusLabel} | Vade: {formatDate(txn.due_date)} | Kalan: {formatCurrency(remaining, txn.currency)} | Ref: {txn.reference_number || '-'} | {txn.description || 'Açıklama yok'}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                            <p className="text-xs text-blue-700 mt-2">
+                              ℹ️ Seçilen işlemin kalan tutarı otomatik olarak doldurulacaktır. İsterseniz değiştirebilirsiniz.
+                            </p>
+                          </>
+                        ) : (
+                          <div className="bg-white border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                            ✅ Bu {transactionForm.customer_id ? 'müşterinin açık alacağı' : 'tedarikçinin açık borcu'} bulunmuyor. Direkt kasa işlemi olarak kaydedilecektir.
+                          </div>
+                        )}
                       </div>
                     )}
 

@@ -106,13 +106,15 @@ export default function AccountingPageV2() {
       setCashBalances(cashByCurrency)
 
       // Ödenmeyi bekleyen alacakları yükle
-      const { data: receivables } = await supabase
+      const { data: receivables, error: recError } = await supabase
         .from('current_account_transactions')
         .select('*, customer:customer_companies(customer_name)')
         .eq('company_id', companyId)
         .eq('transaction_type', 'receivable')
         .in('status', ['unpaid', 'partial'])
-        .order('due_date', { ascending: true })
+        .order('due_date')
+
+      if (recError) console.error('Receivables error:', recError)
 
       setUnpaidReceivables(receivables || [])
 
@@ -126,13 +128,15 @@ export default function AccountingPageV2() {
       setTotalReceivables(receivableByCurrency)
 
       // Ödenmeyi bekleyen borçları yükle
-      const { data: payables } = await supabase
+      const { data: payables, error: payError } = await supabase
         .from('current_account_transactions')
         .select('*, supplier:suppliers(company_name)')
         .eq('company_id', companyId)
         .eq('transaction_type', 'payable')
         .in('status', ['unpaid', 'partial'])
-        .order('due_date', { ascending: true })
+        .order('due_date')
+
+      if (payError) console.error('Payables error:', payError)
 
       setUnpaidPayables(payables || [])
 

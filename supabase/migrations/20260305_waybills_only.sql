@@ -1,6 +1,6 @@
--- Migration: Create waybills (irsaliyeler) table
+-- Migration: Create waybills (irsaliyeler) table ONLY
 -- Date: 2026-03-05
--- Description: Waybill/delivery note management system
+-- Note: Storage policies already exist for accounting-documents bucket
 
 -- Create waybills table
 CREATE TABLE IF NOT EXISTS waybills (
@@ -13,21 +13,21 @@ CREATE TABLE IF NOT EXISTS waybills (
   type VARCHAR(20) NOT NULL CHECK (type IN ('inbound', 'outbound')),
 
   -- Relations
-  inventory_transaction_id UUID REFERENCES inventory_transactions(id) ON DELETE SET NULL,
-  customer_id UUID REFERENCES customer_companies(id) ON DELETE SET NULL,
-  supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
+  inventory_transaction_id UUID, -- warehouse_transactions tablosu mevcut olmayabilir
+  customer_id UUID,
+  supplier_id UUID,
 
   -- Status
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'cancelled')),
 
   -- Document
-  document_url TEXT, -- PDF irsaliye belgesi
+  document_url TEXT, -- PDF irsaliye belgesi (accounting-documents bucket'da)
 
   -- Additional info
   notes TEXT,
 
   -- Metadata
-  created_by UUID REFERENCES auth.users(id),
+  created_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -39,9 +39,6 @@ CREATE TABLE IF NOT EXISTS waybills (
 CREATE INDEX IF NOT EXISTS idx_waybills_company_id ON waybills(company_id);
 CREATE INDEX IF NOT EXISTS idx_waybills_status ON waybills(status);
 CREATE INDEX IF NOT EXISTS idx_waybills_type ON waybills(type);
-CREATE INDEX IF NOT EXISTS idx_waybills_customer_id ON waybills(customer_id);
-CREATE INDEX IF NOT EXISTS idx_waybills_supplier_id ON waybills(supplier_id);
-CREATE INDEX IF NOT EXISTS idx_waybills_inventory_transaction_id ON waybills(inventory_transaction_id);
 CREATE INDEX IF NOT EXISTS idx_waybills_waybill_date ON waybills(waybill_date);
 
 -- Enable RLS
@@ -107,4 +104,4 @@ COMMENT ON TABLE waybills IS 'Irsaliye (waybill/delivery note) records';
 COMMENT ON COLUMN waybills.waybill_number IS 'Unique waybill number within company';
 COMMENT ON COLUMN waybills.type IS 'inbound (giriş) or outbound (çıkış)';
 COMMENT ON COLUMN waybills.status IS 'pending (bekliyor), completed (tamamlandı), cancelled (iptal)';
-COMMENT ON COLUMN waybills.document_url IS 'Path to PDF waybill document in storage';
+COMMENT ON COLUMN waybills.document_url IS 'Path to PDF waybill document in accounting-documents bucket';

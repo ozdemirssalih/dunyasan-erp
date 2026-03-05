@@ -44,7 +44,8 @@ CREATE INDEX IF NOT EXISTS idx_waybills_waybill_date ON waybills(waybill_date);
 -- Enable RLS
 ALTER TABLE waybills ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
+-- RLS Policies (Drop if exists first, then create)
+DROP POLICY IF EXISTS "Users can view waybills for their company" ON waybills;
 CREATE POLICY "Users can view waybills for their company"
 ON waybills
 FOR SELECT
@@ -55,6 +56,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can insert waybills for their company" ON waybills;
 CREATE POLICY "Users can insert waybills for their company"
 ON waybills
 FOR INSERT
@@ -65,6 +67,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Users can update waybills for their company" ON waybills;
 CREATE POLICY "Users can update waybills for their company"
 ON waybills
 FOR UPDATE
@@ -75,6 +78,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can delete waybills for their company" ON waybills;
 CREATE POLICY "Users can delete waybills for their company"
 ON waybills
 FOR DELETE

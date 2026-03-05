@@ -34,6 +34,11 @@ export default function AccountingPageV2() {
   // Modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false)
 
+  // Kasa geçmişi filtreleme state'leri
+  const [searchQuery, setSearchQuery] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+
   // Form state
   const [formMode, setFormMode] = useState<'account' | 'payment'>('account') // Cari kayıt mı, ödeme mi?
   const [documentFile, setDocumentFile] = useState<File | null>(null) // PDF belgesi
@@ -405,6 +410,37 @@ export default function AccountingPageV2() {
     return []
   }
 
+  // Kasa geçmişi filtreleme
+  const getFilteredCashTransactions = () => {
+    return allCashTransactions.filter(transaction => {
+      // Arama filtresi (açıklama veya referans)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesDescription = transaction.description?.toLowerCase().includes(query)
+        const matchesReference = transaction.reference_number?.toLowerCase().includes(query)
+        if (!matchesDescription && !matchesReference) {
+          return false
+        }
+      }
+
+      // Tarih filtreleri
+      const txDate = new Date(transaction.transaction_date)
+      if (startDate) {
+        const start = new Date(startDate)
+        if (txDate < start) return false
+      }
+      if (endDate) {
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999) // Günün sonuna ayarla
+        if (txDate > end) return false
+      }
+
+      return true
+    })
+  }
+
+  const filteredCashTransactions = getFilteredCashTransactions()
+
   return (
     <PermissionGuard module="accounting" permission="view">
       <div className="min-h-screen bg-gray-50 p-8">
@@ -659,8 +695,75 @@ export default function AccountingPageV2() {
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold text-gray-900">Kasa Hareketleri</h3>
-              <p className="text-sm text-gray-600 mt-1">Toplam {allCashTransactions.length} işlem</p>
+              <p className="text-sm text-gray-600 mt-1">
+                {filteredCashTransactions.length} işlem gösteriliyor
+                {filteredCashTransactions.length !== allCashTransactions.length && (
+                  <span className="text-gray-500"> (Toplam {allCashTransactions.length})</span>
+                )}
+              </p>
             </div>
+
+            {/* Filtreleme Alanları */}
+            <div className="p-6 bg-gray-50 border-b border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Arama */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    🔍 Arama
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Açıklama veya referans ara..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Başlangıç Tarihi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📅 Başlangıç
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Bitiş Tarihi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📅 Bitiş
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Temizle Butonu */}
+              {(searchQuery || startDate || endDate) && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setSearchQuery('')
+                      setStartDate('')
+                      setEndDate('')
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    ✕ Filtreleri Temizle
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -674,7 +777,7 @@ export default function AccountingPageV2() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {allCashTransactions.map((transaction) => {
+                  {filteredCashTransactions.map((transaction) => {
                     const paymentMethodLabels = {
                       'cash': 'Nakit',
                       'transfer': 'Havale',
@@ -724,10 +827,13 @@ export default function AccountingPageV2() {
                       </tr>
                     )
                   })}
-                  {allCashTransactions.length === 0 && (
+                  {filteredCashTransactions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                        Henüz işlem bulunmuyor
+                        {allCashTransactions.length === 0
+                          ? 'Henüz işlem bulunmuyor'
+                          : 'Filtrelere uyan işlem bulunamadı. Filtreleri değiştirmeyi deneyin.'
+                        }
                       </td>
                     </tr>
                   )}

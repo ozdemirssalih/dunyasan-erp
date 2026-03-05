@@ -2,8 +2,11 @@
 -- Date: 2026-03-05
 -- Note: Storage policies already exist for accounting-documents bucket
 
+-- Drop table if exists (clean start)
+DROP TABLE IF EXISTS waybills CASCADE;
+
 -- Create waybills table
-CREATE TABLE IF NOT EXISTS waybills (
+CREATE TABLE waybills (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
 

@@ -211,15 +211,27 @@ export default function CurrentAccountsPage() {
     setSelectedAccount(account)
 
     try {
-      // İlgili hesabın tüm işlemlerini çek
-      const { data } = await supabase
+      // İlgili hesabın tüm cari işlemlerini çek
+      const { data: accountTxns } = await supabase
         .from('current_account_transactions')
         .select('*')
         .eq('company_id', companyId!)
         .eq(account.type === 'customer' ? 'customer_id' : 'supplier_id', account.id)
-        .order('transaction_date', { ascending: false })
 
-      setSelectedAccountTransactions(data || [])
+      // İlgili hesabın tüm kasa ödemelerini çek
+      const { data: cashTxns } = await supabase
+        .from('cash_transactions')
+        .select('*')
+        .eq('company_id', companyId!)
+        .eq(account.type === 'customer' ? 'customer_id' : 'supplier_id', account.id)
+
+      // İkisini birleştir ve transaction_date'e göre sırala
+      const allTransactions = [
+        ...(accountTxns || []).map(tx => ({ ...tx, source: 'account' })),
+        ...(cashTxns || []).map(tx => ({ ...tx, source: 'cash' }))
+      ].sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
+
+      setSelectedAccountTransactions(allTransactions as any)
       setShowDetailModal(true)
     } catch (error) {
       console.error('Error loading account transactions:', error)
@@ -510,6 +522,7 @@ export default function CurrentAccountsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Kaynak</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tarih</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Vade</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tip</th>
@@ -522,57 +535,118 @@ export default function CurrentAccountsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {selectedAccountTransactions.map((tx) => {
+                  {selectedAccountTransactions.map((tx: any) => {
+                    const isCashTransaction = tx.source === 'cash'
                     const amount = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount)
+
+                    // Cari işlem hesaplamaları
                     const paidAmount = tx.paid_amount ? (typeof tx.paid_amount === 'number' ? tx.paid_amount : parseFloat(tx.paid_amount)) : 0
                     const remaining = amount - paidAmount
-                    const overdue = isOverdue(tx.due_date) && tx.status !== 'paid'
+                    const overdue = !isCashTransaction && tx.due_date && isOverdue(tx.due_date) && tx.status !== 'paid'
 
                     return (
-                      <tr key={tx.id} className={`hover:bg-gray-50 ${overdue ? 'bg-red-50' : ''}`}>
+                      <tr key={tx.id} className={`hover:bg-gray-50 ${overdue ? 'bg-red-50' : ''} ${isCashTransaction ? 'bg-blue-50' : ''}`}>
+                        {/* Kaynak */}
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${
+                            isCashTransaction ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {isCashTransaction ? 'Kasa' : 'Cari'}
+                          </span>
+                        </td>
+
+                        {/* Tarih */}
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {formatDate(tx.transaction_date)}
                         </td>
+
+                        {/* Vade */}
                         <td className="px-4 py-3 text-sm">
-                          <div className="flex items-center">
-                            {overdue && <AlertCircle className="w-4 h-4 text-red-600 mr-1" />}
-                            <span className={overdue ? 'text-red-600 font-medium' : 'text-gray-900'}>
-                              {formatDate(tx.due_date)}
-                            </span>
-                          </div>
+                          {isCashTransaction ? (
+                            <span className="text-gray-400">-</span>
+                          ) : (
+                            <div className="flex items-center">
+                              {overdue && <AlertCircle className="w-4 h-4 text-red-600 mr-1" />}
+                              <span className={overdue ? 'text-red-600 font-medium' : 'text-gray-900'}>
+                                {formatDate(tx.due_date)}
+                              </span>
+                            </div>
+                          )}
                         </td>
+
+                        {/* Tip */}
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            tx.transaction_type === 'receivable'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {tx.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
-                          </span>
+                          {isCashTransaction ? (
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${
+                              tx.transaction_type === 'income'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {tx.transaction_type === 'income' ? 'Tahsilat' : 'Ödeme'}
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${
+                              tx.transaction_type === 'receivable'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {tx.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
+                            </span>
+                          )}
                         </td>
+
+                        {/* Tutar */}
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
                           {formatCurrency(amount, tx.currency)}
                         </td>
+
+                        {/* Ödenen */}
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {formatCurrency(paidAmount, tx.currency)}
+                          {isCashTransaction ? (
+                            <span className="text-green-600 font-bold">{formatCurrency(amount, tx.currency)}</span>
+                          ) : (
+                            formatCurrency(paidAmount, tx.currency)
+                          )}
                         </td>
+
+                        {/* Kalan */}
                         <td className={`px-4 py-3 text-sm font-bold ${
+                          isCashTransaction ? 'text-gray-400' :
                           tx.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {formatCurrency(remaining, tx.currency)}
+                          {isCashTransaction ? '-' : formatCurrency(remaining, tx.currency)}
                         </td>
+
+                        {/* Durum */}
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            tx.status === 'paid' ? 'bg-gray-100 text-gray-800' :
-                            tx.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {tx.status === 'paid' ? 'Ödendi' : tx.status === 'partial' ? 'Kısmi' : 'Bekliyor'}
-                          </span>
+                          {isCashTransaction ? (
+                            <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
+                              Tamamlandı
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${
+                              tx.status === 'paid' ? 'bg-gray-100 text-gray-800' :
+                              tx.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {tx.status === 'paid' ? 'Ödendi' : tx.status === 'partial' ? 'Kısmi' : 'Bekliyor'}
+                            </span>
+                          )}
                         </td>
+
+                        {/* Açıklama */}
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {tx.description || '-'}
+                          {isCashTransaction && tx.payment_method && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              ({tx.payment_method === 'cash' ? 'Nakit' :
+                                tx.payment_method === 'transfer' ? 'Transfer' :
+                                tx.payment_method === 'check' ? 'Çek' : 'Diğer'})
+                            </div>
+                          )}
                         </td>
+
+                        {/* Referans */}
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {tx.reference_number || '-'}
                         </td>

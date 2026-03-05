@@ -11,6 +11,7 @@ interface Account {
   totalReceivable: number // Toplam alacak (ödenecek)
   totalPayable: number // Toplam borç (ödenecek)
   currency: string
+  balancesByCurrency: Record<string, { receivable: number, payable: number }> // Para birimi bazında bakiyeler
   lastTransactionDate?: string
   transactionCount: number
   overdueCount: number // Vadesi geçmiş işlem sayısı
@@ -104,10 +105,24 @@ export default function CurrentAccountsPage() {
       customers?.forEach(customer => {
         const customerTxs = allTransactions?.filter(t => t.customer_id === customer.id) || []
 
-        // Alacakları hesapla (receivable - müşteriden alınacak)
-        const totalReceivable = customerTxs
+        // Para birimi bazında bakiyeleri hesapla
+        const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
+
+        customerTxs
           .filter(t => t.transaction_type === 'receivable' && t.status !== 'paid')
-          .reduce((sum, tx) => sum + (parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)), 0)
+          .forEach(tx => {
+            const currency = tx.currency || 'TRY'
+            const remaining = parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)
+
+            if (!balancesByCurrency[currency]) {
+              balancesByCurrency[currency] = { receivable: 0, payable: 0 }
+            }
+            balancesByCurrency[currency].receivable += remaining
+          })
+
+        // Toplam alacak (TRY bazlı - backward compatibility için)
+        const totalReceivable = Object.values(balancesByCurrency)
+          .reduce((sum, b) => sum + b.receivable, 0)
 
         // Vadesi geçmiş işlem sayısı
         const overdueCount = customerTxs.filter(t =>
@@ -129,6 +144,7 @@ export default function CurrentAccountsPage() {
           totalReceivable,
           totalPayable: 0,
           currency: mainCurrency,
+          balancesByCurrency,
           lastTransactionDate: sortedTxs[0]?.transaction_date,
           transactionCount: customerTxs.length,
           overdueCount
@@ -139,10 +155,24 @@ export default function CurrentAccountsPage() {
       suppliers?.forEach(supplier => {
         const supplierTxs = allTransactions?.filter(t => t.supplier_id === supplier.id) || []
 
-        // Borçları hesapla (payable - tedarikçiye ödenecek)
-        const totalPayable = supplierTxs
+        // Para birimi bazında bakiyeleri hesapla
+        const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
+
+        supplierTxs
           .filter(t => t.transaction_type === 'payable' && t.status !== 'paid')
-          .reduce((sum, tx) => sum + (parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)), 0)
+          .forEach(tx => {
+            const currency = tx.currency || 'TRY'
+            const remaining = parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)
+
+            if (!balancesByCurrency[currency]) {
+              balancesByCurrency[currency] = { receivable: 0, payable: 0 }
+            }
+            balancesByCurrency[currency].payable += remaining
+          })
+
+        // Toplam borç (TRY bazlı - backward compatibility için)
+        const totalPayable = Object.values(balancesByCurrency)
+          .reduce((sum, b) => sum + b.payable, 0)
 
         // Vadesi geçmiş işlem sayısı
         const overdueCount = supplierTxs.filter(t =>
@@ -164,6 +194,7 @@ export default function CurrentAccountsPage() {
           totalReceivable: 0,
           totalPayable,
           currency: mainCurrency,
+          balancesByCurrency,
           lastTransactionDate: sortedTxs[0]?.transaction_date,
           transactionCount: supplierTxs.length,
           overdueCount
@@ -336,12 +367,38 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-green-600">
-                      {account.totalReceivable > 0 ? formatCurrency(account.totalReceivable) : '-'}
+                      {Object.keys(account.balancesByCurrency).length > 0 ? (
+                        <div className="space-y-1">
+                          {Object.entries(account.balancesByCurrency)
+                            .filter(([_, balance]) => balance.receivable > 0)
+                            .map(([currency, balance]) => (
+                              <div key={currency}>
+                                {new Intl.NumberFormat('tr-TR', {
+                                  style: 'currency',
+                                  currency: currency
+                                }).format(balance.receivable)}
+                              </div>
+                            ))}
+                        </div>
+                      ) : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-red-600">
-                      {account.totalPayable > 0 ? formatCurrency(account.totalPayable) : '-'}
+                      {Object.keys(account.balancesByCurrency).length > 0 ? (
+                        <div className="space-y-1">
+                          {Object.entries(account.balancesByCurrency)
+                            .filter(([_, balance]) => balance.payable > 0)
+                            .map(([currency, balance]) => (
+                              <div key={currency}>
+                                {new Intl.NumberFormat('tr-TR', {
+                                  style: 'currency',
+                                  currency: currency
+                                }).format(balance.payable)}
+                              </div>
+                            ))}
+                        </div>
+                      ) : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">

@@ -108,7 +108,7 @@ export default function AccountingPageV2() {
       // Ödenmeyi bekleyen alacakları yükle
       const { data: receivables, error: recError } = await supabase
         .from('current_account_transactions')
-        .select('*, customer:customer_companies(customer_name)')
+        .select('*')
         .eq('company_id', companyId)
         .eq('transaction_type', 'receivable')
         .in('status', ['unpaid', 'partial'])
@@ -130,7 +130,7 @@ export default function AccountingPageV2() {
       // Ödenmeyi bekleyen borçları yükle
       const { data: payables, error: payError } = await supabase
         .from('current_account_transactions')
-        .select('*, supplier:suppliers(company_name)')
+        .select('*')
         .eq('company_id', companyId)
         .eq('transaction_type', 'payable')
         .in('status', ['unpaid', 'partial'])
@@ -513,11 +513,12 @@ export default function AccountingPageV2() {
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidReceivables.slice(0, 10).map((rec) => {
                     const remaining = parseFloat(rec.amount) - parseFloat(rec.paid_amount || 0)
+                    const customer = customers.find(c => c.id === rec.customer_id)
                     return (
                       <div key={rec.id} className="p-4 hover:bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium text-gray-900">
-                            {rec.customer?.customer_name || 'Müşteri'}
+                            {customer?.customer_name || 'Müşteri'}
                           </div>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
                             rec.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
@@ -553,11 +554,12 @@ export default function AccountingPageV2() {
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidPayables.slice(0, 10).map((pay) => {
                     const remaining = parseFloat(pay.amount) - parseFloat(pay.paid_amount || 0)
+                    const supplier = suppliers.find(s => s.id === pay.supplier_id)
                     return (
                       <div key={pay.id} className="p-4 hover:bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium text-gray-900">
-                            {pay.supplier?.company_name || 'Tedarikçi'}
+                            {supplier?.company_name || 'Tedarikçi'}
                           </div>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
                             pay.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'

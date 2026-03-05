@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS waybills (
   -- Waybill details
   waybill_number VARCHAR(50) NOT NULL,
   waybill_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  type VARCHAR(20) NOT NULL CHECK (type IN ('inbound', 'outbound')),
+  waybill_type VARCHAR(20) NOT NULL CHECK (waybill_type IN ('inbound', 'outbound')),
 
   -- Relations
   inventory_transaction_id UUID, -- warehouse_transactions tablosu mevcut olmayabilir
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS waybills (
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_waybills_company_id ON waybills(company_id);
 CREATE INDEX IF NOT EXISTS idx_waybills_status ON waybills(status);
-CREATE INDEX IF NOT EXISTS idx_waybills_type ON waybills(type);
+CREATE INDEX IF NOT EXISTS idx_waybills_waybill_type ON waybills(waybill_type);
 CREATE INDEX IF NOT EXISTS idx_waybills_waybill_date ON waybills(waybill_date);
 
 -- Enable RLS
@@ -102,6 +102,6 @@ EXECUTE FUNCTION update_waybills_updated_at();
 -- Add comments
 COMMENT ON TABLE waybills IS 'Irsaliye (waybill/delivery note) records';
 COMMENT ON COLUMN waybills.waybill_number IS 'Unique waybill number within company';
-COMMENT ON COLUMN waybills.type IS 'inbound (giriş) or outbound (çıkış)';
+COMMENT ON COLUMN waybills.waybill_type IS 'inbound (giriş) or outbound (çıkış)';
 COMMENT ON COLUMN waybills.status IS 'pending (bekliyor), completed (tamamlandı), cancelled (iptal)';
 COMMENT ON COLUMN waybills.document_url IS 'Path to PDF waybill document in accounting-documents bucket';

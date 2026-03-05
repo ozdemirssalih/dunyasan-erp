@@ -8,7 +8,7 @@ interface Waybill {
   id: string
   waybill_number: string
   waybill_date: string
-  type: 'inbound' | 'outbound'
+  waybill_type: 'inbound' | 'outbound'
   status: 'pending' | 'completed' | 'cancelled'
   document_url: string | null
   notes: string | null
@@ -146,9 +146,9 @@ export default function WaybillsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 text-xs rounded ${
-                      wb.type === 'outbound' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                      wb.waybill_type === 'outbound' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                     }`}>
-                      {wb.type === 'outbound' ? '↑ Çıkış' : '↓ Giriş'}
+                      {wb.waybill_type === 'outbound' ? '↑ Çıkış' : '↓ Giriş'}
                     </span>
                   </td>
                   <td className="px-6 py-4">

@@ -98,12 +98,19 @@ export default function CurrentAccountsPage() {
         .select('*')
         .eq('company_id', companyId)
 
+      // Tüm kasa işlemlerini yükle
+      const { data: allCashTransactions } = await supabase
+        .from('cash_transactions')
+        .select('*')
+        .eq('company_id', companyId)
+
       const accountsData: Account[] = []
       const today = new Date()
 
       // Müşterileri işle
       customers?.forEach(customer => {
         const customerTxs = allTransactions?.filter(t => t.customer_id === customer.id) || []
+        const customerCashTxs = allCashTransactions?.filter(t => t.customer_id === customer.id) || []
 
         // Para birimi bazında bakiyeleri hesapla
         const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
@@ -130,12 +137,16 @@ export default function CurrentAccountsPage() {
           new Date(t.due_date) < today
         ).length
 
-        const sortedTxs = customerTxs.sort((a, b) =>
+        // Tüm işlemleri birleştir (cari + kasa) ve sırala
+        const allCustomerTxs = [
+          ...customerTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date })),
+          ...customerCashTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date }))
+        ].sort((a, b) =>
           new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
         )
 
         // Para birimini en son işlemden al, yoksa TRY
-        const mainCurrency = sortedTxs[0]?.currency || 'TRY'
+        const mainCurrency = allCustomerTxs[0]?.currency || 'TRY'
 
         accountsData.push({
           id: customer.id,
@@ -145,8 +156,8 @@ export default function CurrentAccountsPage() {
           totalPayable: 0,
           currency: mainCurrency,
           balancesByCurrency,
-          lastTransactionDate: sortedTxs[0]?.transaction_date,
-          transactionCount: customerTxs.length,
+          lastTransactionDate: allCustomerTxs[0]?.transaction_date,
+          transactionCount: customerTxs.length + customerCashTxs.length, // Hem cari hem kasa işlemleri
           overdueCount
         })
       })
@@ -154,6 +165,7 @@ export default function CurrentAccountsPage() {
       // Tedarikçileri işle
       suppliers?.forEach(supplier => {
         const supplierTxs = allTransactions?.filter(t => t.supplier_id === supplier.id) || []
+        const supplierCashTxs = allCashTransactions?.filter(t => t.supplier_id === supplier.id) || []
 
         // Para birimi bazında bakiyeleri hesapla
         const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
@@ -180,12 +192,16 @@ export default function CurrentAccountsPage() {
           new Date(t.due_date) < today
         ).length
 
-        const sortedTxs = supplierTxs.sort((a, b) =>
+        // Tüm işlemleri birleştir (cari + kasa) ve sırala
+        const allSupplierTxs = [
+          ...supplierTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date })),
+          ...supplierCashTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date }))
+        ].sort((a, b) =>
           new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
         )
 
         // Para birimini en son işlemden al, yoksa TRY
-        const mainCurrency = sortedTxs[0]?.currency || 'TRY'
+        const mainCurrency = allSupplierTxs[0]?.currency || 'TRY'
 
         accountsData.push({
           id: supplier.id,
@@ -195,8 +211,8 @@ export default function CurrentAccountsPage() {
           totalPayable,
           currency: mainCurrency,
           balancesByCurrency,
-          lastTransactionDate: sortedTxs[0]?.transaction_date,
-          transactionCount: supplierTxs.length,
+          lastTransactionDate: allSupplierTxs[0]?.transaction_date,
+          transactionCount: supplierTxs.length + supplierCashTxs.length, // Hem cari hem kasa işlemleri
           overdueCount
         })
       })

@@ -296,6 +296,27 @@ export default function CurrentAccountsPage() {
     return new Date(dueDate) < new Date()
   }
 
+  const handleDownloadDocument = async (documentPath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('accounting-documents')
+        .createSignedUrl(documentPath, 60) // 60 saniye geçerli URL
+
+      if (error) {
+        console.error('Download error:', error)
+        alert('Belge indirme hatası: ' + error.message)
+        return
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank')
+      }
+    } catch (err) {
+      console.error('Download error:', err)
+      alert('Belge indirilemedi!')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -671,16 +692,14 @@ export default function CurrentAccountsPage() {
                         {/* Belge */}
                         <td className="px-4 py-3 text-center">
                           {tx.document_url ? (
-                            <a
-                              href={tx.document_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                            <button
+                              onClick={() => handleDownloadDocument(tx.document_url)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
                               title="Belgeyi İndir"
                             >
                               <FileDown className="w-3 h-3" />
                               PDF
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
                           )}

@@ -13,12 +13,12 @@
 ### Adım 3: Bucket Ayarları
 ```
 Bucket name: accounting-documents
-Public bucket: ✅ AÇIK (ON) - Public olmalı
+Public bucket: ❌ KAPALI (OFF) - Private olmalı (güvenlik için!)
 File size limit: 5MB (opsiyonel)
 Allowed MIME types: application/pdf (opsiyonel)
 ```
 
-**ÖNEMLİ:** "Public bucket" seçeneğini **✅ AÇIK** yapın!
+**ÖNEMLİ:** "Public bucket" seçeneğini **❌ KAPALI** bırakın! Muhasebe belgeleri hassas bilgiler içerir ve herkes tarafından erişilmemeli.
 
 **Create bucket** butonuna tıklayın.
 
@@ -49,9 +49,9 @@ COMMENT ON COLUMN cash_transactions.document_url IS 'URL to uploaded PDF documen
 
 ---
 
-## 3. Storage Politikaları (Opsiyonel - Extra Güvenlik)
+## 3. Storage Politikaları (Zorunlu - Güvenlik İçin)
 
-Bucket public olsa da, RLS politikaları ekleyerek ekstra güvenlik sağlayabilirsiniz:
+Bucket private olduğu için, kullanıcıların kendi şirketlerinin belgelerine erişebilmesi için RLS politikaları eklemeniz gerekiyor:
 
 ```sql
 -- Storage Policies for accounting-documents bucket
@@ -104,8 +104,13 @@ Artık:
 ### "Bucket not found" hatası
 → Adım 1'i tekrar kontrol edin. Bucket adı tam olarak `accounting-documents` olmalı.
 
-### "403 Forbidden" hatası
-→ Bucket'ı **public** yaptığınızdan emin olun.
+### "403 Forbidden" hatası veya belge yüklenemiyor
+→ Adım 3'teki RLS politikalarını çalıştırdığınızdan emin olun.
+→ Kullanıcının profiles tablosunda company_id'si olduğundan emin olun.
 
 ### "Column does not exist" hatası
 → Adım 2'deki SQL'i çalıştırın.
+
+### Belgeler indirilemiyor
+→ RLS politikalarının doğru çalıştığını kontrol edin.
+→ Bucket'ın private (public değil) olduğundan emin olun.

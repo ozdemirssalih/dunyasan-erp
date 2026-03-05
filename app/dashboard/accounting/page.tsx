@@ -217,15 +217,11 @@ export default function AccountingPageV2() {
 
         if (uploadError) {
           console.error('Upload error:', uploadError)
-          return alert('Belge yüklenirken hata oluştu!')
+          return alert('Belge yüklenirken hata oluştu: ' + uploadError.message)
         }
 
-        // Public URL al
-        const { data: { publicUrl } } = supabase.storage
-          .from('accounting-documents')
-          .getPublicUrl(fileName)
-
-        documentUrl = publicUrl
+        // Dosya yolunu kaydet (signed URL indirme sırasında oluşturulacak)
+        documentUrl = fileName
       }
 
       if (formMode === 'account') {
@@ -364,6 +360,27 @@ export default function AccountingPageV2() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR')
+  }
+
+  const handleDownloadDocument = async (documentPath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('accounting-documents')
+        .createSignedUrl(documentPath, 60) // 60 saniye geçerli URL
+
+      if (error) {
+        console.error('Download error:', error)
+        alert('Belge indirme hatası: ' + error.message)
+        return
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank')
+      }
+    } catch (err) {
+      console.error('Download error:', err)
+      alert('Belge indirilemedi!')
+    }
   }
 
   if (loading) {
@@ -692,16 +709,14 @@ export default function AccountingPageV2() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           {transaction.document_url ? (
-                            <a
-                              href={transaction.document_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                            <button
+                              onClick={() => handleDownloadDocument(transaction.document_url)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
                               title="Belgeyi İndir"
                             >
                               <FileDown className="w-3 h-3" />
                               PDF
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
                           )}

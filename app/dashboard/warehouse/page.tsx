@@ -98,7 +98,9 @@ export default function WarehousePage() {
   const [showEntryModal, setShowEntryModal] = useState(false)
   const [showExitModal, setShowExitModal] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false)
+  const [showWaybillModal, setShowWaybillModal] = useState(false)
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null)
+  const [lastExitTransaction, setLastExitTransaction] = useState<any | null>(null)
 
   // Form states
   const [itemForm, setItemForm] = useState({
@@ -741,7 +743,7 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('warehouse_transactions')
         .insert({
           company_id: companyId,
@@ -753,8 +755,13 @@ export default function WarehousePage() {
           notes: exitForm.notes,
           created_by: currentUserId,
         })
+        .select()
+        .single()
 
       if (error) throw error
+
+      // Çıkış işlemini sakla - irsaliye için kullanılacak
+      setLastExitTransaction(data)
 
       alert('✅ Stok çıkışı başarılı!')
       setShowExitModal(false)
@@ -1332,6 +1339,28 @@ export default function WarehousePage() {
                 </button>
               </div>
             </form>
+
+            {/* İrsaliye İste Butonu - Son çıkış işlemi varsa */}
+            {lastExitTransaction && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      ✅ Son çıkış işlemi başarılı
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      İrsaliye numarası: {lastExitTransaction.reference_number || 'Belirtilmedi'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowWaybillModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2"
+                  >
+                    📄 İrsaliye İste
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

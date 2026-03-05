@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
-  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History
+  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown
 } from 'lucide-react'
 
 type TransactionType = 'receivable' | 'payable' | 'payment'
@@ -36,6 +36,7 @@ export default function AccountingPageV2() {
 
   // Form state
   const [formMode, setFormMode] = useState<'account' | 'payment'>('account') // Cari kayıt mı, ödeme mi?
+  const [documentFile, setDocumentFile] = useState<File | null>(null) // PDF belgesi
   const [transactionForm, setTransactionForm] = useState({
     transaction_type: 'receivable' as TransactionType,
     amount: '',
@@ -204,6 +205,29 @@ export default function AccountingPageV2() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
+      // Dosya yükleme işlemi (varsa)
+      let documentUrl: string | null = null
+      if (documentFile) {
+        const fileExt = documentFile.name.split('.').pop()
+        const fileName = `${companyId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('accounting-documents')
+          .upload(fileName, documentFile)
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError)
+          return alert('Belge yüklenirken hata oluştu!')
+        }
+
+        // Public URL al
+        const { data: { publicUrl } } = supabase.storage
+          .from('accounting-documents')
+          .getPublicUrl(fileName)
+
+        documentUrl = publicUrl
+      }
+
       if (formMode === 'account') {
         // CARİ KAYIT (ALACAK veya BORÇ)
         if (!transactionForm.customer_id && !transactionForm.supplier_id) {
@@ -228,6 +252,7 @@ export default function AccountingPageV2() {
           due_date: transactionForm.due_date,
           description: transactionForm.description,
           reference_number: `${isReceivable ? 'RCV' : 'PAY'}-${Date.now()}`,
+          document_url: documentUrl,
           created_by: user?.id
         })
 
@@ -266,6 +291,7 @@ export default function AccountingPageV2() {
           transaction_date: transactionForm.transaction_date,
           description: transactionForm.description,
           reference_number: `CASH-${Date.now()}`,
+          document_url: documentUrl,
           created_by: user?.id
         }
 
@@ -317,6 +343,7 @@ export default function AccountingPageV2() {
 
   const resetForm = () => {
     setFormMode('account')
+    setDocumentFile(null)
     setTransactionForm({
       transaction_type: 'receivable',
       amount: '',
@@ -626,6 +653,7 @@ export default function AccountingPageV2() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tür</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ödeme</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Belge</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -662,12 +690,28 @@ export default function AccountingPageV2() {
                             {formatCurrency(parseFloat(transaction.amount), transaction.currency || 'TRY')}
                           </span>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {transaction.document_url ? (
+                            <a
+                              href={transaction.document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                              title="Belgeyi İndir"
+                            >
+                              <FileDown className="w-3 h-3" />
+                              PDF
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
                   {allCashTransactions.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                         Henüz işlem bulunmuyor
                       </td>
                     </tr>
@@ -960,6 +1004,55 @@ export default function AccountingPageV2() {
                     rows={3}
                     placeholder="İşlem açıklaması..."
                   />
+                </div>
+
+                {/* Belge Yükleme */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📄 Belge Yükle (Opsiyonel)
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          if (file.type !== 'application/pdf') {
+                            alert('Sadece PDF dosyaları yüklenebilir!')
+                            e.target.value = ''
+                            return
+                          }
+                          if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                            alert('Dosya boyutu 5MB\'dan küçük olmalıdır!')
+                            e.target.value = ''
+                            return
+                          }
+                          setDocumentFile(file)
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    {documentFile && (
+                      <div className="flex items-center justify-between bg-white p-2 rounded border border-gray-200">
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                          <Upload className="w-4 h-4 text-green-600" />
+                          <span>{documentFile.name}</span>
+                          <span className="text-gray-500">({(documentFile.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDocumentFile(null)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      ℹ️ Fatura, makbuz veya sözleşme gibi belgeleri PDF formatında yükleyebilirsiniz. (Maks. 5MB)
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="p-6 border-t border-gray-200 flex gap-3">

@@ -236,6 +236,22 @@ export default function CurrentAccountsPage() {
     return matchesType && matchesBalance && matchesSearch
   })
 
+  // Para birimi bazında toplam alacak ve borçları hesapla
+  const receivablesByCurrency: Record<string, number> = {}
+  const payablesByCurrency: Record<string, number> = {}
+
+  accounts.forEach(acc => {
+    Object.entries(acc.balancesByCurrency).forEach(([currency, balance]) => {
+      if (balance.receivable > 0) {
+        receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.receivable
+      }
+      if (balance.payable > 0) {
+        payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.payable
+      }
+    })
+  })
+
+  // Backward compatibility için
   const totalReceivables = accounts.reduce((sum, acc) => sum + acc.totalReceivable, 0)
   const totalPayables = accounts.reduce((sum, acc) => sum + acc.totalPayable, 0)
   const netBalance = totalReceivables - totalPayables
@@ -277,7 +293,17 @@ export default function CurrentAccountsPage() {
             <span className="text-green-100 text-sm">Toplam Alacak</span>
             <TrendingUp className="w-5 h-5 text-green-100" />
           </div>
-          <div className="text-3xl font-bold">{formatCurrency(totalReceivables)}</div>
+          {Object.keys(receivablesByCurrency).length === 0 ? (
+            <div className="text-3xl font-bold">0.00 TRY</div>
+          ) : (
+            <div className="space-y-1">
+              {Object.entries(receivablesByCurrency).map(([currency, amount]) => (
+                <div key={currency} className="text-2xl font-bold">
+                  {formatCurrency(amount, currency)}
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-green-100 text-xs mt-2">Müşterilerden tahsil edilecek</p>
         </div>
 
@@ -286,7 +312,17 @@ export default function CurrentAccountsPage() {
             <span className="text-red-100 text-sm">Toplam Borç</span>
             <TrendingDown className="w-5 h-5 text-red-100" />
           </div>
-          <div className="text-3xl font-bold">{formatCurrency(totalPayables)}</div>
+          {Object.keys(payablesByCurrency).length === 0 ? (
+            <div className="text-3xl font-bold">0.00 TRY</div>
+          ) : (
+            <div className="space-y-1">
+              {Object.entries(payablesByCurrency).map(([currency, amount]) => (
+                <div key={currency} className="text-2xl font-bold">
+                  {formatCurrency(amount, currency)}
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-red-100 text-xs mt-2">Tedarikçilere ödenecek</p>
         </div>
 

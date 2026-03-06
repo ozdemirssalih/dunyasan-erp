@@ -769,11 +769,13 @@ export default function AccountingPageV2() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Firma</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Açıklama</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tür</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ödeme</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Belge</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referans</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Belge</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -784,13 +786,52 @@ export default function AccountingPageV2() {
                       'check': 'Çek',
                       'other': 'Diğer'
                     }
+
+                    // Firma bilgisini bul
+                    let companyName = '-'
+                    let companyType = ''
+
+                    if (transaction.customer_id) {
+                      const customer = customers.find(c => c.id === transaction.customer_id)
+                      if (customer) {
+                        companyName = customer.customer_name
+                        companyType = 'Müşteri'
+                      }
+                    } else if (transaction.supplier_id) {
+                      const supplier = suppliers.find(s => s.id === transaction.supplier_id)
+                      if (supplier) {
+                        companyName = supplier.company_name
+                        companyType = 'Tedarikçi'
+                      }
+                    }
+
                     return (
                       <tr key={transaction.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(transaction.transaction_date)}
+                          <div>
+                            {formatDate(transaction.transaction_date)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(transaction.transaction_date).toLocaleTimeString('tr-TR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {transaction.description || '-'}
+                        <td className="px-6 py-4 text-sm">
+                          {companyName !== '-' ? (
+                            <div>
+                              <div className="font-medium text-gray-900">{companyName}</div>
+                              <div className="text-xs text-gray-500">{companyType}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                          <div className="line-clamp-2" title={transaction.description}>
+                            {transaction.description || '-'}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -798,13 +839,16 @@ export default function AccountingPageV2() {
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {transaction.transaction_type === 'income' ? 'Tahsilat' : 'Ödeme'}
+                            {transaction.transaction_type === 'income' ? '💰 Tahsilat' : '💸 Ödeme'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {transaction.payment_method ? paymentMethodLabels[transaction.payment_method as keyof typeof paymentMethodLabels] || '-' : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {transaction.reference_number || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right">
                           <span className={transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}>
                             {transaction.transaction_type === 'income' ? '+' : '-'}
                             {formatCurrency(parseFloat(transaction.amount), transaction.currency || 'TRY')}
@@ -829,7 +873,7 @@ export default function AccountingPageV2() {
                   })}
                   {filteredCashTransactions.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                         {allCashTransactions.length === 0
                           ? 'Henüz işlem bulunmuyor'
                           : 'Filtrelere uyan işlem bulunamadı. Filtreleri değiştirmeyi deneyin.'

@@ -279,7 +279,20 @@ export default function CurrentAccountsPage() {
     })
   })
 
-  // Backward compatibility için
+  // Para birimi bazında net bakiye hesapla
+  const netBalancesByCurrency: Record<string, number> = {}
+
+  accounts.forEach(account => {
+    Object.entries(account.balancesByCurrency).forEach(([currency, balances]) => {
+      if (!netBalancesByCurrency[currency]) {
+        netBalancesByCurrency[currency] = 0
+      }
+      // Alacak - Borç = Net Bakiye
+      netBalancesByCurrency[currency] += (balances.receivable - balances.payable)
+    })
+  })
+
+  // Backward compatibility için (eski kod varsa diye)
   const totalReceivables = accounts.reduce((sum, acc) => sum + acc.totalReceivable, 0)
   const totalPayables = accounts.reduce((sum, acc) => sum + acc.totalPayable, 0)
   const netBalance = totalReceivables - totalPayables
@@ -375,13 +388,28 @@ export default function CurrentAccountsPage() {
           <p className="text-red-100 text-xs mt-2">Tedarikçilere ödenecek</p>
         </div>
 
-        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl shadow-lg p-6 text-white`}>
+        <div className={`bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-white text-sm opacity-90">Net Bakiye</span>
             <DollarSign className="w-5 h-5 opacity-90" />
           </div>
-          <div className="text-3xl font-bold">{formatCurrency(netBalance)}</div>
-          <p className="text-white text-xs mt-2 opacity-90">{netBalance >= 0 ? 'Pozitif bakiye' : 'Negatif bakiye'}</p>
+          {Object.keys(netBalancesByCurrency).length === 0 ? (
+            <>
+              <div className="text-3xl font-bold">0.00 TRY</div>
+              <p className="text-white text-xs mt-2 opacity-90">Dengede</p>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {Object.entries(netBalancesByCurrency).map(([currency, amount]) => (
+                  <div key={currency} className="text-2xl font-bold">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+              <p className="text-white text-xs mt-2 opacity-90">Alacak - Borç</p>
+            </>
+          )}
         </div>
       </div>
 

@@ -709,7 +709,7 @@ export default function AccountingPageV2() {
                 {/* Arama */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    🔍 Arama
+                    Arama
                   </label>
                   <input
                     type="text"
@@ -723,7 +723,7 @@ export default function AccountingPageV2() {
                 {/* Başlangıç Tarihi */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    📅 Başlangıç
+                    Başlangıç
                   </label>
                   <input
                     type="date"
@@ -736,7 +736,7 @@ export default function AccountingPageV2() {
                 {/* Bitiş Tarihi */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    📅 Bitiş
+                    Bitiş
                   </label>
                   <input
                     type="date"
@@ -758,7 +758,7 @@ export default function AccountingPageV2() {
                     }}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    ✕ Filtreleri Temizle
+                    Filtreleri Temizle
                   </button>
                 </div>
               )}
@@ -839,7 +839,7 @@ export default function AccountingPageV2() {
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {transaction.transaction_type === 'income' ? '💰 Tahsilat' : '💸 Ödeme'}
+                            {transaction.transaction_type === 'income' ? 'Tahsilat' : 'Ödeme'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

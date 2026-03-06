@@ -773,6 +773,30 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
+      // STOK KONTROLÜ - Talep oluşturmadan önce kontrol et!
+      const { data: item, error: itemError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, name, code')
+        .eq('id', exitForm.item_id)
+        .single()
+
+      if (itemError) throw new Error('Ürün bilgisi alınamadı')
+
+      const requestedQuantity = parseFloat(exitForm.quantity.toString())
+      const availableStock = parseFloat(item.current_stock || 0)
+
+      if (availableStock < requestedQuantity) {
+        alert(
+          `❌ YETERSİZ STOK!\n\n` +
+          `Ürün: ${item.code} - ${item.name}\n` +
+          `Talep: ${requestedQuantity}\n` +
+          `Mevcut: ${availableStock}\n` +
+          `Eksik: ${requestedQuantity - availableStock}\n\n` +
+          `İrsaliye talebi oluşturulamaz. Stok negatif olamaz!`
+        )
+        return
+      }
+
       // İrsaliye numarası oluştur
       const waybillNumber = `WB-${Date.now()}`
 
@@ -813,6 +837,30 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
+      // STOK KONTROLÜ - Çok önemli!
+      const { data: item, error: itemError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, name, code')
+        .eq('id', exitForm.item_id)
+        .single()
+
+      if (itemError) throw new Error('Ürün bilgisi alınamadı')
+
+      const requestedQuantity = parseFloat(exitForm.quantity.toString())
+      const availableStock = parseFloat(item.current_stock || 0)
+
+      if (availableStock < requestedQuantity) {
+        alert(
+          `❌ YETERSİZ STOK!\n\n` +
+          `Ürün: ${item.code} - ${item.name}\n` +
+          `Talep: ${requestedQuantity}\n` +
+          `Mevcut: ${availableStock}\n` +
+          `Eksik: ${requestedQuantity - availableStock}\n\n` +
+          `Stok negatif olamaz!`
+        )
+        return
+      }
+
       const { data, error } = await supabase
         .from('warehouse_transactions')
         .insert({

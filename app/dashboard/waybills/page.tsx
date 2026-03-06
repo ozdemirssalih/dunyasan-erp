@@ -99,6 +99,29 @@ export default function WaybillsPage() {
       // Parse form data from notes
       const formData = JSON.parse(waybill.notes)
 
+      // STOK KONTROLÜ - Çok önemli!
+      const { data: item, error: itemError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, name, code')
+        .eq('id', formData.item_id)
+        .single()
+
+      if (itemError) throw new Error('Ürün bilgisi alınamadı')
+
+      const requestedQuantity = parseFloat(formData.quantity)
+      const availableStock = parseFloat(item.current_stock || 0)
+
+      if (availableStock < requestedQuantity) {
+        throw new Error(
+          `❌ YETERSİZ STOK!\n\n` +
+          `Ürün: ${item.code} - ${item.name}\n` +
+          `Talep: ${requestedQuantity}\n` +
+          `Mevcut: ${availableStock}\n` +
+          `Eksik: ${requestedQuantity - availableStock}\n\n` +
+          `Stok negatif olamaz!`
+        )
+      }
+
       // Upload PDF
       const fileName = `${companyId}/waybills/${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`
       const { error: uploadError } = await supabase.storage

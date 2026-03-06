@@ -37,6 +37,14 @@ export default function CurrentAccountsPage() {
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
+  // Döviz kurları
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    'TRY': 1,
+    'USD': 32.50, // Varsayılan
+    'EUR': 35.20, // Varsayılan
+    'GBP': 41.10  // Varsayılan
+  })
+
   // Filters
   const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'customer' | 'supplier'>('all')
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivable' | 'payable'>('all')
@@ -49,7 +57,28 @@ export default function CurrentAccountsPage() {
 
   useEffect(() => {
     loadData()
+    fetchExchangeRates()
   }, [])
+
+  const fetchExchangeRates = async () => {
+    try {
+      // exchangerate-api.com - Ücretsiz API (günde 1500 istek)
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/TRY')
+      const data = await response.json()
+
+      if (data && data.rates) {
+        setExchangeRates({
+          'TRY': 1,
+          'USD': 1 / data.rates.USD, // TRY -> USD oranı
+          'EUR': 1 / data.rates.EUR, // TRY -> EUR oranı
+          'GBP': 1 / data.rates.GBP  // TRY -> GBP oranı
+        })
+      }
+    } catch (error) {
+      console.warn('Döviz kurları yüklenemedi, varsayılan değerler kullanılıyor:', error)
+      // Hata olursa varsayılan kurlar kullanılacak
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -301,6 +330,15 @@ export default function CurrentAccountsPage() {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount)
   }
 
+  const calculateTotalInTRY = (balances: Record<string, number>) => {
+    let total = 0
+    Object.entries(balances).forEach(([currency, amount]) => {
+      const rate = exchangeRates[currency] || 1
+      total += amount * rate
+    })
+    return total
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
@@ -358,13 +396,21 @@ export default function CurrentAccountsPage() {
           {Object.keys(receivablesByCurrency).length === 0 ? (
             <div className="text-3xl font-bold">0.00 TRY</div>
           ) : (
-            <div className="space-y-1">
-              {Object.entries(receivablesByCurrency).map(([currency, amount]) => (
-                <div key={currency} className="text-2xl font-bold">
-                  {formatCurrency(amount, currency)}
+            <>
+              <div className="space-y-1">
+                {Object.entries(receivablesByCurrency).map(([currency, amount]) => (
+                  <div key={currency} className="text-2xl font-bold">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+              {Object.keys(receivablesByCurrency).length > 0 && Object.keys(receivablesByCurrency).some(c => c !== 'TRY') && (
+                <div className="mt-2 pt-2 border-t border-green-400/30">
+                  <p className="text-green-100 text-xs opacity-75">Toplam TL Karşılığı</p>
+                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(receivablesByCurrency))}</p>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
           <p className="text-green-100 text-xs mt-2">Müşterilerden tahsil edilecek</p>
         </div>
@@ -377,13 +423,21 @@ export default function CurrentAccountsPage() {
           {Object.keys(payablesByCurrency).length === 0 ? (
             <div className="text-3xl font-bold">0.00 TRY</div>
           ) : (
-            <div className="space-y-1">
-              {Object.entries(payablesByCurrency).map(([currency, amount]) => (
-                <div key={currency} className="text-2xl font-bold">
-                  {formatCurrency(amount, currency)}
+            <>
+              <div className="space-y-1">
+                {Object.entries(payablesByCurrency).map(([currency, amount]) => (
+                  <div key={currency} className="text-2xl font-bold">
+                    {formatCurrency(amount, currency)}
+                  </div>
+                ))}
+              </div>
+              {Object.keys(payablesByCurrency).length > 0 && Object.keys(payablesByCurrency).some(c => c !== 'TRY') && (
+                <div className="mt-2 pt-2 border-t border-red-400/30">
+                  <p className="text-red-100 text-xs opacity-75">Toplam TL Karşılığı</p>
+                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(payablesByCurrency))}</p>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
           <p className="text-red-100 text-xs mt-2">Tedarikçilere ödenecek</p>
         </div>
@@ -407,6 +461,12 @@ export default function CurrentAccountsPage() {
                   </div>
                 ))}
               </div>
+              {Object.keys(netBalancesByCurrency).length > 0 && Object.keys(netBalancesByCurrency).some(c => c !== 'TRY') && (
+                <div className="mt-2 pt-2 border-t border-blue-400/30">
+                  <p className="text-white text-xs opacity-75">Toplam TL Karşılığı</p>
+                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(netBalancesByCurrency))}</p>
+                </div>
+              )}
               <p className="text-white text-xs mt-2 opacity-90">Alacak - Borç</p>
             </>
           )}

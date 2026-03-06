@@ -421,7 +421,6 @@ export default function WarehousePage() {
       .from('waybills')
       .select('*')
       .eq('company_id', companyId)
-      .eq('status', 'pending')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -429,6 +428,19 @@ export default function WarehousePage() {
     }
 
     setPendingWaybills(data || [])
+  }
+
+  const handleDownloadWaybillDocument = async (documentPath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('accounting-documents')
+        .createSignedUrl(documentPath, 60)
+
+      if (error) throw error
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    } catch (error: any) {
+      alert('Belge indirilemedi: ' + error.message)
+    }
   }
 
   const handleApproveProductionTransfer = async (transferId: string) => {
@@ -1409,54 +1421,80 @@ export default function WarehousePage() {
               </p>
             </form>
 
-            {/* Bekleyen İrsaliyeler */}
+            {/* İrsaliye Durumu */}
             {pendingWaybills.length > 0 && (
               <div className="mt-8 pt-6 border-t border-gray-200">
                 <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                     {pendingWaybills.length}
                   </span>
-                  İrsaliye Bekleniyor
+                  İrsaliye Talepleri
                 </h4>
                 <div className="space-y-3">
                   {pendingWaybills.map((waybill) => {
                     const formData = waybill.notes ? JSON.parse(waybill.notes) : {}
                     const item = items.find(i => i.id === formData.item_id)
+                    const isPending = waybill.status === 'pending'
+                    const isCompleted = waybill.status === 'completed'
 
                     return (
-                      <div key={waybill.id} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-sm font-semibold text-gray-800">
-                              İrsaliye No: {waybill.waybill_number}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(waybill.created_at).toLocaleDateString('tr-TR')}
-                            </span>
+                      <div
+                        key={waybill.id}
+                        className={`rounded-lg p-4 border ${
+                          isPending ? 'bg-yellow-50 border-yellow-200' :
+                          isCompleted ? 'bg-green-50 border-green-200' :
+                          'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-sm font-semibold text-gray-800">
+                                İrsaliye No: {waybill.waybill_number}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(waybill.created_at).toLocaleDateString('tr-TR')}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-700 mb-2">
+                              <span className="font-medium">{item?.name || 'Ürün'}</span>
+                              {' - '}
+                              <span>{formData.quantity} {item?.unit || 'adet'}</span>
+                              {formData.shipment_destination && (
+                                <>
+                                  {' → '}
+                                  <span className="text-blue-600">{formData.shipment_destination}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-700">
-                            <span className="font-medium">{item?.name || 'Ürün'}</span>
-                            {' - '}
-                            <span>{formData.quantity} {item?.unit || 'adet'}</span>
-                            {formData.shipment_destination && (
+                          <div className="flex items-center gap-2">
+                            {isPending && (
+                              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-xs font-medium flex items-center gap-1">
+                                ⏳ PDF Bekleniyor
+                              </span>
+                            )}
+                            {isCompleted && waybill.document_url && (
                               <>
-                                {' → '}
-                                <span className="text-blue-600">{formData.shipment_destination}</span>
+                                <button
+                                  onClick={() => handleDownloadWaybillDocument(waybill.document_url!)}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium flex items-center gap-1"
+                                >
+                                  📄 PDF İndir
+                                </button>
+                                <span className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-medium flex items-center gap-1">
+                                  ✅ Tamamlandı
+                                </span>
                               </>
                             )}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-xs font-medium flex items-center gap-1">
-                            ⏳ Bekliyor
-                          </span>
                         </div>
                       </div>
                     )
                   })}
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
-                  💡 İrsaliye PDF'i yüklendiğinde stok otomatik olarak çıkışı yapılacaktır.
+                  💡 İrsaliye PDF'i "Faturalar ve İrsaliyeler" sayfasından yüklendiğinde stok otomatik olarak çıkış yapılacaktır.
                 </p>
               </div>
             )}

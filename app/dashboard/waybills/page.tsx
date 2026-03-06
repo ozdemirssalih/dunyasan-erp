@@ -21,6 +21,7 @@ export default function WaybillsPage() {
   const [waybills, setWaybills] = useState<Waybill[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [selectedWaybill, setSelectedWaybill] = useState<Waybill | null>(null)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
@@ -33,6 +34,8 @@ export default function WaybillsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      setUserId(user.id)
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -63,10 +66,23 @@ export default function WaybillsPage() {
   }
 
   const handleUploadDocument = async (waybillId: string) => {
-    if (!documentFile || !companyId) return
+    if (!documentFile || !companyId || !userId) return
 
     try {
       setUploadingId(waybillId)
+
+      // Get waybill data
+      const { data: waybill, error: waybillError } = await supabase
+        .from('waybills')
+        .select('*')
+        .eq('id', waybillId)
+        .single()
+
+      if (waybillError) throw waybillError
+      if (!waybill?.notes) throw new Error('İrsaliye bilgileri bulunamadı')
+
+      // Parse form data from notes
+      const formData = JSON.parse(waybill.notes)
 
       // Upload PDF
       const fileName = `${companyId}/waybills/${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`
@@ -76,18 +92,37 @@ export default function WaybillsPage() {
 
       if (uploadError) throw uploadError
 
-      // Update waybill
+      // Create warehouse transaction (actual stock exit)
+      const { data: transaction, error: transactionError } = await supabase
+        .from('warehouse_transactions')
+        .insert({
+          company_id: companyId,
+          item_id: formData.item_id,
+          type: 'exit',
+          quantity: parseFloat(formData.quantity),
+          shipment_destination: formData.shipment_destination,
+          reference_number: formData.reference_number,
+          notes: formData.notes,
+          created_by: userId,
+        })
+        .select()
+        .single()
+
+      if (transactionError) throw transactionError
+
+      // Update waybill with document and transaction link
       const { error: updateError } = await supabase
         .from('waybills')
         .update({
           document_url: fileName,
-          status: 'completed'
+          status: 'completed',
+          inventory_transaction_id: transaction.id
         })
         .eq('id', waybillId)
 
       if (updateError) throw updateError
 
-      alert('✅ İrsaliye yüklendi ve tamamlandı!')
+      alert('✅ İrsaliye yüklendi ve stok çıkışı gerçekleştirildi!')
       setDocumentFile(null)
       setSelectedWaybill(null)
       loadWaybills(companyId)

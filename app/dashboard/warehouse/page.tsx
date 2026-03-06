@@ -87,6 +87,7 @@ export default function WarehousePage() {
   const [qcTransfers, setQCTransfers] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [pendingWaybills, setPendingWaybills] = useState<any[]>([])
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -250,6 +251,9 @@ export default function WarehousePage() {
       await loadProductionTransfers(finalCompanyId)
       await loadQCTransfers(finalCompanyId)
 
+      // Load pending waybills
+      await loadPendingWaybills(finalCompanyId)
+
     } catch (error) {
       console.error('Error loading data:', error)
       if (!silent) alert('Veri yüklenirken hata oluştu!')
@@ -410,6 +414,21 @@ export default function WarehousePage() {
     }
 
     setQCTransfers(data || [])
+  }
+
+  const loadPendingWaybills = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('waybills')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error loading pending waybills:', error)
+    }
+
+    setPendingWaybills(data || [])
   }
 
   const handleApproveProductionTransfer = async (transferId: string) => {
@@ -734,6 +753,45 @@ export default function WarehousePage() {
       loadData()
     } catch (error: any) {
       console.error('Error entry:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  const handleRequestWaybill = async () => {
+    if (!companyId) return
+
+    try {
+      // İrsaliye numarası oluştur
+      const waybillNumber = `WB-${Date.now()}`
+
+      // Form bilgilerini JSON olarak sakla (sonra kullanmak için)
+      const formData = {
+        item_id: exitForm.item_id,
+        quantity: exitForm.quantity,
+        shipment_destination: exitForm.shipment_destination,
+        reference_number: exitForm.reference_number,
+        notes: exitForm.notes
+      }
+
+      // Waybill talebi oluştur
+      const { error } = await supabase
+        .from('waybills')
+        .insert({
+          company_id: companyId,
+          waybill_number: waybillNumber,
+          waybill_type: 'outbound',
+          status: 'pending',
+          notes: JSON.stringify(formData), // Form bilgilerini sakla
+          created_by: currentUserId,
+        })
+
+      if (error) throw error
+
+      alert('✅ İrsaliye talebi oluşturuldu! Faturalar sayfasından PDF yükleyebilirsiniz.')
+      resetExitForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error:', error)
       alert('❌ Hata: ' + error.message)
     }
   }
@@ -1325,10 +1383,18 @@ export default function WarehousePage() {
 
               <div className="flex space-x-4">
                 <button
-                  type="submit"
-                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold"
+                  type="button"
+                  onClick={async () => {
+                    if (!exitForm.item_id || !exitForm.quantity) {
+                      alert('Lütfen stok kalemi ve miktar girin!')
+                      return
+                    }
+                    // İrsaliye talebi oluştur
+                    await handleRequestWaybill()
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2"
                 >
-                  ↑ Çıkış Yap
+                  📄 İrsaliye İste
                 </button>
                 <button
                   type="button"
@@ -1338,27 +1404,60 @@ export default function WarehousePage() {
                   Temizle
                 </button>
               </div>
+              <p className="text-sm text-gray-500 mt-2">
+                ℹ️ İrsaliye talebi oluşturulacak. İrsaliye geldiğinde otomatik olarak çıkış yapılacaktır.
+              </p>
             </form>
 
-            {/* İrsaliye İste Butonu - Son çıkış işlemi varsa */}
-            {lastExitTransaction && (
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">
-                      ✅ Son çıkış işlemi başarılı
-                    </p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      İrsaliye numarası: {lastExitTransaction.reference_number || 'Belirtilmedi'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowWaybillModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2"
-                  >
-                    📄 İrsaliye İste
-                  </button>
+            {/* Bekleyen İrsaliyeler */}
+            {pendingWaybills.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
+                    {pendingWaybills.length}
+                  </span>
+                  İrsaliye Bekleniyor
+                </h4>
+                <div className="space-y-3">
+                  {pendingWaybills.map((waybill) => {
+                    const formData = waybill.notes ? JSON.parse(waybill.notes) : {}
+                    const item = items.find(i => i.id === formData.item_id)
+
+                    return (
+                      <div key={waybill.id} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-sm font-semibold text-gray-800">
+                              İrsaliye No: {waybill.waybill_number}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(waybill.created_at).toLocaleDateString('tr-TR')}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-700">
+                            <span className="font-medium">{item?.name || 'Ürün'}</span>
+                            {' - '}
+                            <span>{formData.quantity} {item?.unit || 'adet'}</span>
+                            {formData.shipment_destination && (
+                              <>
+                                {' → '}
+                                <span className="text-blue-600">{formData.shipment_destination}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-xs font-medium flex items-center gap-1">
+                            ⏳ Bekliyor
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  💡 İrsaliye PDF'i yüklendiğinde stok otomatik olarak çıkışı yapılacaktır.
+                </p>
               </div>
             )}
           </div>

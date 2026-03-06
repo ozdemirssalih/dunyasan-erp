@@ -16,6 +16,14 @@ export default function AccountingPageV2() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard')
 
+  // Döviz kurları
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    'TRY': 1,
+    'USD': 32.50,
+    'EUR': 35.20,
+    'GBP': 41.10
+  })
+
   // Data states - Para birimi bazında
   const [cashBalances, setCashBalances] = useState<Record<string, number>>({})
   const [totalReceivables, setTotalReceivables] = useState<Record<string, number>>({})
@@ -57,11 +65,30 @@ export default function AccountingPageV2() {
 
   useEffect(() => {
     initializeData()
+    fetchExchangeRates()
   }, [])
 
   useEffect(() => {
     if (companyId) loadData()
   }, [companyId])
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/TRY')
+      const data = await response.json()
+
+      if (data && data.rates) {
+        setExchangeRates({
+          'TRY': 1,
+          'USD': 1 / data.rates.USD,
+          'EUR': 1 / data.rates.EUR,
+          'GBP': 1 / data.rates.GBP
+        })
+      }
+    } catch (error) {
+      console.warn('Döviz kurları yüklenemedi, varsayılan değerler kullanılıyor:', error)
+    }
+  }
 
   const initializeData = async () => {
     try {
@@ -363,6 +390,15 @@ export default function AccountingPageV2() {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency }).format(amount)
   }
 
+  const calculateTotalInTRY = (balances: Record<string, number>) => {
+    let total = 0
+    Object.entries(balances).forEach(([currency, amount]) => {
+      const rate = exchangeRates[currency] || 1
+      total += amount * rate
+    })
+    return total
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
@@ -504,13 +540,21 @@ export default function AccountingPageV2() {
                 {Object.keys(cashBalances).length === 0 ? (
                   <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
                 ) : (
-                  <div className="space-y-1">
-                    {Object.entries(cashBalances).map(([currency, amount]) => (
-                      <div key={currency} className="text-lg font-bold text-gray-900">
-                        {formatCurrency(amount, currency)}
+                  <>
+                    <div className="space-y-1">
+                      {Object.entries(cashBalances).map(([currency, amount]) => (
+                        <div key={currency} className="text-lg font-bold text-gray-900">
+                          {formatCurrency(amount, currency)}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(cashBalances).length > 0 && Object.keys(cashBalances).some(c => c !== 'TRY') && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs text-gray-500">Toplam TL Karşılığı</p>
+                        <p className="text-sm font-semibold text-gray-900">{formatCurrency(calculateTotalInTRY(cashBalances))}</p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -525,13 +569,21 @@ export default function AccountingPageV2() {
                 {Object.keys(totalReceivables).length === 0 ? (
                   <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
                 ) : (
-                  <div className="space-y-1">
-                    {Object.entries(totalReceivables).map(([currency, amount]) => (
-                      <div key={currency} className="text-lg font-bold text-green-600">
-                        {formatCurrency(amount, currency)}
+                  <>
+                    <div className="space-y-1">
+                      {Object.entries(totalReceivables).map(([currency, amount]) => (
+                        <div key={currency} className="text-lg font-bold text-green-600">
+                          {formatCurrency(amount, currency)}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(totalReceivables).length > 0 && Object.keys(totalReceivables).some(c => c !== 'TRY') && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs text-gray-500">Toplam TL Karşılığı</p>
+                        <p className="text-sm font-semibold text-green-600">{formatCurrency(calculateTotalInTRY(totalReceivables))}</p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -546,13 +598,21 @@ export default function AccountingPageV2() {
                 {Object.keys(totalPayables).length === 0 ? (
                   <div className="text-xl font-bold text-gray-400">0.00 TRY</div>
                 ) : (
-                  <div className="space-y-1">
-                    {Object.entries(totalPayables).map(([currency, amount]) => (
-                      <div key={currency} className="text-lg font-bold text-red-600">
-                        {formatCurrency(amount, currency)}
+                  <>
+                    <div className="space-y-1">
+                      {Object.entries(totalPayables).map(([currency, amount]) => (
+                        <div key={currency} className="text-lg font-bold text-red-600">
+                          {formatCurrency(amount, currency)}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(totalPayables).length > 0 && Object.keys(totalPayables).some(c => c !== 'TRY') && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs text-gray-500">Toplam TL Karşılığı</p>
+                        <p className="text-sm font-semibold text-red-600">{formatCurrency(calculateTotalInTRY(totalPayables))}</p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -567,13 +627,21 @@ export default function AccountingPageV2() {
                 {Object.keys(monthlyIncome).length === 0 ? (
                   <div className="text-xl font-bold">0.00 TRY</div>
                 ) : (
-                  <div className="space-y-1">
-                    {Object.entries(monthlyIncome).map(([currency, amount]) => (
-                      <div key={currency} className="text-lg font-bold">
-                        {formatCurrency(amount, currency)}
+                  <>
+                    <div className="space-y-1">
+                      {Object.entries(monthlyIncome).map(([currency, amount]) => (
+                        <div key={currency} className="text-lg font-bold">
+                          {formatCurrency(amount, currency)}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(monthlyIncome).length > 0 && Object.keys(monthlyIncome).some(c => c !== 'TRY') && (
+                      <div className="mt-2 pt-2 border-t border-emerald-400/30">
+                        <p className="text-emerald-100 text-xs opacity-75">Toplam TL Karşılığı</p>
+                        <p className="text-sm font-semibold">{formatCurrency(calculateTotalInTRY(monthlyIncome))}</p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
                 <p className="text-emerald-100 text-xs mt-2">
                   {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
@@ -591,13 +659,21 @@ export default function AccountingPageV2() {
                 {Object.keys(monthlyExpense).length === 0 ? (
                   <div className="text-xl font-bold">0.00 TRY</div>
                 ) : (
-                  <div className="space-y-1">
-                    {Object.entries(monthlyExpense).map(([currency, amount]) => (
-                      <div key={currency} className="text-lg font-bold">
-                        {formatCurrency(amount, currency)}
+                  <>
+                    <div className="space-y-1">
+                      {Object.entries(monthlyExpense).map(([currency, amount]) => (
+                        <div key={currency} className="text-lg font-bold">
+                          {formatCurrency(amount, currency)}
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(monthlyExpense).length > 0 && Object.keys(monthlyExpense).some(c => c !== 'TRY') && (
+                      <div className="mt-2 pt-2 border-t border-rose-400/30">
+                        <p className="text-rose-100 text-xs opacity-75">Toplam TL Karşılığı</p>
+                        <p className="text-sm font-semibold">{formatCurrency(calculateTotalInTRY(monthlyExpense))}</p>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
                 <p className="text-rose-100 text-xs mt-2">
                   {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}

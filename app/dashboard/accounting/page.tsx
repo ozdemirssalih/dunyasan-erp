@@ -267,6 +267,11 @@ export default function AccountingPageV2() {
 
         const isReceivable = !!transactionForm.customer_id
 
+        // Tarihe şu anki saati ekle
+        const transactionDate = new Date(transactionForm.transaction_date)
+        const now = new Date()
+        transactionDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+
         await supabase.from('current_account_transactions').insert({
           company_id: companyId,
           transaction_type: isReceivable ? 'receivable' : 'payable',
@@ -276,7 +281,7 @@ export default function AccountingPageV2() {
           paid_amount: 0,
           currency: transactionForm.currency,
           status: 'unpaid',
-          transaction_date: transactionForm.transaction_date,
+          transaction_date: transactionDate.toISOString(),
           due_date: transactionForm.due_date,
           description: transactionForm.description,
           reference_number: `${isReceivable ? 'RCV' : 'PAY'}-${Date.now()}`,
@@ -309,6 +314,11 @@ export default function AccountingPageV2() {
           return alert('Müşteri veya tedarikçi seçimi zorunludur!')
         }
 
+        // Tarihe şu anki saati ekle
+        const cashTransactionDate = new Date(transactionForm.transaction_date)
+        const nowCash = new Date()
+        cashTransactionDate.setHours(nowCash.getHours(), nowCash.getMinutes(), nowCash.getSeconds(), nowCash.getMilliseconds())
+
         // Kasa kaydı oluştur
         const cashData: any = {
           company_id: companyId,
@@ -316,7 +326,7 @@ export default function AccountingPageV2() {
           amount: amount,
           currency: transactionForm.currency,
           payment_method: transactionForm.payment_method,
-          transaction_date: transactionForm.transaction_date,
+          transaction_date: cashTransactionDate.toISOString(),
           description: transactionForm.description,
           reference_number: `CASH-${Date.now()}`,
           document_url: documentUrl,

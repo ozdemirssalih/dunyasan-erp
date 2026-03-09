@@ -25,6 +25,7 @@ export default function CompanyChat() {
   const [userChatGroups, setUserChatGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
   const [unreadCount, setUnreadCount] = useState(0)
+  const [groupUnreadCounts, setGroupUnreadCounts] = useState<Record<string, number>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
@@ -34,20 +35,76 @@ export default function CompanyChat() {
 
   useEffect(() => {
     if (isOpen) {
-      setUnreadCount(0)
       scrollToBottom()
+      // Seçili grubun okunmamış sayısını sıfırla
+      setGroupUnreadCounts(prev => ({
+        ...prev,
+        [selectedGroup]: 0
+      }))
+      // Toplam okunmamış sayısını yeniden hesapla
+      setUnreadCount(prev => Math.max(0, prev - (groupUnreadCounts[selectedGroup] || 0)))
     }
   }, [isOpen, messages])
 
   useEffect(() => {
     if (companyId) {
       loadMessages(companyId)
+      // Seçili gruba geçildiğinde o grubun okunmamış sayısını sıfırla
+      if (isOpen) {
+        setGroupUnreadCounts(prev => ({
+          ...prev,
+          [selectedGroup]: 0
+        }))
+      }
     }
   }, [selectedGroup])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const playNotificationSound = () => {
+    try {
+      // Web Audio API ile basit bildirim sesi oluştur
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+
+      // İki farklı frekans için oscillator oluştur (ding-dong efekti)
+      const oscillator1 = audioContext.createOscillator()
+      const oscillator2 = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator1.connect(gainNode)
+      oscillator2.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // İlk nota (yüksek)
+      oscillator1.frequency.value = 800
+      oscillator1.type = 'sine'
+
+      // İkinci nota (düşük)
+      oscillator2.frequency.value = 600
+      oscillator2.type = 'sine'
+
+      // Ses seviyesi
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+      // Başlat ve durdur
+      oscillator1.start(audioContext.currentTime)
+      oscillator1.stop(audioContext.currentTime + 0.15)
+
+      oscillator2.start(audioContext.currentTime + 0.15)
+      oscillator2.stop(audioContext.currentTime + 0.3)
+
+      // Cleanup
+      setTimeout(() => {
+        audioContext.close()
+      }, 500)
+    } catch (err) {
+      console.log('Ses hatası:', err)
+    }
+  }
+
 
   const initChat = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -85,12 +142,27 @@ export default function CompanyChat() {
         },
         (payload) => {
           console.log('New message received:', payload)
-          loadMessages(profile.company_id)
+          const newMsg = payload.new as any
 
-          // Increase unread count if chat is closed
-          if (!isOpen && payload.new.sender_id !== user.id) {
-            setUnreadCount(prev => prev + 1)
+          // Kendi mesajımız değilse bildirim gönder
+          if (newMsg.sender_id !== user.id) {
+            // Sesli bildirim çal
+            playNotificationSound()
+
+            // Grup bazlı okunmamış sayıları güncelle
+            const msgGroup = newMsg.chat_group || 'all'
+            setGroupUnreadCounts(prev => ({
+              ...prev,
+              [msgGroup]: (prev[msgGroup] || 0) + 1
+            }))
+
+            // Toplam okunmamış sayısını artır
+            if (!isOpen || selectedGroup !== msgGroup) {
+              setUnreadCount(prev => prev + 1)
+            }
           }
+
+          loadMessages(profile.company_id)
         }
       )
       .subscribe()
@@ -164,12 +236,12 @@ export default function CompanyChat() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all z-50 flex items-center gap-2"
+          className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all z-50 flex items-center gap-2 relative"
         >
           <MessageCircle className="w-6 h-6" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
+            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center shadow-lg border-2 border-white animate-pulse">
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </button>
@@ -201,10 +273,12 @@ export default function CompanyChat() {
                 onChange={(e) => setSelectedGroup(e.target.value)}
                 className="flex-1 px-2 py-1 text-sm text-gray-900 rounded border-0 focus:ring-2 focus:ring-blue-300"
               >
-                <option value="all">🌍 Genel Chat</option>
+                <option value="all">
+                  🌍 Genel Chat {groupUnreadCounts.all > 0 ? `(${groupUnreadCounts.all})` : ''}
+                </option>
                 {userChatGroups.map((group) => (
                   <option key={group} value={group}>
-                    📁 {group}
+                    📁 {group} {groupUnreadCounts[group] > 0 ? `(${groupUnreadCounts[group]})` : ''}
                   </option>
                 ))}
               </select>

@@ -176,7 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {user && (
           <div className="px-4 py-3 bg-blue-800/50">
             <div className="text-sm font-semibold">{profile?.full_name || user.email}</div>
-            <div className="text-xs text-blue-200">{profile?.role || 'Kullanıcı'}</div>
+            <div className="text-xs text-blue-200">{profile?.role?.name || 'Kullanıcı'}</div>
           </div>
         )}
 

@@ -24,7 +24,7 @@ export default function EmployeePortalPage() {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, role:role_id(name)')
         .eq('id', user.id)
         .single()
 
@@ -79,7 +79,7 @@ export default function EmployeePortalPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-3xl font-bold mb-2">Merhaba, {profile?.full_name}!</h2>
-              <p className="text-blue-100 text-lg">{profile?.role || 'Çalışan'}</p>
+              <p className="text-blue-100 text-lg">{profile?.role?.name || 'Çalışan'}</p>
             </div>
             <div className="text-right">
               <div className="flex items-center justify-end gap-2 mb-2">
@@ -168,7 +168,7 @@ export default function EmployeePortalPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Rol</p>
-                <p className="text-base font-semibold text-gray-900">{profile.role || '-'}</p>
+                <p className="text-base font-semibold text-gray-900">{profile.role?.name || '-'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Telefon</p>

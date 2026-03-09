@@ -2,22 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Clock, Calendar, Package, CheckCircle, Settings, TrendingUp } from 'lucide-react'
+import { Clock, Calendar, Users, MessageSquare, Bell } from 'lucide-react'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [currentTime, setCurrentTime] = useState('')
   const [currentDate, setCurrentDate] = useState('')
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    completedOrders: 0,
-    inProgressOrders: 0,
-    activeMachines: 0,
-    totalMachines: 0,
-    qcPendingCount: 0,
-  })
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadUser()
@@ -38,44 +29,6 @@ export default function DashboardPage() {
         .single()
 
       setProfile(profileData)
-
-      if (profileData?.company_id) {
-        await loadStats(profileData.company_id)
-      }
-    }
-    setLoading(false)
-  }
-
-  const loadStats = async (companyId: string) => {
-    try {
-      // Get production orders stats
-      const { data: orders } = await supabase
-        .from('production_orders')
-        .select('*')
-        .eq('company_id', companyId)
-
-      // Get machines stats
-      const { data: machinesData } = await supabase
-        .from('machines')
-        .select('*')
-        .eq('company_id', companyId)
-
-      // Get quality control inventory stats
-      const { data: qcInventory } = await supabase
-        .from('quality_control_inventory')
-        .select('*')
-        .eq('company_id', companyId)
-
-      setStats({
-        totalOrders: orders?.length || 0,
-        completedOrders: orders?.filter(o => o.status === 'completed').length || 0,
-        inProgressOrders: orders?.filter(o => o.status === 'in_progress').length || 0,
-        activeMachines: machinesData?.filter(m => m.status === 'active').length || 0,
-        totalMachines: machinesData?.length || 0,
-        qcPendingCount: qcInventory?.length || 0,
-      })
-    } catch (error) {
-      console.error('Error loading stats:', error)
     }
   }
 
@@ -93,21 +46,6 @@ export default function DashboardPage() {
       day: 'numeric'
     }))
   }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-lg text-gray-600">Yükleniyor...</div>
-        </div>
-      </div>
-    )
-  }
-
-  const completionRate = stats.totalOrders > 0
-    ? Math.round((stats.completedOrders / stats.totalOrders) * 100)
-    : 0
 
   return (
     <div className="space-y-6">
@@ -131,87 +69,49 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Total Orders */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+        {/* My Tasks Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">Toplam Sipariş</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <Package className="w-6 h-6" />
+            <h3 className="text-lg font-semibold text-gray-900">Görevlerim</h3>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Users className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-          <p className="text-4xl font-bold mb-2">{stats.totalOrders}</p>
-          <p className="text-blue-100 text-sm">Sistemdeki tüm siparişler</p>
+          <p className="text-3xl font-bold text-gray-900 mb-2">-</p>
+          <p className="text-sm text-gray-600">Yakında kullanıma açılacak</p>
         </div>
 
-        {/* Completed Orders */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+        {/* Messages Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">Tamamlanan</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <CheckCircle className="w-6 h-6" />
+            <h3 className="text-lg font-semibold text-gray-900">Mesajlar</h3>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <MessageSquare className="w-6 h-6 text-green-600" />
             </div>
           </div>
-          <p className="text-4xl font-bold mb-2">{stats.completedOrders}</p>
-          <p className="text-green-100 text-sm">%{completionRate} tamamlanma oranı</p>
+          <p className="text-3xl font-bold text-gray-900 mb-2">-</p>
+          <p className="text-sm text-gray-600">Yakında kullanıma açılacak</p>
         </div>
 
-        {/* Active Machines */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+        {/* Notifications Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">Aktif Tezgah</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <Settings className="w-6 h-6" />
+            <h3 className="text-lg font-semibold text-gray-900">Bildirimler</h3>
+            <div className="p-3 bg-amber-100 rounded-lg">
+              <Bell className="w-6 h-6 text-amber-600" />
             </div>
           </div>
-          <p className="text-4xl font-bold mb-2">{stats.activeMachines}/{stats.totalMachines}</p>
-          <p className="text-purple-100 text-sm">Çalışan tezgah sayısı</p>
-        </div>
-
-        {/* In Progress */}
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">Devam Eden</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-          </div>
-          <p className="text-4xl font-bold mb-2">{stats.inProgressOrders}</p>
-          <p className="text-amber-100 text-sm">Üretimde olan siparişler</p>
-        </div>
-
-        {/* QC Pending */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">KK Bekleyen</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-          <p className="text-4xl font-bold mb-2">{stats.qcPendingCount}</p>
-          <p className="text-orange-100 text-sm">Kalite kontrolde bekleyen</p>
-        </div>
-
-        {/* System Status */}
-        <div className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold opacity-90">Sistem Durumu</h3>
-            <div className="p-3 bg-white/20 rounded-lg">
-              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            </div>
-          </div>
-          <p className="text-4xl font-bold mb-2">Aktif</p>
-          <p className="text-gray-300 text-sm">Tüm sistemler çalışıyor</p>
+          <p className="text-3xl font-bold text-gray-900 mb-2">-</p>
+          <p className="text-sm text-gray-600">Yakında kullanıma açılacak</p>
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Access */}
       <div className="bg-white rounded-xl shadow-md p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Hızlı Erişim</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <a
             href="/dashboard/production"
             className="flex flex-col items-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all hover:shadow-md"
@@ -274,55 +174,30 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Progress Overview */}
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-6">Üretim Genel Görünüm</h3>
-        <div className="space-y-4">
-          {/* Completion Rate */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Tamamlanma Oranı</span>
-              <span className="text-lg font-bold text-green-600">%{completionRate}</span>
+      {/* User Info */}
+      {profile && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Kullanıcı Bilgilerim</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">Ad Soyad</p>
+              <p className="text-base font-semibold text-gray-900">{profile.full_name || '-'}</p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-4">
-              <div
-                className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all"
-                style={{ width: `${completionRate}%` }}
-              ></div>
+            <div>
+              <p className="text-sm text-gray-500">E-posta</p>
+              <p className="text-base font-semibold text-gray-900">{user?.email || '-'}</p>
             </div>
-          </div>
-
-          {/* In Progress Rate */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Devam Eden İşler</span>
-              <span className="text-lg font-bold text-blue-600">{stats.inProgressOrders}</span>
+            <div>
+              <p className="text-sm text-gray-500">Rol</p>
+              <p className="text-base font-semibold text-gray-900">{profile.role || '-'}</p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-4">
-              <div
-                className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all"
-                style={{ width: `${stats.totalOrders > 0 ? (stats.inProgressOrders / stats.totalOrders) * 100 : 0}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Machine Utilization */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Tezgah Kullanımı</span>
-              <span className="text-lg font-bold text-purple-600">
-                %{stats.totalMachines > 0 ? Math.round((stats.activeMachines / stats.totalMachines) * 100) : 0}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-4">
-              <div
-                className="bg-gradient-to-r from-purple-500 to-purple-600 h-4 rounded-full transition-all"
-                style={{ width: `${stats.totalMachines > 0 ? (stats.activeMachines / stats.totalMachines) * 100 : 0}%` }}
-              ></div>
+            <div>
+              <p className="text-sm text-gray-500">Telefon</p>
+              <p className="text-base font-semibold text-gray-900">{profile.phone || '-'}</p>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

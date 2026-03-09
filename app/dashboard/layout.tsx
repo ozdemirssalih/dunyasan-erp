@@ -42,29 +42,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       console.log('✅ User authenticated:', user.email)
       setUser(user)
 
-      // Get user profile with role info
+      // Get user profile
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*, role:role_id(name)')
+        .select('*')
         .eq('id', user.id)
         .single()
 
       setProfile(profileData)
-
-      // Check if user is admin or super_admin
-      const roleName = profileData?.role?.name
-      const isAdmin = roleName === 'Admin' || roleName === 'Super Admin'
-
-      console.log('User role:', roleName, 'Is Admin:', isAdmin)
-
-      // If not admin, redirect to employee portal (outside dashboard)
-      if (!isAdmin) {
-        console.log('🚫 Not admin, redirecting to employee portal')
-        setAuthLoading(false)
-        router.push('/employee-portal')
-        return
-      }
-
       setAuthLoading(false)
     }
 
@@ -160,7 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {user && (
           <div className="px-4 py-3 bg-blue-800/50">
             <div className="text-sm font-semibold">{profile?.full_name || user.email}</div>
-            <div className="text-xs text-blue-200">{profile?.role?.name || 'Kullanıcı'}</div>
+            <div className="text-xs text-blue-200">{profile?.role || 'Kullanıcı'}</div>
           </div>
         )}
 

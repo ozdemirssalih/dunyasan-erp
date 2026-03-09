@@ -57,19 +57,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       console.log('User role:', roleName, 'Is Admin:', isAdmin)
 
-      // If not admin and not already on employee-portal, redirect
-      if (!isAdmin && pathname !== '/dashboard/employee-portal') {
+      // If not admin, redirect to employee portal (outside dashboard)
+      if (!isAdmin) {
         console.log('🚫 Not admin, redirecting to employee portal')
         setAuthLoading(false)
-        router.push('/dashboard/employee-portal')
-        return
-      }
-
-      // If admin and on employee-portal, redirect to main dashboard
-      if (isAdmin && pathname === '/dashboard/employee-portal') {
-        console.log('✅ Admin on employee portal, redirecting to dashboard')
-        setAuthLoading(false)
-        router.push('/dashboard')
+        router.push('/employee-portal')
         return
       }
 
@@ -146,14 +138,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // If no user after auth check, they'll be redirected to login
   // But render the layout anyway to avoid blocking child pages
   console.log('🎨 Rendering layout - User:', user?.email || 'none')
-
-  // Check if on employee portal page
-  const isEmployeePortal = pathname === '/dashboard/employee-portal'
-
-  // If on employee portal, render without sidebar
-  if (isEmployeePortal) {
-    return <>{children}</>
-  }
 
   return (
     <div className="flex h-screen bg-gray-100">

@@ -499,6 +499,20 @@ export default function QualityControlPage() {
 
       console.log('🎉 Transfer onaylandı! Trigger otomatik olarak kaliteye ekleyecek.')
 
+      // 3. Üretim çıktılarının durumunu güncelle (Bekliyor → KK'da)
+      const { error: outputsUpdateError } = await supabase
+        .from('production_outputs')
+        .update({ transfer_status: 'sent_to_qc' })
+        .eq('output_item_id', transfer.item_id)
+        .eq('transfer_status', 'pending')
+
+      if (outputsUpdateError) {
+        console.error('⚠️ Üretim çıktıları güncellenemedi:', outputsUpdateError)
+        // Kritik değil, devam et
+      } else {
+        console.log('✅ Üretim çıktıları "KK\'da" olarak güncellendi')
+      }
+
       // NOT: Kaliteye ekleme işlemi database trigger tarafından yapılıyor
       // approve_production_to_qc_transfer() trigger fonksiyonu:
       // - Sadece kalite kontrol deposuna quantity kadar ekliyor

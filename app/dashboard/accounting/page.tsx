@@ -46,6 +46,16 @@ export default function AccountingPageV2() {
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
   const [checkDocumentFile, setCheckDocumentFile] = useState<File | null>(null)
+
+  // Yaklaşan çekler için tarih aralığı
+  const [upcomingChecksStartDate, setUpcomingChecksStartDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const getDefaultEndDate = () => {
+    const date = new Date()
+    date.setDate(date.getDate() + 30)
+    return date.toISOString().split('T')[0]
+  }
+  const [upcomingChecksEndDate, setUpcomingChecksEndDate] = useState<string>(getDefaultEndDate())
+
   const [checkForm, setCheckForm] = useState({
     check_number: '',
     check_type: 'incoming' as 'incoming' | 'outgoing',
@@ -641,6 +651,46 @@ export default function AccountingPageV2() {
 
   const filteredCashTransactions = getFilteredCashTransactions()
 
+  // Yaklaşan çekleri filtrele (belirtilen tarih aralığında vadesi dolacak çekler)
+  const getUpcomingChecks = (checkType: 'incoming' | 'outgoing') => {
+    const startDate = new Date(upcomingChecksStartDate)
+    startDate.setHours(0, 0, 0, 0)
+
+    const endDate = new Date(upcomingChecksEndDate)
+    endDate.setHours(23, 59, 59, 999)
+
+    return checks.filter(check => {
+      if (check.check_type !== checkType) return false
+      if (check.status !== 'pending') return false // Sadece bekleyen çekler
+
+      const dueDate = new Date(check.due_date)
+      return dueDate >= startDate && dueDate <= endDate
+    }).sort((a, b) => {
+      const dateA = new Date(a.due_date).getTime()
+      const dateB = new Date(b.due_date).getTime()
+      return dateA - dateB // En yakın vade tarihi önce
+    })
+  }
+
+  const upcomingIncomingChecks = getUpcomingChecks('incoming')
+  const upcomingOutgoingChecks = getUpcomingChecks('outgoing')
+
+  // Geçmiş çekleri getir (ödenmiş/tahsil edilmiş)
+  const getPastChecks = (checkType: 'incoming' | 'outgoing') => {
+    return checks.filter(check => {
+      if (check.check_type !== checkType) return false
+      // Tahsil edilmiş veya ödenmiş durumda olanlar
+      return check.status === 'collected' || check.status === 'paid'
+    }).sort((a, b) => {
+      const dateA = new Date(a.due_date).getTime()
+      const dateB = new Date(b.due_date).getTime()
+      return dateB - dateA // En yeni önce
+    })
+  }
+
+  const pastIncomingChecks = getPastChecks('incoming')
+  const pastOutgoingChecks = getPastChecks('outgoing')
+
   return (
     <PermissionGuard module="accounting" permission="view">
       <div className="min-h-screen bg-gray-50 p-8">
@@ -1177,6 +1227,265 @@ export default function AccountingPageV2() {
                 </div>
               </div>
 
+              {/* Yaklaşan Çekler Bölümü */}
+              <div className="mb-6 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-1">📅 Yaklaşan Çekler</h4>
+                    <p className="text-sm text-gray-600">Vadesi yaklaşan çekleri takip edin</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Başlangıç:</label>
+                      <input
+                        type="date"
+                        value={upcomingChecksStartDate}
+                        onChange={(e) => setUpcomingChecksStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Bitiş:</label>
+                      <input
+                        type="date"
+                        value={upcomingChecksEndDate}
+                        onChange={(e) => setUpcomingChecksEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setUpcomingChecksStartDate(new Date().toISOString().split('T')[0])
+                        setUpcomingChecksEndDate(getDefaultEndDate())
+                      }}
+                      className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      Sıfırla
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Yaklaşan Gelen Çekler */}
+                  <div className="bg-white rounded-lg border border-green-200 overflow-hidden">
+                    <div className="bg-green-50 border-b border-green-200 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-bold text-green-900">💰 Yaklaşan Gelen Çekler</h5>
+                        <span className="px-2 py-1 bg-green-600 text-white text-xs font-semibold rounded-full">
+                          {upcomingIncomingChecks.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {upcomingIncomingChecks.length > 0 ? (
+                        <table className="w-full">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Müşteri</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tutar</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {upcomingIncomingChecks.map((check) => {
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              const dueDate = new Date(check.due_date)
+                              const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                              const isUrgent = daysRemaining <= 7
+
+                              return (
+                                <tr key={check.id} className={`hover:bg-gray-50 ${isUrgent ? 'bg-red-50' : ''}`}>
+                                  <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
+                                  <td className="px-3 py-2 text-sm text-gray-700">{check.customer_name || '-'}</td>
+                                  <td className="px-3 py-2 text-sm font-semibold text-green-600">
+                                    {formatCurrency(check.amount, check.currency)}
+                                  </td>
+                                  <td className="px-3 py-2 text-sm">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-gray-700">{new Date(check.due_date).toLocaleDateString('tr-TR')}</span>
+                                      <span className={`text-xs font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
+                                        {daysRemaining === 0 ? 'Bugün!' : daysRemaining === 1 ? 'Yarın' : `${daysRemaining} gün`}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-8 text-center text-gray-500">
+                          <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Yaklaşan gelen çek bulunmuyor</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Yaklaşan Giden Çekler */}
+                  <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+                    <div className="bg-red-50 border-b border-red-200 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-bold text-red-900">💸 Yaklaşan Giden Çekler</h5>
+                        <span className="px-2 py-1 bg-red-600 text-white text-xs font-semibold rounded-full">
+                          {upcomingOutgoingChecks.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {upcomingOutgoingChecks.length > 0 ? (
+                        <table className="w-full">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tedarikçi</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tutar</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {upcomingOutgoingChecks.map((check) => {
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              const dueDate = new Date(check.due_date)
+                              const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                              const isUrgent = daysRemaining <= 7
+
+                              return (
+                                <tr key={check.id} className={`hover:bg-gray-50 ${isUrgent ? 'bg-red-50' : ''}`}>
+                                  <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
+                                  <td className="px-3 py-2 text-sm text-gray-700">{check.supplier_name || '-'}</td>
+                                  <td className="px-3 py-2 text-sm font-semibold text-red-600">
+                                    {formatCurrency(check.amount, check.currency)}
+                                  </td>
+                                  <td className="px-3 py-2 text-sm">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-gray-700">{new Date(check.due_date).toLocaleDateString('tr-TR')}</span>
+                                      <span className={`text-xs font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
+                                        {daysRemaining === 0 ? 'Bugün!' : daysRemaining === 1 ? 'Yarın' : `${daysRemaining} gün`}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-8 text-center text-gray-500">
+                          <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Yaklaşan giden çek bulunmuyor</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Geçmiş Çekler Bölümü */}
+              <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                <div className="mb-4">
+                  <h4 className="text-lg font-bold text-gray-900 mb-1">📜 Geçmiş Çekler</h4>
+                  <p className="text-sm text-gray-600">Tahsil edilmiş ve ödenmiş çekler</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Tahsil Edilmiş Gelen Çekler */}
+                  <div className="bg-white rounded-lg border border-green-200 overflow-hidden">
+                    <div className="bg-green-50 border-b border-green-200 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-bold text-green-900">✅ Tahsil Edilmiş Çekler</h5>
+                        <span className="px-2 py-1 bg-green-600 text-white text-xs font-semibold rounded-full">
+                          {pastIncomingChecks.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {pastIncomingChecks.length > 0 ? (
+                        <table className="w-full">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Müşteri</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tutar</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {pastIncomingChecks.map((check) => (
+                              <tr key={check.id} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
+                                <td className="px-3 py-2 text-sm text-gray-700">{check.customer_name || '-'}</td>
+                                <td className="px-3 py-2 text-sm font-semibold text-green-600">
+                                  {formatCurrency(check.amount, check.currency)}
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-600">
+                                  {new Date(check.due_date).toLocaleDateString('tr-TR')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-8 text-center text-gray-500">
+                          <FileCheck className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Tahsil edilmiş çek bulunmuyor</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ödenmiş Giden Çekler */}
+                  <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
+                    <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-bold text-blue-900">✅ Ödenmiş Çekler</h5>
+                        <span className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
+                          {pastOutgoingChecks.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {pastOutgoingChecks.length > 0 ? (
+                        <table className="w-full">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tedarikçi</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tutar</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {pastOutgoingChecks.map((check) => (
+                              <tr key={check.id} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
+                                <td className="px-3 py-2 text-sm text-gray-700">{check.supplier_name || '-'}</td>
+                                <td className="px-3 py-2 text-sm font-semibold text-blue-600">
+                                  {formatCurrency(check.amount, check.currency)}
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-600">
+                                  {new Date(check.due_date).toLocaleDateString('tr-TR')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-8 text-center text-gray-500">
+                          <FileCheck className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Ödenmiş çek bulunmuyor</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tüm Çekler Tablosu */}
+              <h4 className="text-lg font-bold text-gray-900 mb-4">📋 Tüm Çekler</h4>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">

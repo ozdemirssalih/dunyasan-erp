@@ -1,5 +1,8 @@
+-- Önce mevcut tabloyu sil (varsa)
+DROP TABLE IF EXISTS checks CASCADE;
+
 -- Çek Takip Tablosu
-CREATE TABLE IF NOT EXISTS checks (
+CREATE TABLE checks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
 
@@ -16,8 +19,8 @@ CREATE TABLE IF NOT EXISTS checks (
   due_date DATE NOT NULL, -- Vade tarihi
 
   -- İlişkili Bilgiler
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL, -- Gelen çek için
-  supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL, -- Giden çek için
+  customer_id UUID, -- Gelen çek için - Foreign key sonra eklenecek
+  supplier_id UUID, -- Giden çek için - Foreign key sonra eklenecek
 
   -- Durum
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'collected', 'paid', 'bounced', 'cancelled')),
@@ -90,3 +93,7 @@ CREATE TRIGGER checks_updated_at
 COMMENT ON TABLE checks IS 'Çek takip tablosu - gelen ve giden çeklerin yönetimi';
 COMMENT ON COLUMN checks.check_type IS 'incoming: gelen çek, outgoing: giden çek';
 COMMENT ON COLUMN checks.status IS 'pending: beklemede, collected: tahsil edildi, paid: ödendi, bounced: karşılıksız, cancelled: iptal';
+
+-- Foreign key'leri sonra ekle (customers ve suppliers tabloları varsa)
+-- ALTER TABLE checks ADD CONSTRAINT fk_checks_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL;
+-- ALTER TABLE checks ADD CONSTRAINT fk_checks_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
-import { Package, Wrench, Truck, Plus, Edit, Trash2, Search } from 'lucide-react'
+import { Package, Wrench, Truck, Plus, Edit, Trash2, Search, X } from 'lucide-react'
 
 // ── Tipler ───────────────────────────────────────────────────
 type Tab = 'inventory' | 'maintenance'
@@ -82,8 +82,13 @@ export default function ToolroomPage() {
   // Filtreler (Envanter tab)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [locationFilter, setLocationFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredTools, setFilteredTools] = useState<Tool[]>([])
+
+  // Dinamik filtre listeleri
+  const [uniqueTypes, setUniqueTypes] = useState<string[]>([])
+  const [uniqueLocations, setUniqueLocations] = useState<string[]>([])
 
   // ── Modaller ─────────────────────────────────────────────
   // 1. Ekle / Düzenle
@@ -118,10 +123,20 @@ export default function ToolroomPage() {
   // ── Lifecycle ────────────────────────────────────────────
   useEffect(() => { loadAll() }, [])
 
+  // Unique listeleri güncelle
+  useEffect(() => {
+    const types = Array.from(new Set(tools.map(t => t.tool_type).filter(Boolean))).sort() as string[]
+    const locations = Array.from(new Set(tools.map(t => t.location).filter(Boolean))).sort() as string[]
+    setUniqueTypes(types)
+    setUniqueLocations(locations)
+  }, [tools])
+
+  // Filtreleme
   useEffect(() => {
     let f = tools
     if (statusFilter !== 'all') f = f.filter(t => t.status === statusFilter)
     if (typeFilter !== 'all') f = f.filter(t => (t.tool_type || '') === typeFilter)
+    if (locationFilter !== 'all') f = f.filter(t => (t.location || '') === locationFilter)
     if (searchTerm) {
       const q = searchTerm.toLowerCase()
       f = f.filter(t =>
@@ -134,7 +149,7 @@ export default function ToolroomPage() {
       )
     }
     setFilteredTools(f)
-  }, [tools, statusFilter, typeFilter, searchTerm])
+  }, [tools, statusFilter, typeFilter, locationFilter, searchTerm])
 
   // ── Data Loading ─────────────────────────────────────────
   async function loadAll() {
@@ -434,17 +449,45 @@ export default function ToolroomPage() {
                     ))}
                   </select>
 
-                  {/* Tür Filtresi */}
+                  {/* Kategori/Tür Filtresi */}
                   <select
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
                     className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="all">Tüm Türler</option>
-                    {TOOL_TYPES.map((t) => (
+                    <option value="all">Tüm Kategoriler ({uniqueTypes.length})</option>
+                    {uniqueTypes.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
+
+                  {/* Lokasyon Filtresi */}
+                  <select
+                    value={locationFilter}
+                    onChange={(e) => setLocationFilter(e.target.value)}
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="all">Tüm Lokasyonlar ({uniqueLocations.length})</option>
+                    {uniqueLocations.map((loc) => (
+                      <option key={loc} value={loc}>{loc}</option>
+                    ))}
+                  </select>
+
+                  {/* Filtreleri Temizle */}
+                  {(statusFilter !== 'all' || typeFilter !== 'all' || locationFilter !== 'all' || searchTerm) && (
+                    <button
+                      onClick={() => {
+                        setStatusFilter('all')
+                        setTypeFilter('all')
+                        setLocationFilter('all')
+                        setSearchTerm('')
+                      }}
+                      className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 font-semibold"
+                      title="Tüm filtreleri temizle"
+                    >
+                      <X className="w-4 h-4" /> Temizle
+                    </button>
+                  )}
 
                   {/* Ekle Butonu */}
                   {canCreate('toolroom') && (
@@ -456,6 +499,40 @@ export default function ToolroomPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Filtre Sonuç Bilgisi */}
+                {(statusFilter !== 'all' || typeFilter !== 'all' || locationFilter !== 'all' || searchTerm) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold text-blue-900">
+                        {filteredTools.length} / {tools.length} takım gösteriliyor
+                      </span>
+                      <span className="text-blue-600">•</span>
+                      <div className="flex flex-wrap gap-2">
+                        {searchTerm && (
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">
+                            Arama: "{searchTerm}"
+                          </span>
+                        )}
+                        {statusFilter !== 'all' && (
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">
+                            Durum: {STATUS[statusFilter as ToolStatus].label}
+                          </span>
+                        )}
+                        {typeFilter !== 'all' && (
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">
+                            Kategori: {typeFilter}
+                          </span>
+                        )}
+                        {locationFilter !== 'all' && (
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">
+                            Lokasyon: {locationFilter}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Takım Listesi */}
                 {filteredTools.length === 0 ? (

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
-  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown
+  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown, FileCheck
 } from 'lucide-react'
 
 type TransactionType = 'receivable' | 'payable' | 'payment'
@@ -14,7 +14,7 @@ export default function AccountingPageV2() {
   const { canCreate } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'checks'>('dashboard')
 
   // Döviz kurları
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
@@ -41,6 +41,25 @@ export default function AccountingPageV2() {
 
   // Modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false)
+  const [showCheckModal, setShowCheckModal] = useState(false)
+
+  // Çek takip state'leri
+  const [checks, setChecks] = useState<any[]>([])
+  const [checkForm, setCheckForm] = useState({
+    check_number: '',
+    check_type: 'incoming' as 'incoming' | 'outgoing',
+    amount: '',
+    currency: 'TRY',
+    check_date: new Date().toISOString().split('T')[0],
+    due_date: '',
+    customer_id: '',
+    supplier_id: '',
+    bank_name: '',
+    branch_name: '',
+    account_number: '',
+    description: '',
+    status: 'pending' as 'pending' | 'collected' | 'paid' | 'bounced' | 'cancelled'
+  })
 
   // Kasa geçmişi filtreleme state'leri
   const [searchQuery, setSearchQuery] = useState('')
@@ -224,6 +243,25 @@ export default function AccountingPageV2() {
       setMonthlyIncome(monthlyIncomeByCurrency)
       setMonthlyExpense(monthlyExpenseByCurrency)
 
+      // Çekleri yükle
+      const { data: checksData } = await supabase
+        .from('checks')
+        .select(`
+          *,
+          customer:customers!checks_customer_id_fkey(customer_name),
+          supplier:suppliers!checks_supplier_id_fkey(company_name)
+        `)
+        .eq('company_id', companyId)
+        .order('due_date', { ascending: true })
+
+      const formattedChecks = checksData?.map(check => ({
+        ...check,
+        customer_name: check.customer?.customer_name,
+        supplier_name: check.supplier?.company_name
+      })) || []
+
+      setChecks(formattedChecks)
+
     } catch (error) {
       console.error('Error loading data:', error)
     }
@@ -396,6 +434,106 @@ export default function AccountingPageV2() {
     })
   }
 
+  const resetCheckForm = () => {
+    setCheckForm({
+      check_number: '',
+      check_type: 'incoming',
+      amount: '',
+      currency: 'TRY',
+      check_date: new Date().toISOString().split('T')[0],
+      due_date: '',
+      customer_id: '',
+      supplier_id: '',
+      bank_name: '',
+      branch_name: '',
+      account_number: '',
+      description: '',
+      status: 'pending'
+    })
+  }
+
+  const handleSaveCheck = async () => {
+    if (!checkForm.check_number || !checkForm.amount || !checkForm.due_date || !companyId) {
+      return alert('Çek no, tutar ve vade tarihi zorunludur!')
+    }
+
+    if (checkForm.check_type === 'incoming' && !checkForm.customer_id) {
+      return alert('Gelen çek için müşteri seçimi zorunludur!')
+    }
+
+    if (checkForm.check_type === 'outgoing' && !checkForm.supplier_id) {
+      return alert('Giden çek için tedarikçi seçimi zorunludur!')
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const { error } = await supabase
+        .from('checks')
+        .insert({
+          company_id: companyId,
+          check_number: checkForm.check_number,
+          check_type: checkForm.check_type,
+          amount: parseFloat(checkForm.amount),
+          currency: checkForm.currency,
+          check_date: checkForm.check_date,
+          due_date: checkForm.due_date,
+          customer_id: checkForm.check_type === 'incoming' ? checkForm.customer_id : null,
+          supplier_id: checkForm.check_type === 'outgoing' ? checkForm.supplier_id : null,
+          bank_name: checkForm.bank_name,
+          branch_name: checkForm.branch_name,
+          account_number: checkForm.account_number,
+          description: checkForm.description,
+          status: checkForm.status,
+          created_by: user?.id
+        })
+
+      if (error) throw error
+
+      alert('Çek başarıyla kaydedildi!')
+      setShowCheckModal(false)
+      resetCheckForm()
+      loadData()
+    } catch (error: any) {
+      console.error('Error saving check:', error)
+      alert('Çek kaydedilirken hata oluştu: ' + error.message)
+    }
+  }
+
+  const handleUpdateCheckStatus = async (check: any) => {
+    const newStatus = prompt(`Çek durumunu güncelleyin:\n1: Beklemede\n2: Tahsil Edildi\n3: Ödendi\n4: Karşılıksız\n5: İptal`, '1')
+
+    if (!newStatus) return
+
+    const statusMap: Record<string, string> = {
+      '1': 'pending',
+      '2': 'collected',
+      '3': 'paid',
+      '4': 'bounced',
+      '5': 'cancelled'
+    }
+
+    const status = statusMap[newStatus]
+    if (!status) {
+      return alert('Geçersiz seçim!')
+    }
+
+    try {
+      const { error } = await supabase
+        .from('checks')
+        .update({ status })
+        .eq('id', check.id)
+
+      if (error) throw error
+
+      alert('Çek durumu güncellendi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error updating check:', error)
+      alert('Çek güncellenirken hata oluştu: ' + error.message)
+    }
+  }
+
   const formatCurrency = (amount: number, currency: string = 'TRY') => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency }).format(amount)
   }
@@ -530,6 +668,17 @@ export default function AccountingPageV2() {
             >
               <History className="w-4 h-4" />
               Kasa Geçmişi
+            </button>
+            <button
+              onClick={() => setActiveTab('checks')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                activeTab === 'checks'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <FileCheck className="w-4 h-4" />
+              Çek Takip
             </button>
           </div>
         </div>
@@ -776,7 +925,7 @@ export default function AccountingPageV2() {
               </div>
             </div>
           </>
-        ) : (
+        ) : activeTab === 'history' ? (
           // Kasa Geçmişi
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-6 border-b border-gray-200">
@@ -971,7 +1120,124 @@ export default function AccountingPageV2() {
               </table>
             </div>
           </div>
-        )}
+        ) : activeTab === 'checks' ? (
+          // Çek Takip
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Çek Takip</h3>
+                  <p className="text-sm text-gray-600 mt-1">Gelen ve giden çekleri yönetin</p>
+                </div>
+                {canCreate('accounting') && (
+                  <button
+                    onClick={() => setShowCheckModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yeni Çek
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="text-sm text-green-600 mb-1">Gelen Çekler (Beklemede)</div>
+                  <div className="text-2xl font-bold text-green-700">
+                    {checks.filter(c => c.check_type === 'incoming' && c.status === 'pending').length}
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="text-sm text-red-600 mb-1">Giden Çekler (Beklemede)</div>
+                  <div className="text-2xl font-bold text-red-700">
+                    {checks.filter(c => c.check_type === 'outgoing' && c.status === 'pending').length}
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="text-sm text-blue-600 mb-1">Toplam Çek</div>
+                  <div className="text-2xl font-bold text-blue-700">{checks.length}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Çek No</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tür</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tutar</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Müşteri/Tedarikçi</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Çek Tarihi</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Vade Tarihi</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Durum</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {checks.map((check) => (
+                      <tr key={check.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">{check.check_number}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            check.check_type === 'incoming'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {check.check_type === 'incoming' ? 'Gelen' : 'Giden'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {formatCurrency(check.amount, check.currency)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {check.customer_name || check.supplier_name || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {new Date(check.check_date).toLocaleDateString('tr-TR')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {new Date(check.due_date).toLocaleDateString('tr-TR')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            check.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            check.status === 'collected' ? 'bg-green-100 text-green-700' :
+                            check.status === 'paid' ? 'bg-blue-100 text-blue-700' :
+                            check.status === 'bounced' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {check.status === 'pending' ? 'Beklemede' :
+                             check.status === 'collected' ? 'Tahsil Edildi' :
+                             check.status === 'paid' ? 'Ödendi' :
+                             check.status === 'bounced' ? 'Karşılıksız' :
+                             'İptal'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleUpdateCheckStatus(check)}
+                            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                          >
+                            Düzenle
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {checks.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                          Henüz çek kaydı bulunmuyor
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Transaction Modal */}
         {showTransactionModal && (
@@ -1315,6 +1581,214 @@ export default function AccountingPageV2() {
                 </button>
                 <button
                   onClick={handleSaveTransaction}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Check Modal */}
+        {showCheckModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-gray-900">Yeni Çek</h3>
+                  <button onClick={() => { setShowCheckModal(false); resetCheckForm(); }} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {/* Çek Türü */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Çek Türü *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setCheckForm({...checkForm, check_type: 'incoming', supplier_id: ''})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        checkForm.check_type === 'incoming'
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'bg-white text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      Gelen Çek
+                    </button>
+                    <button
+                      onClick={() => setCheckForm({...checkForm, check_type: 'outgoing', customer_id: ''})}
+                      className={`px-4 py-2 rounded-lg font-medium border ${
+                        checkForm.check_type === 'outgoing'
+                          ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-white text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      Giden Çek
+                    </button>
+                  </div>
+                </div>
+
+                {/* Müşteri/Tedarikçi */}
+                <div>
+                  {checkForm.check_type === 'incoming' ? (
+                    <>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri *</label>
+                      <select
+                        value={checkForm.customer_id}
+                        onChange={(e) => setCheckForm({...checkForm, customer_id: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      >
+                        <option value="">Müşteri Seçiniz...</option>
+                        {customers.map(customer => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.customer_name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi *</label>
+                      <select
+                        value={checkForm.supplier_id}
+                        onChange={(e) => setCheckForm({...checkForm, supplier_id: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      >
+                        <option value="">Tedarikçi Seçiniz...</option>
+                        {suppliers.map(supplier => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.company_name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
+
+                {/* Çek No ve Tutar */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Çek No *</label>
+                    <input
+                      type="text"
+                      value={checkForm.check_number}
+                      onChange={(e) => setCheckForm({...checkForm, check_number: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="Çek numarası"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={checkForm.amount}
+                      onChange={(e) => setCheckForm({...checkForm, amount: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                {/* Para Birimi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Para Birimi *</label>
+                  <select
+                    value={checkForm.currency}
+                    onChange={(e) => setCheckForm({...checkForm, currency: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="TRY">TRY - Türk Lirası</option>
+                    <option value="USD">USD - Amerikan Doları</option>
+                    <option value="EUR">EUR - Euro</option>
+                    <option value="GBP">GBP - İngiliz Sterlini</option>
+                  </select>
+                </div>
+
+                {/* Tarihler */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Çek Tarihi *</label>
+                    <input
+                      type="date"
+                      value={checkForm.check_date}
+                      onChange={(e) => setCheckForm({...checkForm, check_date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi *</label>
+                    <input
+                      type="date"
+                      value={checkForm.due_date}
+                      onChange={(e) => setCheckForm({...checkForm, due_date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                {/* Banka Bilgileri */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Banka Adı</label>
+                    <input
+                      type="text"
+                      value={checkForm.bank_name}
+                      onChange={(e) => setCheckForm({...checkForm, bank_name: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="Banka adı"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Şube Adı</label>
+                    <input
+                      type="text"
+                      value={checkForm.branch_name}
+                      onChange={(e) => setCheckForm({...checkForm, branch_name: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="Şube adı"
+                    />
+                  </div>
+                </div>
+
+                {/* Hesap No */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hesap Numarası</label>
+                  <input
+                    type="text"
+                    value={checkForm.account_number}
+                    onChange={(e) => setCheckForm({...checkForm, account_number: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    placeholder="Hesap numarası"
+                  />
+                </div>
+
+                {/* Açıklama */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
+                  <textarea
+                    value={checkForm.description}
+                    onChange={(e) => setCheckForm({...checkForm, description: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    rows={3}
+                    placeholder="Ek açıklama..."
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => { setShowCheckModal(false); resetCheckForm(); }}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveCheck}
                   className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />

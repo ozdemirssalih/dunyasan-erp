@@ -23,6 +23,7 @@ interface UnifiedItem {
   unit: string
   min_stock: number
   unit_price: number | null
+  currency: string | null // Para birimi (TL, USD, EUR)
   location: string | null
   supplier: string | null
   supplierId?: string | null
@@ -68,6 +69,7 @@ export default function InventoryPage() {
     min_stock: 0,
     max_stock: 0, // Max stok (depo için)
     unit_price: 0,
+    currency: 'TL', // Para birimi (TL, USD, EUR)
     location: '',
     location_letter: '', // Takımhane için
     location_number: '', // Takımhane için
@@ -181,6 +183,7 @@ export default function InventoryPage() {
           unit: item.unit || item.measurement_unit || 'adet',
           min_stock: item.min_stock || item.min_quantity || 0,
           unit_price: item.unit_price || item.price || null,
+          currency: item.currency || 'TL',
           location: item.location || item.shelf_location || null,
           supplier: supplierName || item.supplier_name || item.supplier || null,
           supplierId: item.supplier_id || null,
@@ -212,6 +215,7 @@ export default function InventoryPage() {
         unit: item.unit || item.measurement_unit || 'adet',
         min_stock: item.min_stock_level || item.min_stock || 0,
         unit_price: item.unit_cost || item.unit_price || null,
+        currency: item.currency || 'TL',
         location: item.location || null,
         supplier: item.supplier_name || item.supplier || null,
         source: 'inventory',
@@ -250,6 +254,7 @@ export default function InventoryPage() {
         unit: item.warehouse_items?.unit || 'adet',
         min_stock: 0,
         unit_price: null,
+        currency: null,
         location: null,
         supplier: null,
         description: item.warehouse_items?.description || null,
@@ -281,6 +286,7 @@ export default function InventoryPage() {
         unit: 'Adet', // Takımhane'de her zaman Adet
         min_stock: item.min_quantity || item.min_stock || 0,
         unit_price: item.unit_price || item.price || 0,
+        currency: item.currency || 'TL',
         location: item.location || null,
         supplier: item.supplier?.company_name || item.supplier_name || item.supplier || null,
         supplierId: item.supplier_id || null,
@@ -321,6 +327,7 @@ export default function InventoryPage() {
       min_stock: 0,
       max_stock: 0,
       unit_price: 0,
+      currency: 'TL',
       location: '',
       location_letter: '',
       location_number: '',
@@ -355,6 +362,7 @@ export default function InventoryPage() {
       min_stock: item.min_stock || 0,
       max_stock: 0, // Düzenleme modunda veritabanından çekilecek (depo için)
       unit_price: item.unit_price || 0,
+      currency: item.currency || 'TL',
       location: item.location || '',
       location_letter,
       location_number,
@@ -385,6 +393,7 @@ export default function InventoryPage() {
           unit: form.unit,
           min_stock_level: form.min_stock,
           unit_cost: form.unit_price,
+          currency: form.currency,
           location: form.location || null,
           supplier: form.supplier || null,
         }
@@ -410,6 +419,7 @@ export default function InventoryPage() {
           quantity: form.quantity,
           min_quantity: form.min_stock,
           unit_price: form.unit_price,
+          currency: form.currency,
           location,
           status: editingItem?.status || 'available', // Yeni ekleme: available, düzenleme: mevcut status
           is_active: true,
@@ -443,6 +453,7 @@ export default function InventoryPage() {
           unit: form.unit,
           min_stock: form.min_stock,
           unit_price: form.unit_price,
+          currency: form.currency,
           is_active: true,
         }
 
@@ -543,7 +554,11 @@ export default function InventoryPage() {
   const toolCount = allItems.filter(i => i.source === 'toolroom').length
   const lowStockCount = allItems.filter(i => i.quantity > 0 && i.min_stock > 0 && i.quantity < i.min_stock).length
   const outOfStockCount = allItems.filter(i => i.quantity === 0).length
-  const totalValue = allItems.reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0)
+
+  // Para birimlerine göre ayrı envanter değerleri
+  const totalValueTL = allItems.filter(i => i.currency === 'TL').reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0)
+  const totalValueUSD = allItems.filter(i => i.currency === 'USD').reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0)
+  const totalValueEUR = allItems.filter(i => i.currency === 'EUR').reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0)
   const uniqueCategories = Array.from(new Set(allItems.map(i => i.category))).sort()
 
   return (
@@ -607,9 +622,31 @@ export default function InventoryPage() {
             <p className="text-xs text-gray-400 mt-1">acil temin</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-            <p className="text-gray-500 text-sm font-medium mb-1">Envanter Değeri</p>
-            <p className="text-2xl font-bold text-gray-800">{totalValue.toLocaleString('tr-TR')} ₺</p>
-            <p className="text-xs text-gray-400 mt-1">fiyatlı kalemler</p>
+            <p className="text-gray-500 text-sm font-medium mb-2">Envanter Değeri</p>
+            <div className="space-y-1.5">
+              {totalValueTL > 0 && (
+                <div className="flex items-baseline gap-1">
+                  <p className="text-xl font-bold text-gray-800">{totalValueTL.toLocaleString('tr-TR')}</p>
+                  <p className="text-sm text-gray-500">₺</p>
+                </div>
+              )}
+              {totalValueUSD > 0 && (
+                <div className="flex items-baseline gap-1">
+                  <p className="text-xl font-bold text-gray-800">{totalValueUSD.toLocaleString('tr-TR')}</p>
+                  <p className="text-sm text-gray-500">$</p>
+                </div>
+              )}
+              {totalValueEUR > 0 && (
+                <div className="flex items-baseline gap-1">
+                  <p className="text-xl font-bold text-gray-800">{totalValueEUR.toLocaleString('tr-TR')}</p>
+                  <p className="text-sm text-gray-500">€</p>
+                </div>
+              )}
+              {totalValueTL === 0 && totalValueUSD === 0 && totalValueEUR === 0 && (
+                <p className="text-2xl font-bold text-gray-300">0 ₺</p>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">fiyatlı kalemler</p>
           </div>
         </div>
 
@@ -728,7 +765,12 @@ export default function InventoryPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">
-                        {item.unit_price != null ? `${item.unit_price.toLocaleString('tr-TR')} ₺` : '—'}
+                        {item.unit_price != null ? (
+                          <>
+                            {item.unit_price.toLocaleString('tr-TR')}{' '}
+                            {item.currency === 'USD' ? '$' : item.currency === 'EUR' ? '€' : '₺'}
+                          </>
+                        ) : '—'}
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-500">{item.location || '—'}</td>
                       <td className="px-5 py-3.5">
@@ -1103,18 +1145,32 @@ export default function InventoryPage() {
                       </div>
                     )}
 
-                    {/* Birim Fiyat */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat (₺)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.unit_price}
-                        onChange={(e) => setForm({ ...form, unit_price: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="0.00"
-                      />
+                    {/* Birim Fiyat ve Para Birimi */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birim Fiyat</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.unit_price}
+                          onChange={(e) => setForm({ ...form, unit_price: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Para Birimi</label>
+                        <select
+                          value={form.currency}
+                          onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        >
+                          <option value="TL">₺ TL</option>
+                          <option value="USD">$ USD</option>
+                          <option value="EUR">€ EUR</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>

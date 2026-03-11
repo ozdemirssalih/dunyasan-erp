@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Clock, Calendar, MessageSquare, ChevronRight } from 'lucide-react'
+import { Clock, Calendar, MessageSquare, ChevronRight, Activity, User, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DashboardPage() {
@@ -12,6 +12,8 @@ export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState('')
   const [messageCount, setMessageCount] = useState(0)
   const [recentMessages, setRecentMessages] = useState<any[]>([])
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     loadUser()
@@ -33,8 +35,17 @@ export default function DashboardPage() {
 
       setProfile(profileData)
 
+      // Admin kontrolü
+      const adminRoles = ['admin', 'owner']
+      setIsAdmin(adminRoles.includes(profileData?.role))
+
       if (profileData?.company_id) {
         await loadStats(profileData.company_id, user.id)
+
+        // Eğer admin ise, aktivite loglarını yükle
+        if (adminRoles.includes(profileData?.role)) {
+          await loadActivityLogs(profileData.company_id)
+        }
       }
     }
   }
@@ -53,6 +64,21 @@ export default function DashboardPage() {
       setMessageCount(messages?.length || 0)
     } catch (error) {
       console.error('Error loading stats:', error)
+    }
+  }
+
+  const loadActivityLogs = async (companyId: string) => {
+    try {
+      const { data: logs } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      setActivityLogs(logs || [])
+    } catch (error) {
+      console.error('Error loading activity logs:', error)
     }
   }
 
@@ -133,6 +159,110 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Activity Logs - Admin Only */}
+      {isAdmin && activityLogs.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md">
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <Activity className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Aktivite Log Kayıtları</h3>
+                  <p className="text-sm text-gray-600">Son kullanıcı işlemleri</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
+                {activityLogs.length} kayıt
+              </span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Kullanıcı</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">İşlem</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Modül</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Açıklama</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tarih/Saat</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {activityLogs.map((log) => {
+                  const actionColors: Record<string, string> = {
+                    create: 'bg-green-100 text-green-700',
+                    update: 'bg-blue-100 text-blue-700',
+                    delete: 'bg-red-100 text-red-700',
+                    login: 'bg-gray-100 text-gray-700',
+                    logout: 'bg-gray-100 text-gray-700',
+                    view: 'bg-purple-100 text-purple-700',
+                    export: 'bg-orange-100 text-orange-700'
+                  }
+
+                  const actionLabels: Record<string, string> = {
+                    create: 'Oluşturma',
+                    update: 'Güncelleme',
+                    delete: 'Silme',
+                    login: 'Giriş',
+                    logout: 'Çıkış',
+                    view: 'Görüntüleme',
+                    export: 'Dışa Aktarma'
+                  }
+
+                  const moduleLabels: Record<string, string> = {
+                    accounting: 'Muhasebe',
+                    warehouse: 'Depo',
+                    production: 'Üretim',
+                    hrm: 'İnsan Kaynakları',
+                    customers: 'Müşteriler',
+                    suppliers: 'Tedarikçiler',
+                    quality: 'Kalite',
+                    waybills: 'İrsaliyeler',
+                    invoices: 'Faturalar',
+                    checks: 'Çekler'
+                  }
+
+                  return (
+                    <tr key={log.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{log.user_name || 'Sistem'}</p>
+                            <p className="text-xs text-gray-500">{log.user_email || ''}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${actionColors[log.action_type] || 'bg-gray-100 text-gray-700'}`}>
+                          {actionLabels[log.action_type] || log.action_type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {moduleLabels[log.module] || log.module}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700 max-w-md truncate">
+                        {log.description}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <div>
+                          <p>{new Date(log.created_at).toLocaleDateString('tr-TR')}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(log.created_at).toLocaleTimeString('tr-TR')}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* User Info */}
       {profile && (

@@ -265,7 +265,7 @@ export default function AccountingPageV2() {
 
         if (check.customer_id) {
           const { data: customerData } = await supabase
-            .from('customers')
+            .from('customer_companies')
             .select('customer_name')
             .eq('id', check.customer_id)
             .single()

@@ -340,11 +340,12 @@ export default function ToolroomPage() {
   // ── Tab Badge Hesaplamaları ──────────────────────────────
   const lowStockCount = tools.filter(t => t.quantity < t.min_quantity).length
   const maintenanceCount = tools.filter(t => t.status === 'maintenance' || t.status === 'broken').length
+  const totalToolsCount = tools.length
 
   const tabs = [
-    { key: 'inventory' as Tab, label: 'Envanter', badge: lowStockCount, alert: lowStockCount > 0 },
-    { key: 'maintenance' as Tab, label: 'Bakım Geçmişi', badge: maintenanceCount, alert: maintenanceCount > 0 },
-  ] as { key: Tab; label: string; badge: number | null; alert?: boolean }[]
+    { key: 'inventory' as Tab, label: 'Envanter', badge: `${totalToolsCount} Takım`, alert: false },
+    { key: 'maintenance' as Tab, label: 'Bakım Geçmişi', badge: maintenanceCount > 0 ? maintenanceCount.toString() : null, alert: maintenanceCount > 0 },
+  ] as { key: Tab; label: string; badge: string | null; alert?: boolean }[]
 
   // ── Render ───────────────────────────────────────────────
   if (loading) {
@@ -387,10 +388,10 @@ export default function ToolroomPage() {
                   }`}
                 >
                   {t.label}
-                  {t.badge !== null && t.badge > 0 && (
+                  {t.badge !== null && (
                     <span
-                      className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                        t.alert ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'
+                      className={`ml-2 px-2 py-0.5 text-xs rounded-full font-semibold ${
+                        t.alert ? 'bg-red-500 text-white' : 'bg-blue-100 text-blue-700'
                       }`}
                     >
                       {t.badge}

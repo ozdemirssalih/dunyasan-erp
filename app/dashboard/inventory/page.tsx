@@ -483,6 +483,33 @@ export default function InventoryPage() {
     }
   }
 
+  const deleteItem = async (item: UnifiedItem) => {
+    if (!confirm(`"${item.code} - ${item.name}" kaydını silmek istediğinize emin misiniz?`)) return
+
+    try {
+      let error
+      if (item.source === 'warehouse') {
+        const result = await supabase.from('warehouse_items').delete().eq('id', item.rawId)
+        error = result.error
+      } else if (item.source === 'inventory') {
+        const result = await supabase.from('inventory').delete().eq('id', item.rawId)
+        error = result.error
+      } else if (item.source === 'toolroom') {
+        // Takımhane için soft delete (is_active = false)
+        const result = await supabase.from('tools').update({ is_active: false }).eq('id', item.rawId)
+        error = result.error
+      } else {
+        alert('Bu kaynaktan silme işlemi desteklenmiyor.')
+        return
+      }
+
+      if (error) throw error
+      await loadData()
+    } catch (error: any) {
+      alert('❌ Silme hatası: ' + error.message)
+    }
+  }
+
   const getStockStatus = (item: UnifiedItem) => {
     if (item.quantity === 0) return { label: 'Stokta Yok', color: 'text-red-600', bg: 'bg-red-50' }
     if (item.min_stock > 0 && item.quantity < item.min_stock) return { label: 'Düşük Stok', color: 'text-orange-600', bg: 'bg-orange-50' }
@@ -706,15 +733,26 @@ export default function InventoryPage() {
                       <td className="px-5 py-3.5 text-sm text-gray-500">{item.location || '—'}</td>
                       <td className="px-5 py-3.5">
                         {(item.source === 'inventory' || item.source === 'toolroom' || item.source === 'warehouse') ? (
-                          <button
-                            onClick={() => openEditModal(item)}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
-                            title="Tüm alanları düzenle"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditModal(item)}
+                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded transition-colors"
+                              title="Düzenle"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => deleteItem(item)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-xs text-gray-300 px-1.5">—</span>
                         )}

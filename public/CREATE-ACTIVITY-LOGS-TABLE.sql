@@ -44,14 +44,13 @@ CREATE INDEX idx_activity_logs_company_created ON activity_logs(company_id, crea
 -- RLS Policies
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 
--- Sadece yöneticiler log kayıtlarını görebilir
-CREATE POLICY "Admins can view activity logs"
+-- Aynı şirketteki kullanıcılar log kayıtlarını görebilir
+CREATE POLICY "Users can view activity logs in their company"
   ON activity_logs FOR SELECT
   USING (
     company_id IN (
       SELECT company_id FROM profiles
       WHERE id = auth.uid()
-      AND role IN ('admin', 'owner')
     )
   );
 

@@ -777,6 +777,41 @@ export default function ManagementDashboard() {
         })
       }
 
+      // Activity Logs (sistem log kayıtları)
+      const { data: activityLogsData, error: activityLogsError } = await supabase
+        .from('activity_logs')
+        .select('id, action, entity_type, entity_name, user_name, created_at')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (activityLogsError) {
+        console.error('❌ Activity logs hatası:', activityLogsError)
+      }
+
+      if (activityLogsData) {
+        activityLogsData.forEach(log => {
+          // Action'a göre status belirle
+          let status = 'success'
+          if (log.action === 'deleted') status = 'error'
+          else if (log.action === 'updated') status = 'warning'
+
+          // Action'ı Türkçe'ye çevir
+          const actionText =
+            log.action === 'created' ? 'Oluşturuldu' :
+            log.action === 'updated' ? 'Güncellendi' :
+            log.action === 'deleted' ? 'Silindi' : log.action
+
+          activities.push({
+            id: log.id,
+            type: 'log',
+            description: `${log.entity_type || 'Kayıt'} - ${log.entity_name || ''} ${actionText}${log.user_name ? ' (' + log.user_name + ')' : ''}`,
+            time: new Date(log.created_at).toLocaleString('tr-TR'),
+            status: status
+          })
+        })
+      }
+
       activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       setRecentActivities(activities.slice(0, 15))
       console.log('📊 Son işlemler hazır:', activities.length, 'işlem')
@@ -1277,10 +1312,12 @@ export default function ManagementDashboard() {
                       <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                         activity.type === 'production' ? 'bg-blue-100 text-blue-700' :
                         activity.type === 'qc' ? 'bg-purple-100 text-purple-700' :
+                        activity.type === 'log' ? 'bg-orange-100 text-orange-700' :
                         'bg-cyan-100 text-cyan-700'
                       }`}>
                         {activity.type === 'production' ? 'ÜRETİM' :
-                         activity.type === 'qc' ? 'KALİTE' : 'DEPO'}
+                         activity.type === 'qc' ? 'KALİTE' :
+                         activity.type === 'log' ? 'LOG' : 'DEPO'}
                       </span>
                       <span className={`w-2 h-2 rounded-full ${
                         activity.status === 'success' ? 'bg-green-500' :

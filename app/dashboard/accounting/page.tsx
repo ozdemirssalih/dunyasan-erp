@@ -45,6 +45,7 @@ export default function AccountingPageV2() {
 
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
+  const [checkDocumentFile, setCheckDocumentFile] = useState<File | null>(null)
   const [checkForm, setCheckForm] = useState({
     check_number: '',
     check_type: 'incoming' as 'incoming' | 'outgoing',
@@ -54,9 +55,6 @@ export default function AccountingPageV2() {
     due_date: '',
     customer_id: '',
     supplier_id: '',
-    bank_name: '',
-    branch_name: '',
-    account_number: '',
     description: '',
     status: 'pending' as 'pending' | 'collected' | 'paid' | 'bounced' | 'cancelled'
   })
@@ -435,6 +433,7 @@ export default function AccountingPageV2() {
   }
 
   const resetCheckForm = () => {
+    setCheckDocumentFile(null)
     setCheckForm({
       check_number: '',
       check_type: 'incoming',
@@ -444,9 +443,6 @@ export default function AccountingPageV2() {
       due_date: '',
       customer_id: '',
       supplier_id: '',
-      bank_name: '',
-      branch_name: '',
-      account_number: '',
       description: '',
       status: 'pending'
     })
@@ -468,6 +464,28 @@ export default function AccountingPageV2() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
+      // PDF dosyası yükleme (varsa)
+      let documentUrl = null
+      if (checkDocumentFile) {
+        const fileExt = checkDocumentFile.name.split('.').pop()
+        const fileName = `${companyId}/${Date.now()}_${checkForm.check_number}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('check-documents')
+          .upload(fileName, checkDocumentFile)
+
+        if (uploadError) {
+          console.error('File upload error:', uploadError)
+          return alert('Dosya yüklenirken hata oluştu: ' + uploadError.message)
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('check-documents')
+          .getPublicUrl(fileName)
+
+        documentUrl = publicUrl
+      }
+
       const { error } = await supabase
         .from('checks')
         .insert({
@@ -480,9 +498,7 @@ export default function AccountingPageV2() {
           due_date: checkForm.due_date,
           customer_id: checkForm.check_type === 'incoming' ? checkForm.customer_id : null,
           supplier_id: checkForm.check_type === 'outgoing' ? checkForm.supplier_id : null,
-          bank_name: checkForm.bank_name,
-          branch_name: checkForm.branch_name,
-          account_number: checkForm.account_number,
+          document_url: documentUrl,
           description: checkForm.description,
           status: checkForm.status,
           created_by: user?.id
@@ -1172,6 +1188,7 @@ export default function AccountingPageV2() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Çek Tarihi</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Vade Tarihi</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Durum</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Belge</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">İşlemler</th>
                     </tr>
                   </thead>
@@ -1216,6 +1233,20 @@ export default function AccountingPageV2() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
+                          {check.document_url ? (
+                            <a
+                              href={check.document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                            >
+                              <FileDown className="w-4 h-4" />
+                            </a>
+                          ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           <button
                             onClick={() => handleUpdateCheckStatus(check)}
                             className="text-blue-600 hover:text-blue-700 text-sm font-medium"
@@ -1227,7 +1258,7 @@ export default function AccountingPageV2() {
                     ))}
                     {checks.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                           Henüz çek kaydı bulunmuyor
                         </td>
                       </tr>
@@ -1731,40 +1762,39 @@ export default function AccountingPageV2() {
                   </div>
                 </div>
 
-                {/* Banka Bilgileri */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Banka Adı</label>
-                    <input
-                      type="text"
-                      value={checkForm.bank_name}
-                      onChange={(e) => setCheckForm({...checkForm, bank_name: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      placeholder="Banka adı"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Şube Adı</label>
-                    <input
-                      type="text"
-                      value={checkForm.branch_name}
-                      onChange={(e) => setCheckForm({...checkForm, branch_name: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      placeholder="Şube adı"
-                    />
-                  </div>
-                </div>
-
-                {/* Hesap No */}
+                {/* PDF Yükleme */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Hesap Numarası</label>
-                  <input
-                    type="text"
-                    value={checkForm.account_number}
-                    onChange={(e) => setCheckForm({...checkForm, account_number: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    placeholder="Hesap numarası"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Çek Belgesi (PDF)</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => setCheckDocumentFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="check-document-upload"
+                    />
+                    <label
+                      htmlFor="check-document-upload"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <Upload className="w-8 h-8 text-gray-400" />
+                      <span className="text-sm text-gray-600">
+                        {checkDocumentFile ? checkDocumentFile.name : 'PDF dosyası seçin veya sürükleyin'}
+                      </span>
+                      <span className="text-xs text-gray-500">Maksimum 5MB</span>
+                    </label>
+                  </div>
+                  {checkDocumentFile && (
+                    <div className="mt-2 flex items-center justify-between bg-blue-50 p-2 rounded">
+                      <span className="text-sm text-blue-700">{checkDocumentFile.name}</span>
+                      <button
+                        onClick={() => setCheckDocumentFile(null)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Açıklama */}

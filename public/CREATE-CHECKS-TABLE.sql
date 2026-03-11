@@ -28,9 +28,7 @@ CREATE TABLE IF NOT EXISTS checks (
   -- cancelled: iptal edildi
 
   -- Ek Bilgiler
-  bank_name VARCHAR(255),
-  branch_name VARCHAR(255),
-  account_number VARCHAR(100),
+  document_url TEXT, -- Çek PDF belgesi
   endorsee VARCHAR(255), -- Ciro edilen kişi/firma
   description TEXT,
 

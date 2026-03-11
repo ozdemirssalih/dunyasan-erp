@@ -254,21 +254,41 @@ export default function AccountingPageV2() {
       // Çekleri yükle
       const { data: checksData } = await supabase
         .from('checks')
-        .select(`
-          *,
-          customer:customers!checks_customer_id_fkey(customer_name),
-          supplier:suppliers!checks_supplier_id_fkey(company_name)
-        `)
+        .select('*')
         .eq('company_id', companyId)
         .order('due_date', { ascending: true })
 
-      const formattedChecks = checksData?.map(check => ({
-        ...check,
-        customer_name: check.customer?.customer_name,
-        supplier_name: check.supplier?.company_name
-      })) || []
+      // Müşteri ve tedarikçi bilgilerini manuel olarak yükle
+      const checksWithNames = await Promise.all((checksData || []).map(async (check) => {
+        let customer_name = null
+        let supplier_name = null
 
-      setChecks(formattedChecks)
+        if (check.customer_id) {
+          const { data: customerData } = await supabase
+            .from('customers')
+            .select('customer_name')
+            .eq('id', check.customer_id)
+            .single()
+          customer_name = customerData?.customer_name
+        }
+
+        if (check.supplier_id) {
+          const { data: supplierData } = await supabase
+            .from('suppliers')
+            .select('company_name')
+            .eq('id', check.supplier_id)
+            .single()
+          supplier_name = supplierData?.company_name
+        }
+
+        return {
+          ...check,
+          customer_name,
+          supplier_name
+        }
+      }))
+
+      setChecks(checksWithNames)
 
     } catch (error) {
       console.error('Error loading data:', error)

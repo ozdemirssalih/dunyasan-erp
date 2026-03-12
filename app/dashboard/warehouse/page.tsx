@@ -100,7 +100,9 @@ export default function WarehousePage() {
   const [showExitModal, setShowExitModal] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [showWaybillModal, setShowWaybillModal] = useState(false)
+  const [showTransactionEditModal, setShowTransactionEditModal] = useState(false)
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [lastExitTransaction, setLastExitTransaction] = useState<any | null>(null)
 
   // Form states
@@ -143,6 +145,17 @@ export default function WarehousePage() {
     unit: 'adet',
     urgency: 'medium',
     reason: '',
+  })
+
+  const [transactionEditForm, setTransactionEditForm] = useState({
+    quantity: 0,
+    supplier: '',
+    reference_number: '',
+    notes: '',
+    transaction_date: new Date().toISOString().split('T')[0],
+    shipment_destination: '',
+    department_name: '',
+    destination_type: '',
   })
 
   useEffect(() => {
@@ -956,6 +969,52 @@ export default function WarehousePage() {
     }
   }
 
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction)
+    setTransactionEditForm({
+      quantity: transaction.quantity,
+      supplier: transaction.supplier || '',
+      reference_number: transaction.reference_number || '',
+      notes: transaction.notes || '',
+      transaction_date: transaction.transaction_date ? transaction.transaction_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      shipment_destination: transaction.shipment_destination || '',
+      department_name: transaction.department_name || '',
+      destination_type: transaction.destination_type || '',
+    })
+    setShowTransactionEditModal(true)
+  }
+
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId || !editingTransaction) return
+
+    try {
+      const { error } = await supabase
+        .from('warehouse_transactions')
+        .update({
+          quantity: transactionEditForm.quantity,
+          supplier: transactionEditForm.supplier || null,
+          reference_number: transactionEditForm.reference_number || null,
+          notes: transactionEditForm.notes || null,
+          transaction_date: transactionEditForm.transaction_date,
+          shipment_destination: transactionEditForm.shipment_destination || null,
+          department_name: transactionEditForm.department_name || null,
+          destination_type: transactionEditForm.destination_type || null,
+        })
+        .eq('id', editingTransaction.id)
+
+      if (error) throw error
+
+      alert('✅ İşlem detayları güncellendi!')
+      setShowTransactionEditModal(false)
+      setEditingTransaction(null)
+      loadData()
+    } catch (error: any) {
+      console.error('Error updating transaction:', error)
+      alert('❌ Hata: ' + error.message)
+    }
+  }
+
   const resetItemForm = () => {
     setItemForm({
       code: '',
@@ -1638,6 +1697,7 @@ export default function WarehousePage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kaynak/Hedef</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referans</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemi Yapan</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1673,6 +1733,16 @@ export default function WarehousePage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {tx.created_by_name}
+                      </td>
+                      <td className="px-6 py-4">
+                        {canEdit('warehouse') && (
+                          <button
+                            onClick={() => handleEditTransaction(tx)}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                          >
+                            ✏️ Düzenle
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -2290,6 +2360,166 @@ export default function WarehousePage() {
                     onClick={() => {
                       setShowRequestModal(false)
                       resetRequestForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* TRANSACTION EDIT MODAL */}
+        {showTransactionEditModal && editingTransaction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-white">📝 İşlem Detaylarını Düzenle</h2>
+                <button
+                  onClick={() => {
+                    setShowTransactionEditModal(false)
+                    setEditingTransaction(null)
+                  }}
+                  className="text-white hover:text-gray-200 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateTransaction} className="p-6 space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Ürün:</span>
+                      <span className="ml-2 font-semibold">{editingTransaction.item_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Kod:</span>
+                      <span className="ml-2 font-semibold">{editingTransaction.item_code}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Tip:</span>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
+                        editingTransaction.type === 'entry'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {editingTransaction.type === 'entry' ? '↓ Giriş' : '↑ Çıkış'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">İşlemi Yapan:</span>
+                      <span className="ml-2 font-semibold">{editingTransaction.created_by_name}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={transactionEditForm.quantity}
+                      onChange={(e) => setTransactionEditForm({ ...transactionEditForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">İşlem Tarihi</label>
+                    <input
+                      type="date"
+                      value={transactionEditForm.transaction_date}
+                      onChange={(e) => setTransactionEditForm({ ...transactionEditForm, transaction_date: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {editingTransaction.type === 'entry' ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tedarikçi</label>
+                    <input
+                      type="text"
+                      value={transactionEditForm.supplier}
+                      onChange={(e) => setTransactionEditForm({ ...transactionEditForm, supplier: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                      placeholder="Tedarikçi firma"
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Hedef</label>
+                      <input
+                        type="text"
+                        value={transactionEditForm.shipment_destination}
+                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, shipment_destination: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                        placeholder="Sevkiyat hedefi"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Departman</label>
+                      <input
+                        type="text"
+                        value={transactionEditForm.department_name}
+                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, department_name: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                        placeholder="Departman"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Hedef Tipi</label>
+                      <input
+                        type="text"
+                        value={transactionEditForm.destination_type}
+                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, destination_type: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                        placeholder="Hedef tipi"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">İrsaliye/Referans No</label>
+                  <input
+                    type="text"
+                    value={transactionEditForm.reference_number}
+                    onChange={(e) => setTransactionEditForm({ ...transactionEditForm, reference_number: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                  <textarea
+                    value={transactionEditForm.notes}
+                    onChange={(e) => setTransactionEditForm({ ...transactionEditForm, notes: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold"
+                  >
+                    💾 Güncelle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTransactionEditModal(false)
+                      setEditingTransaction(null)
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

@@ -149,13 +149,7 @@ export default function WarehousePage() {
 
   const [transactionEditForm, setTransactionEditForm] = useState({
     quantity: 0,
-    supplier: '',
-    reference_number: '',
-    notes: '',
     transaction_date: new Date().toISOString().split('T')[0],
-    shipment_destination: '',
-    department_name: '',
-    destination_type: '',
   })
 
   useEffect(() => {
@@ -973,13 +967,7 @@ export default function WarehousePage() {
     setEditingTransaction(transaction)
     setTransactionEditForm({
       quantity: transaction.quantity,
-      supplier: transaction.supplier || '',
-      reference_number: transaction.reference_number || '',
-      notes: transaction.notes || '',
       transaction_date: transaction.transaction_date ? transaction.transaction_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      shipment_destination: transaction.shipment_destination || '',
-      department_name: transaction.department_name || '',
-      destination_type: transaction.destination_type || '',
     })
     setShowTransactionEditModal(true)
   }
@@ -993,19 +981,13 @@ export default function WarehousePage() {
         .from('warehouse_transactions')
         .update({
           quantity: transactionEditForm.quantity,
-          supplier: transactionEditForm.supplier || null,
-          reference_number: transactionEditForm.reference_number || null,
-          notes: transactionEditForm.notes || null,
           transaction_date: transactionEditForm.transaction_date,
-          shipment_destination: transactionEditForm.shipment_destination || null,
-          department_name: transactionEditForm.department_name || null,
-          destination_type: transactionEditForm.destination_type || null,
         })
         .eq('id', editingTransaction.id)
 
       if (error) throw error
 
-      alert('✅ İşlem detayları güncellendi!')
+      alert('✅ İşlem miktar ve tarihi güncellendi!')
       setShowTransactionEditModal(false)
       setEditingTransaction(null)
       loadData()
@@ -2442,70 +2424,10 @@ export default function WarehousePage() {
                   </div>
                 </div>
 
-                {editingTransaction.type === 'entry' ? (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tedarikçi</label>
-                    <input
-                      type="text"
-                      value={transactionEditForm.supplier}
-                      onChange={(e) => setTransactionEditForm({ ...transactionEditForm, supplier: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                      placeholder="Tedarikçi firma"
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Hedef</label>
-                      <input
-                        type="text"
-                        value={transactionEditForm.shipment_destination}
-                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, shipment_destination: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                        placeholder="Sevkiyat hedefi"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Departman</label>
-                      <input
-                        type="text"
-                        value={transactionEditForm.department_name}
-                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, department_name: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                        placeholder="Departman"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Hedef Tipi</label>
-                      <input
-                        type="text"
-                        value={transactionEditForm.destination_type}
-                        onChange={(e) => setTransactionEditForm({ ...transactionEditForm, destination_type: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                        placeholder="Hedef tipi"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">İrsaliye/Referans No</label>
-                  <input
-                    type="text"
-                    value={transactionEditForm.reference_number}
-                    onChange={(e) => setTransactionEditForm({ ...transactionEditForm, reference_number: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
-                  <textarea
-                    value={transactionEditForm.notes}
-                    onChange={(e) => setTransactionEditForm({ ...transactionEditForm, notes: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
-                  />
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-700">
+                    ℹ️ <strong>Not:</strong> Sadece miktar ve tarih düzenlenebilir. Diğer bilgileri değiştirmek için yeni bir işlem girişi yapın.
+                  </p>
                 </div>
 
                 <div className="flex space-x-4 pt-4">

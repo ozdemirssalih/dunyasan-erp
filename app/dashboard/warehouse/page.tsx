@@ -987,13 +987,34 @@ export default function WarehousePage() {
 
       if (error) throw error
 
-      alert('✅ İşlem miktar ve tarihi güncellendi!')
+      alert('İşlem miktar ve tarihi güncellendi!')
       setShowTransactionEditModal(false)
       setEditingTransaction(null)
       loadData()
     } catch (error: any) {
       console.error('Error updating transaction:', error)
-      alert('❌ Hata: ' + error.message)
+      alert('Hata: ' + error.message)
+    }
+  }
+
+  const handleDeleteTransaction = async (transaction: Transaction) => {
+    if (!confirm(`"${transaction.item_name}" için ${transaction.type === 'entry' ? 'giriş' : 'çıkış'} işlemini silmek istediğinize emin misiniz?\n\nMiktar: ${transaction.quantity} ${transaction.unit}\nTarih: ${new Date(transaction.transaction_date).toLocaleDateString('tr-TR')}`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('warehouse_transactions')
+        .delete()
+        .eq('id', transaction.id)
+
+      if (error) throw error
+
+      alert('İşlem kaydı silindi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error)
+      alert('Hata: ' + error.message)
     }
   }
 
@@ -1717,14 +1738,24 @@ export default function WarehousePage() {
                         {tx.created_by_name}
                       </td>
                       <td className="px-6 py-4">
-                        {canEdit('warehouse') && (
-                          <button
-                            onClick={() => handleEditTransaction(tx)}
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                          >
-                            ✏️ Düzenle
-                          </button>
-                        )}
+                        <div className="flex space-x-2">
+                          {canEdit('warehouse') && (
+                            <button
+                              onClick={() => handleEditTransaction(tx)}
+                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            >
+                              Düzenle
+                            </button>
+                          )}
+                          {canDelete('warehouse') && (
+                            <button
+                              onClick={() => handleDeleteTransaction(tx)}
+                              className="text-red-600 hover:text-red-800 font-medium text-sm"
+                            >
+                              Sil
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2358,7 +2389,7 @@ export default function WarehousePage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-white">📝 İşlem Detaylarını Düzenle</h2>
+                <h2 className="text-xl font-bold text-white">İşlem Detaylarını Düzenle</h2>
                 <button
                   onClick={() => {
                     setShowTransactionEditModal(false)
@@ -2426,7 +2457,7 @@ export default function WarehousePage() {
 
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <p className="text-sm text-blue-700">
-                    ℹ️ <strong>Not:</strong> Sadece miktar ve tarih düzenlenebilir. Diğer bilgileri değiştirmek için yeni bir işlem girişi yapın.
+                    <strong>Not:</strong> Sadece miktar ve tarih düzenlenebilir. Diğer bilgileri değiştirmek için yeni bir işlem girişi yapın.
                   </p>
                 </div>
 
@@ -2435,7 +2466,7 @@ export default function WarehousePage() {
                     type="submit"
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold"
                   >
-                    💾 Güncelle
+                    Güncelle
                   </button>
                   <button
                     type="button"

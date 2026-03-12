@@ -123,6 +123,7 @@ export default function WarehousePage() {
     reference_number: '',
     notes: '',
     requiresQC: false, // Kalite kontrol gerekli mi?
+    transaction_date: new Date().toISOString().split('T')[0], // İşlem tarihi (varsayılan: bugün)
   })
 
   const [exitForm, setExitForm] = useState({
@@ -735,6 +736,7 @@ export default function WarehousePage() {
             notes: entryForm.notes,
             requested_by: currentUserId,
             status: 'pending',
+            transaction_date: entryForm.transaction_date,
           })
 
         if (error) throw error
@@ -753,6 +755,7 @@ export default function WarehousePage() {
             reference_number: entryForm.reference_number,
             notes: entryForm.notes,
             created_by: currentUserId,
+            transaction_date: entryForm.transaction_date,
           })
 
         if (error) throw error
@@ -944,6 +947,7 @@ export default function WarehousePage() {
       reference_number: '',
       notes: '',
       requiresQC: false,
+      transaction_date: new Date().toISOString().split('T')[0],
     })
   }
 
@@ -1310,6 +1314,16 @@ export default function WarehousePage() {
                     type="text"
                     value={entryForm.reference_number}
                     onChange={(e) => setEntryForm({ ...entryForm, reference_number: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">İşlem Tarihi</label>
+                  <input
+                    type="date"
+                    value={entryForm.transaction_date}
+                    onChange={(e) => setEntryForm({ ...entryForm, transaction_date: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                   />
                 </div>

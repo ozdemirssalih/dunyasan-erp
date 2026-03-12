@@ -124,6 +124,7 @@ export default function WarehousePage() {
     notes: '',
     requiresQC: false, // Kalite kontrol gerekli mi?
     transaction_date: new Date().toISOString().split('T')[0], // İşlem tarihi (varsayılan: bugün)
+    delivery_document: null as File | null, // Teslim tutanağı dosyası
   })
 
   const [exitForm, setExitForm] = useState({
@@ -723,6 +724,34 @@ export default function WarehousePage() {
     if (!companyId) return
 
     try {
+      // Dosya boyut kontrolü (10 MB = 10 * 1024 * 1024 bytes)
+      if (entryForm.delivery_document && entryForm.delivery_document.size > 10 * 1024 * 1024) {
+        alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')
+        return
+      }
+
+      // Teslim tutanağı dosyasını yükle (varsa)
+      let deliveryDocumentUrl = null
+      if (entryForm.delivery_document) {
+        const fileExt = entryForm.delivery_document.name.split('.').pop()
+        const fileName = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('delivery-documents')
+          .upload(fileName, entryForm.delivery_document)
+
+        if (uploadError) {
+          console.error('Dosya yükleme hatası:', uploadError)
+          alert('⚠️ Dosya yüklenemedi, ancak işlem devam ediyor...')
+        } else {
+          // Public URL al
+          const { data: urlData } = supabase.storage
+            .from('delivery-documents')
+            .getPublicUrl(fileName)
+          deliveryDocumentUrl = urlData.publicUrl
+        }
+      }
+
       // Kalite kontrol gerekiyorsa warehouse_qc_requests'e kaydet
       if (entryForm.requiresQC) {
         const { error } = await supabase
@@ -737,6 +766,7 @@ export default function WarehousePage() {
             requested_by: currentUserId,
             status: 'pending',
             transaction_date: entryForm.transaction_date,
+            delivery_document_url: deliveryDocumentUrl,
           })
 
         if (error) throw error
@@ -756,6 +786,7 @@ export default function WarehousePage() {
             notes: entryForm.notes,
             created_by: currentUserId,
             transaction_date: entryForm.transaction_date,
+            delivery_document_url: deliveryDocumentUrl,
           })
 
         if (error) throw error
@@ -948,6 +979,7 @@ export default function WarehousePage() {
       notes: '',
       requiresQC: false,
       transaction_date: new Date().toISOString().split('T')[0],
+      delivery_document: null,
     })
   }
 
@@ -1337,6 +1369,35 @@ export default function WarehousePage() {
                   rows={3}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                 />
+              </div>
+
+              {/* Teslim Tutanağı Dosya Yükleme */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">📎 Teslim Tutanağı</label>
+                <input
+                  type="file"
+                  accept="*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      if (file.size > 10 * 1024 * 1024) {
+                        alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')
+                        e.target.value = ''
+                        return
+                      }
+                      setEntryForm({ ...entryForm, delivery_document: file })
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Her tür dosya yüklenebilir (Max: 10 MB)
+                  {entryForm.delivery_document && (
+                    <span className="text-green-600 font-semibold ml-2">
+                      ✓ {entryForm.delivery_document.name} ({(entryForm.delivery_document.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                  )}
+                </p>
               </div>
 
               {/* Kalite Kontrol Checkbox */}

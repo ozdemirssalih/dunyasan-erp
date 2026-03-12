@@ -27,6 +27,7 @@ interface WarehouseItem {
 
 interface Transaction {
   id: string
+  item_id: string
   item_name: string
   item_code: string
   type: 'entry' | 'exit'
@@ -307,6 +308,7 @@ export default function WarehousePage() {
 
     const transactionsData = data?.map((t: any) => ({
       id: t.id,
+      item_id: t.item_id,
       item_name: t.item?.name || 'Bilinmiyor',
       item_code: t.item?.code || '',
       type: t.type,
@@ -998,19 +1000,53 @@ export default function WarehousePage() {
   }
 
   const handleDeleteTransaction = async (transaction: Transaction) => {
-    if (!confirm(`"${transaction.item_name}" için ${transaction.type === 'entry' ? 'giriş' : 'çıkış'} işlemini silmek istediğinize emin misiniz?\n\nMiktar: ${transaction.quantity} ${transaction.unit}\nTarih: ${new Date(transaction.transaction_date).toLocaleDateString('tr-TR')}`)) {
+    if (!confirm(`"${transaction.item_name}" için ${transaction.type === 'entry' ? 'giriş' : 'çıkış'} işlemini silmek istediğinize emin misiniz?\n\nMiktar: ${transaction.quantity} ${transaction.unit}\nTarih: ${new Date(transaction.transaction_date).toLocaleDateString('tr-TR')}\n\nÖNEMLİ: Bu işlem stok miktarını tersine çevirecektir.`)) {
       return
     }
 
     try {
-      const { error } = await supabase
+      // Önce mevcut item'ı al
+      const { data: currentItem, error: itemError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock')
+        .eq('id', transaction.item_id)
+        .single()
+
+      if (itemError) throw new Error('Ürün bilgisi alınamadı: ' + itemError.message)
+
+      // Yeni stok miktarını hesapla
+      let newStock = currentItem.current_stock
+      if (transaction.type === 'entry') {
+        // Giriş işlemi silinirse, stoktan çıkar
+        newStock = currentItem.current_stock - transaction.quantity
+      } else {
+        // Çıkış işlemi silinirse, stoka ekle
+        newStock = currentItem.current_stock + transaction.quantity
+      }
+
+      // Stok negatif olmasın kontrolü
+      if (newStock < 0) {
+        alert('Uyarı: Bu işlem silindikten sonra stok negatif olacak! İşlem iptal edildi.')
+        return
+      }
+
+      // Stoku güncelle
+      const { error: updateError } = await supabase
+        .from('warehouse_items')
+        .update({ current_stock: newStock })
+        .eq('id', transaction.item_id)
+
+      if (updateError) throw new Error('Stok güncelleme hatası: ' + updateError.message)
+
+      // Sonra işlemi sil
+      const { error: deleteError } = await supabase
         .from('warehouse_transactions')
         .delete()
         .eq('id', transaction.id)
 
-      if (error) throw error
+      if (deleteError) throw new Error('İşlem silme hatası: ' + deleteError.message)
 
-      alert('İşlem kaydı silindi!')
+      alert('İşlem kaydı silindi ve stok güncellendi!')
       loadData()
     } catch (error: any) {
       console.error('Error deleting transaction:', error)

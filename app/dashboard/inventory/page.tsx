@@ -77,6 +77,8 @@ export default function InventoryPage() {
     supplierId: '',
     model: '', // Model/Seri (takımhane için)
     notes: '', // Notlar (textarea - takımhane için)
+    transaction_date: new Date().toISOString().split('T')[0], // İşlem tarihi
+    delivery_document: null as File | null, // Teslim tutanağı dosyası
   })
 
   useEffect(() => { loadData() }, [])
@@ -335,6 +337,8 @@ export default function InventoryPage() {
       supplierId: '',
       model: '',
       notes: '',
+      transaction_date: new Date().toISOString().split('T')[0],
+      delivery_document: null,
     })
     setShowModal(true)
   }
@@ -370,6 +374,8 @@ export default function InventoryPage() {
       supplierId: item.supplierId || '',
       model: item.model || '', // Takımhane için
       notes: item.notes || '', // Takımhane için
+      transaction_date: new Date().toISOString().split('T')[0],
+      delivery_document: null,
     })
     setShowModal(true)
   }
@@ -381,10 +387,39 @@ export default function InventoryPage() {
     setModalLoading(true)
 
     try {
+      // Dosya boyut kontrolü (10 MB = 10 * 1024 * 1024 bytes)
+      if (form.delivery_document && form.delivery_document.size > 10 * 1024 * 1024) {
+        alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')
+        setModalLoading(false)
+        return
+      }
+
+      // Teslim tutanağı dosyasını yükle (varsa ve sadece yeni ekleme ise)
+      let deliveryDocumentUrl = null
+      if (isAddMode && form.delivery_document) {
+        const fileExt = form.delivery_document.name.split('.').pop()
+        const fileName = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('delivery-documents')
+          .upload(fileName, form.delivery_document)
+
+        if (uploadError) {
+          console.error('Dosya yükleme hatası:', uploadError)
+          alert('⚠️ Dosya yüklenemedi, ancak işlem devam ediyor...')
+        } else {
+          // Public URL al
+          const { data: urlData } = supabase.storage
+            .from('delivery-documents')
+            .getPublicUrl(fileName)
+          deliveryDocumentUrl = urlData.publicUrl
+        }
+      }
+
       const targetSource = isAddMode ? form.source : editingItem?.source
 
       if (targetSource === 'inventory') {
-        const data = {
+        const data: any = {
           company_id: companyId,
           product_code: form.code,
           product_name: form.name,
@@ -399,6 +434,8 @@ export default function InventoryPage() {
         }
 
         if (isAddMode) {
+          if (deliveryDocumentUrl) data.delivery_document_url = deliveryDocumentUrl
+          if (form.transaction_date) data.transaction_date = form.transaction_date
           const { error } = await supabase.from('inventory').insert(data)
           if (error) throw error
         } else if (editingItem) {
@@ -437,6 +474,8 @@ export default function InventoryPage() {
         }
 
         if (isAddMode) {
+          if (deliveryDocumentUrl) data.delivery_document_url = deliveryDocumentUrl
+          if (form.transaction_date) data.transaction_date = form.transaction_date
           const { error } = await supabase.from('tools').insert(data)
           if (error) throw error
         } else if (editingItem) {
@@ -475,6 +514,8 @@ export default function InventoryPage() {
         }
 
         if (isAddMode) {
+          if (deliveryDocumentUrl) data.delivery_document_url = deliveryDocumentUrl
+          if (form.transaction_date) data.transaction_date = form.transaction_date
           const { error } = await supabase.from('warehouse_items').insert(data)
           if (error) throw error
         } else if (editingItem) {
@@ -1186,6 +1227,45 @@ export default function InventoryPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                       placeholder="Ek bilgiler..."
                     />
+                  </div>
+                )}
+
+                {/* İşlem Tarihi ve Teslim Tutanağı (Sadece YENİ EKLEME için) */}
+                {isAddMode && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">İşlem Tarihi</label>
+                      <input
+                        type="date"
+                        value={form.transaction_date}
+                        onChange={(e) => setForm({ ...form, transaction_date: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">📎 Teslim Tutanağı</label>
+                      <input
+                        type="file"
+                        accept="*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')
+                              e.target.value = ''
+                              return
+                            }
+                            setForm({ ...form, delivery_document: file })
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      {form.delivery_document && (
+                        <p className="text-xs text-green-600 font-semibold mt-1">
+                          ✓ {form.delivery_document.name} ({(form.delivery_document.size / 1024 / 1024).toFixed(2)} MB)
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 

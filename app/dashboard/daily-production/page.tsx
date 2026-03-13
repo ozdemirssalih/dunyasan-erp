@@ -84,6 +84,7 @@ export default function DailyProductionPage() {
   // Modal
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     project_id: '',
     machine_id: '',
@@ -383,6 +384,7 @@ export default function DailyProductionPage() {
       shift: '',
       notes: ''
     })
+    setEmployeeSearchTerm('')
     setEditingId(null)
     setShowModal(false)
   }
@@ -709,40 +711,61 @@ export default function DailyProductionPage() {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Çalışan Personel (Birden fazla seçilebilir)
                     </label>
+                    {/* Arama Kutusu */}
+                    <input
+                      type="text"
+                      placeholder="Personel ara..."
+                      value={employeeSearchTerm}
+                      onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
                     <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
                       {employees.length === 0 ? (
                         <p className="text-gray-500 text-sm">Personel bulunamadı</p>
                       ) : (
-                        <div className="space-y-2">
-                          {employees.map((employee) => (
-                            <label
-                              key={employee.id}
-                              className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={formData.employee_ids.includes(employee.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormData({
-                                      ...formData,
-                                      employee_ids: [...formData.employee_ids, employee.id]
-                                    })
-                                  } else {
-                                    setFormData({
-                                      ...formData,
-                                      employee_ids: formData.employee_ids.filter(id => id !== employee.id)
-                                    })
-                                  }
-                                }}
-                                className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                              />
-                              <span className="text-sm text-gray-700">
-                                {employee.full_name} <span className="text-gray-500">({employee.employee_code})</span>
-                              </span>
-                            </label>
-                          ))}
-                        </div>
+                        (() => {
+                          const filteredEmployees = employees.filter(employee =>
+                            employee.full_name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+                            employee.employee_code.toLowerCase().includes(employeeSearchTerm.toLowerCase())
+                          )
+
+                          return filteredEmployees.length === 0 ? (
+                            <p className="text-gray-500 text-sm">
+                              {employeeSearchTerm ? 'Arama sonucu bulunamadı' : 'Personel bulunamadı'}
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {filteredEmployees.map((employee) => (
+                                <label
+                                  key={employee.id}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.employee_ids.includes(employee.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormData({
+                                          ...formData,
+                                          employee_ids: [...formData.employee_ids, employee.id]
+                                        })
+                                      } else {
+                                        setFormData({
+                                          ...formData,
+                                          employee_ids: formData.employee_ids.filter(id => id !== employee.id)
+                                        })
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                  />
+                                  <span className="text-sm text-gray-700">
+                                    {employee.full_name} <span className="text-gray-500">({employee.employee_code})</span>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )
+                        })()
                       )}
                     </div>
                     {formData.employee_ids.length > 0 && (

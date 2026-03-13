@@ -2233,7 +2233,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Proje
+                      Proje <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={outputForm.project_id}
@@ -2245,52 +2245,16 @@ export default function ProductionPage() {
                           setProjectParts([])
                         }
                       }}
+                      required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
-                      <option value="">Proje Seçilmedi</option>
+                      <option value="">Proje Seçiniz</option>
                       {projects.map(project => (
                         <option key={project.id} value={project.id}>
                           {project.project_name}
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Parça (Opsiyonel)
-                    </label>
-                    <select
-                      value={outputForm.project_part_id}
-                      onChange={(e) => {
-                        const partId = e.target.value
-                        const selectedPart = projectParts.find(p => p.id === partId)
-
-                        // Parça seçilince hammadde ve mamülü otomatik doldur
-                        if (selectedPart && selectedPart.raw_material_id && selectedPart.finished_product_id) {
-                          setOutputForm({
-                            ...outputForm,
-                            project_part_id: partId,
-                            input_item_id: selectedPart.raw_material_id,
-                            output_item_id: selectedPart.finished_product_id
-                          })
-                        } else {
-                          setOutputForm({ ...outputForm, project_part_id: partId })
-                        }
-                      }}
-                      disabled={!outputForm.project_id}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg disabled:bg-gray-100"
-                    >
-                      <option value="">Parça Seçilmedi</option>
-                      {projectParts.map(part => (
-                        <option key={part.id} value={part.id}>
-                          {part.part_code} - {part.part_name}
-                        </option>
-                      ))}
-                    </select>
-                    {outputForm.project_part_id && projectParts.find(p => p.id === outputForm.project_part_id)?.raw_material_id && (
-                      <p className="text-xs text-green-600 mt-1">✓ Hammadde ve mamül otomatik seçildi</p>
-                    )}
                   </div>
 
                   <div>

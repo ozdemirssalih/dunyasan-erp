@@ -140,6 +140,7 @@ export default function ProductionPage() {
     notes: '',
     project_id: '',
     project_part_id: '',
+    production_date: new Date().toISOString().split('T')[0],
   })
 
   const [transferForm, setTransferForm] = useState({
@@ -725,6 +726,7 @@ export default function ProductionPage() {
           created_by: currentUserId,
           project_id: outputForm.project_id || null,
           project_part_id: outputForm.project_part_id || null,
+          production_date: outputForm.production_date,
         })
 
       if (outputError) throw outputError
@@ -837,6 +839,7 @@ export default function ProductionPage() {
       notes: '',
       project_id: '',
       project_part_id: '',
+      production_date: new Date().toISOString().split('T')[0],
     })
     setProjectParts([])
   }
@@ -1995,6 +1998,19 @@ export default function ProductionPage() {
                       step="0.001"
                       value={outputForm.quantity}
                       onChange={(e) => setOutputForm({ ...outputForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Üretim Tarihi <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={outputForm.production_date}
+                      onChange={(e) => setOutputForm({ ...outputForm, production_date: e.target.value })}
                       required
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     />

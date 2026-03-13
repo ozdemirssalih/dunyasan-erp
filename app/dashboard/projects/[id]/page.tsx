@@ -110,7 +110,30 @@ export default function ProjectDetailPage() {
         .limit(30)
 
       console.log('✅ Daily production loaded:', dailyProductionData?.length || 0)
-      setDailyProduction(dailyProductionData || [])
+
+      // Her kayıt için employee_ids varsa personel bilgilerini yükle
+      if (dailyProductionData && dailyProductionData.length > 0) {
+        const productionsWithEmployees = await Promise.all(
+          dailyProductionData.map(async (dp) => {
+            if (dp.employee_ids && dp.employee_ids.length > 0) {
+              // employee_ids array'indeki personelleri çek
+              const { data: employeesData } = await supabase
+                .from('employees')
+                .select('id, employee_code, full_name')
+                .in('id', dp.employee_ids)
+
+              return {
+                ...dp,
+                employees: employeesData || []
+              }
+            }
+            return dp
+          })
+        )
+        setDailyProduction(productionsWithEmployees)
+      } else {
+        setDailyProduction(dailyProductionData || [])
+      }
 
       // Load productions (for progress calculation)
       const { data: productionsData } = await supabase
@@ -703,6 +726,12 @@ export default function ProjectDetailPage() {
                       })}
                       {dp.shift && ` - ${dp.shift}`}
                     </div>
+                    {/* Personel Gösterimi */}
+                    {dp.employees && dp.employees.length > 0 && (
+                      <div className="text-xs text-green-700 font-medium mt-1">
+                        👥 {dp.employees.map((emp: any) => emp.full_name).join(', ')}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className={`text-lg font-bold ${

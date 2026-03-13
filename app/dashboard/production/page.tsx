@@ -74,7 +74,11 @@ interface ProductionOutput {
   shift: string
   quality_status: string
   operator_name: string
+  operator_id?: string
   transfer_status: string
+  notes?: string
+  project_id?: string
+  project_part_id?: string
 }
 
 export default function ProductionPage() {
@@ -113,6 +117,8 @@ export default function ProductionPage() {
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showManualStockModal, setShowManualStockModal] = useState(false)
   const [showQCTransferModal, setShowQCTransferModal] = useState(false)
+  const [showEditOutputModal, setShowEditOutputModal] = useState(false)
+  const [editingOutput, setEditingOutput] = useState<any>(null)
 
   // Submitting states (çift tıklama engellemek için)
   const [submittingRequest, setSubmittingRequest] = useState(false)
@@ -383,7 +389,11 @@ export default function ProductionPage() {
       shift: o.shift || '',
       quality_status: o.quality_status,
       operator_name: o.operator?.full_name || '',
-      transfer_status: o.transfer_status || 'pending'
+      operator_id: o.operator_id,
+      transfer_status: o.transfer_status || 'pending',
+      notes: o.notes || '',
+      project_id: o.project_id || '',
+      project_part_id: o.project_part_id || ''
     })) || []
 
     setOutputs(outputsData)
@@ -813,6 +823,108 @@ export default function ProductionPage() {
     } catch (error: any) {
       console.error('Error creating output:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingOutput(false)
+    }
+  }
+
+  const handleUpdateOutput = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId || !editingOutput) return
+    if (submittingOutput) return
+
+    try {
+      setSubmittingOutput(true)
+
+      const oldQuantity = editingOutput.quantity
+      const newQuantity = outputForm.quantity
+
+      // 1. Üretim kaydını güncelle
+      const { error: updateError } = await supabase
+        .from('production_outputs')
+        .update({
+          output_item_id: outputForm.output_item_id,
+          quantity: newQuantity,
+          shift: outputForm.shift,
+          operator_id: outputForm.operator_id || null,
+          notes: outputForm.notes,
+          project_id: outputForm.project_id || null,
+          project_part_id: outputForm.project_part_id || null,
+          production_date: outputForm.production_date,
+        })
+        .eq('id', editingOutput.id)
+
+      if (updateError) throw updateError
+
+      // 2. Eğer mamül değiştiyse veya miktar değiştiyse, üretim deposundaki stoğu güncelle
+      if (editingOutput.output_item_id !== outputForm.output_item_id || oldQuantity !== newQuantity) {
+        // Eski üründen eski miktarı çıkar
+        const { data: oldStock } = await supabase
+          .from('production_inventory')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', editingOutput.output_item_id)
+          .eq('item_type', 'finished_product')
+          .maybeSingle()
+
+        if (oldStock) {
+          const newOldStock = oldStock.current_stock - oldQuantity
+          if (newOldStock < 0) {
+            alert('Uyarı: Eski ürünün stoğu negatif olacak!')
+          }
+
+          await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: newOldStock,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', editingOutput.output_item_id)
+            .eq('item_type', 'finished_product')
+        }
+
+        // Yeni ürüne yeni miktarı ekle
+        const { data: newStock } = await supabase
+          .from('production_inventory')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', outputForm.output_item_id)
+          .eq('item_type', 'finished_product')
+          .maybeSingle()
+
+        if (newStock) {
+          await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: newStock.current_stock + newQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', outputForm.output_item_id)
+            .eq('item_type', 'finished_product')
+        } else {
+          // Yeni ürün için kayıt yoksa oluştur
+          await supabase
+            .from('production_inventory')
+            .insert({
+              company_id: companyId,
+              item_id: outputForm.output_item_id,
+              current_stock: newQuantity,
+              item_type: 'finished_product',
+              notes: 'Üretim kaydı düzenleme ile oluşturuldu'
+            })
+        }
+      }
+
+      alert('Üretim kaydı güncellendi ve stok düzeltildi!')
+      setShowEditOutputModal(false)
+      setEditingOutput(null)
+      resetOutputForm()
+      await loadData()
+    } catch (error: any) {
+      console.error('Error updating output:', error)
+      alert('Hata: ' + error.message)
     } finally {
       setSubmittingOutput(false)
     }
@@ -1507,6 +1619,7 @@ export default function ProductionPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Vardiya</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kalite</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Operatör</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1544,6 +1657,30 @@ export default function ProductionPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {output.operator_name || '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => {
+                              setEditingOutput(output)
+                              setOutputForm({
+                                input_item_id: '',
+                                output_item_id: output.output_item_id,
+                                quantity: output.quantity,
+                                fire_quantity: 0,
+                                fire_reason: 'process_error',
+                                shift: output.shift,
+                                operator_id: output.operator_id || '',
+                                notes: output.notes || '',
+                                project_id: output.project_id || '',
+                                project_part_id: output.project_part_id || '',
+                                production_date: output.production_date
+                              })
+                              setShowEditOutputModal(true)
+                            }}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                          >
+                            Düzenle
+                          </button>
                         </td>
                       </tr>
                     )
@@ -2151,6 +2288,102 @@ export default function ProductionPage() {
                     type="button"
                     onClick={() => {
                       setShowOutputModal(false)
+                      resetOutputForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Output Modal */}
+        {showEditOutputModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Üretim Kaydını Düzenle</h3>
+
+              <form onSubmit={handleUpdateOutput} className="space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="text-sm text-gray-700">
+                    <strong>Ürün:</strong> {editingOutput?.output_item_name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Sadece miktar, tarih, vardiya ve notlar düzenlenebilir.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Üretilen Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={outputForm.quantity}
+                      onChange={(e) => setOutputForm({ ...outputForm, quantity: parseFloat(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Üretim Tarihi <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={outputForm.production_date}
+                      onChange={(e) => setOutputForm({ ...outputForm, production_date: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Vardiya <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={outputForm.shift}
+                      onChange={(e) => setOutputForm({ ...outputForm, shift: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="sabah">Sabah</option>
+                      <option value="oglen">Öğlen</option>
+                      <option value="gece">Gece</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notlar</label>
+                    <textarea
+                      value={outputForm.notes}
+                      onChange={(e) => setOutputForm({ ...outputForm, notes: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    disabled={submittingOutput}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50"
+                  >
+                    {submittingOutput ? 'Güncelleniyor...' : 'Güncelle'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditOutputModal(false)
+                      setEditingOutput(null)
                       resetOutputForm()
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"

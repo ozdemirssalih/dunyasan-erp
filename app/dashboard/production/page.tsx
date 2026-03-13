@@ -930,6 +930,60 @@ export default function ProductionPage() {
     }
   }
 
+  const handleDeleteOutput = async (output: ProductionOutput) => {
+    if (!confirm(`"${output.output_item_name}" için üretim kaydını silmek istediğinizden emin misiniz?\n\nMiktar: ${output.quantity} ${output.unit}\nTarih: ${new Date(output.production_date).toLocaleDateString('tr-TR')}\n\nÖNEMLİ: Bu işlem üretim stoğundan ürünü düşürecektir.`)) {
+      return
+    }
+
+    try {
+      if (!companyId) return
+
+      // 1. Üretim deposundan stoğu düş
+      const { data: currentStock } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', output.output_item_id)
+        .eq('item_type', 'finished_product')
+        .maybeSingle()
+
+      if (currentStock) {
+        const newStock = currentStock.current_stock - output.quantity
+
+        if (newStock < 0) {
+          alert('Uyarı: Bu işlem stoku negatif yapacak! İşlem iptal edildi.')
+          return
+        }
+
+        const { error: stockError } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: newStock,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', output.output_item_id)
+          .eq('item_type', 'finished_product')
+
+        if (stockError) throw stockError
+      }
+
+      // 2. Üretim kaydını sil
+      const { error: deleteError } = await supabase
+        .from('production_outputs')
+        .delete()
+        .eq('id', output.id)
+
+      if (deleteError) throw deleteError
+
+      alert('Üretim kaydı silindi ve stok güncellendi!')
+      loadData()
+    } catch (error: any) {
+      console.error('Error deleting output:', error)
+      alert('Hata: ' + error.message)
+    }
+  }
+
   const resetRequestForm = () => {
     setRequestForm({
       item_id: '',
@@ -1659,28 +1713,36 @@ export default function ProductionPage() {
                           {output.operator_name || '-'}
                         </td>
                         <td className="px-6 py-4">
-                          <button
-                            onClick={() => {
-                              setEditingOutput(output)
-                              setOutputForm({
-                                input_item_id: '',
-                                output_item_id: output.output_item_id,
-                                quantity: output.quantity,
-                                fire_quantity: 0,
-                                fire_reason: 'process_error',
-                                shift: output.shift,
-                                operator_id: output.operator_id || '',
-                                notes: output.notes || '',
-                                project_id: output.project_id || '',
-                                project_part_id: output.project_part_id || '',
-                                production_date: output.production_date
-                              })
-                              setShowEditOutputModal(true)
-                            }}
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                          >
-                            Düzenle
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => {
+                                setEditingOutput(output)
+                                setOutputForm({
+                                  input_item_id: '',
+                                  output_item_id: output.output_item_id,
+                                  quantity: output.quantity,
+                                  fire_quantity: 0,
+                                  fire_reason: 'process_error',
+                                  shift: output.shift,
+                                  operator_id: output.operator_id || '',
+                                  notes: output.notes || '',
+                                  project_id: output.project_id || '',
+                                  project_part_id: output.project_part_id || '',
+                                  production_date: output.production_date
+                                })
+                                setShowEditOutputModal(true)
+                              }}
+                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOutput(output)}
+                              className="text-red-600 hover:text-red-800 font-medium text-sm"
+                            >
+                              Sil
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

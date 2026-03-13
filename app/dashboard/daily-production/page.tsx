@@ -11,6 +11,7 @@ interface DailyProduction {
   project_id: string
   machine_id: string
   employee_id?: string
+  employee_ids?: string[]
   production_date: string
   capacity_target: number
   actual_production: number
@@ -34,6 +35,11 @@ interface DailyProduction {
     employee_code: string
     full_name: string
   }
+  employees?: {
+    id: string
+    employee_code: string
+    full_name: string
+  }[]
 }
 
 interface Project {
@@ -233,7 +239,30 @@ export default function DailyProductionPage() {
 
       console.log('✅ [LOAD] Yüklenen kayıt sayısı:', data?.length || 0)
       console.log('📦 [LOAD] İlk kayıt:', data?.[0])
-      setProductions(data || [])
+
+      // Her kayıt için employee_ids varsa personel bilgilerini yükle
+      if (data && data.length > 0) {
+        const productionsWithEmployees = await Promise.all(
+          data.map(async (prod) => {
+            if (prod.employee_ids && prod.employee_ids.length > 0) {
+              // employee_ids array'indeki personelleri çek
+              const { data: employeesData } = await supabase
+                .from('employees')
+                .select('id, employee_code, full_name')
+                .in('id', prod.employee_ids)
+
+              return {
+                ...prod,
+                employees: employeesData || []
+              }
+            }
+            return prod
+          })
+        )
+        setProductions(productionsWithEmployees)
+      } else {
+        setProductions(data || [])
+      }
       console.log('🔄 [LOAD] State güncellendi')
     } catch (error) {
       console.error('❌ [LOAD] Error loading productions:', error)
@@ -515,11 +544,16 @@ export default function DailyProductionPage() {
                         })}
                         {production.shift && ` - ${production.shift}`}
                       </div>
-                      {production.employee && (
+                      {/* Personel Gösterimi - Backward Compatibility */}
+                      {production.employees && production.employees.length > 0 ? (
+                        <div className="text-xs text-green-700 font-medium mt-1">
+                          👥 {production.employees.map(emp => emp.full_name).join(', ')}
+                        </div>
+                      ) : production.employee ? (
                         <div className="text-xs text-green-700 font-medium mt-1">
                           👤 {production.employee.full_name}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="text-right">

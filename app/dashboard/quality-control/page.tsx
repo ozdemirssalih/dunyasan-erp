@@ -658,8 +658,54 @@ export default function QualityControlPage() {
       if (qcStockError) throw qcStockError
 
       if (transferForm.quality_result === 'passed') {
-        // GEÇERSE: Ana depoya transfer talebi oluştur (depo onayı bekle)
-        const { error } = await supabase
+        // GEÇERSE: Direkt ana depoya ekle (onay bekleme)
+
+        // 1. Ana depoya ekle/güncelle - önce kontrol et var mı
+        const { data: existingWarehouseStock, error: warehouseCheckError } = await supabase
+          .from('warehouse_items')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('id', transferForm.item_id)
+          .maybeSingle()
+
+        if (warehouseCheckError && warehouseCheckError.code !== 'PGRST116') throw warehouseCheckError
+
+        if (existingWarehouseStock) {
+          // Varsa stoku güncelle
+          const { error: updateError } = await supabase
+            .from('warehouse_items')
+            .update({
+              current_stock: existingWarehouseStock.current_stock + transferForm.quantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('id', transferForm.item_id)
+
+          if (updateError) throw updateError
+        } else {
+          // Ürün warehouse_items'da yoksa hata ver
+          throw new Error('Ürün ana depoda bulunamadı. Önce depo stok kartı oluşturulmalı.')
+        }
+
+        // 2. Warehouse transactions kayıt ekle
+        const { error: transactionError } = await supabase
+          .from('warehouse_transactions')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            type: 'entry',
+            quantity: transferForm.quantity,
+            supplier: 'Kalite Kontrol',
+            reference_number: `KK-${new Date().getTime()}`,
+            notes: `Kalite testini geçti - ${transferForm.notes || ''}`,
+            created_by: currentUserId,
+            transaction_date: new Date().toISOString().split('T')[0],
+          })
+
+        if (transactionError) throw transactionError
+
+        // 3. Transfer kaydı oluştur (kayıt amaçlı, approved olarak)
+        const { error: transferError } = await supabase
           .from('qc_to_warehouse_transfers')
           .insert({
             company_id: companyId,
@@ -668,12 +714,14 @@ export default function QualityControlPage() {
             quality_result: transferForm.quality_result,
             notes: transferForm.notes,
             requested_by: currentUserId,
-            status: 'pending',
+            status: 'approved',
+            approved_by: currentUserId,
+            approved_at: new Date().toISOString(),
           })
 
-        if (error) throw error
+        if (transferError) throw transferError
 
-        alert('✅ Kalite test sonucu kaydedildi! Kalite deposundan düşüldü. Ana depoya transfer talebi oluşturuldu, depo onayını bekliyor.')
+        alert('✅ Kalite test sonucu kaydedildi! Ürün kalite deposundan düşüldü ve ana depoya eklendi.')
       } else {
         // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
         // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı

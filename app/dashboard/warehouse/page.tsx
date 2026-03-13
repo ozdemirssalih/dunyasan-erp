@@ -656,8 +656,7 @@ export default function WarehousePage() {
   }
 
   const handleRejectProductionRequest = async (requestId: string) => {
-    const notes = prompt('Ret sebebini yazın:')
-    if (notes === null) return
+    if (!confirm('Bu talebi reddetmek istediğinizden emin misiniz?')) return
 
     try {
       const { error } = await supabase
@@ -666,17 +665,16 @@ export default function WarehousePage() {
           status: 'rejected',
           approved_by: currentUserId,
           approved_at: new Date().toISOString(),
-          notes: notes,
         })
         .eq('id', requestId)
 
       if (error) throw error
 
-      alert('✅ Talep reddedildi.')
+      alert('Talep reddedildi.')
       loadData()
     } catch (error: any) {
       console.error('Error rejecting request:', error)
-      alert('❌ Hata: ' + error.message)
+      alert('Hata: ' + error.message)
     }
   }
 

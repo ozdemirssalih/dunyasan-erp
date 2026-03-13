@@ -41,6 +41,7 @@ export default function ProjectDetailPage() {
   const [availableTools, setAvailableTools] = useState<any[]>([])
   const [selectedToolId, setSelectedToolId] = useState('')
   const [toolBreakageRate, setToolBreakageRate] = useState('')
+  const [toolSearchTerm, setToolSearchTerm] = useState('')
 
   // Machine edit modal
   const [showMachineEditModal, setShowMachineEditModal] = useState(false)
@@ -400,6 +401,7 @@ export default function ProjectDetailPage() {
       setShowToolModal(false)
       setSelectedToolId('')
       setToolBreakageRate('')
+      setToolSearchTerm('')
     } catch (error: any) {
       console.error('❌ Error adding tool:', error)
       if (error?.code === '23505') {
@@ -1286,6 +1288,7 @@ export default function ProjectDetailPage() {
                   setShowToolModal(false)
                   setSelectedToolId('')
                   setToolBreakageRate('')
+                  setToolSearchTerm('')
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -1304,18 +1307,67 @@ export default function ProjectDetailPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Takım Seçin <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={selectedToolId}
-                    onChange={(e) => setSelectedToolId(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  >
-                    <option value="">Takım Seçiniz</option>
-                    {availableTools.map((tool) => (
-                      <option key={tool.id} value={tool.id}>
-                        {tool.tool_name} ({tool.tool_code}) - {tool.unit_price?.toFixed(2) || '0.00'} €
-                      </option>
-                    ))}
-                  </select>
+
+                  {/* Arama Kutusu */}
+                  <input
+                    type="text"
+                    placeholder="Takım ara (isim, kod, marka)..."
+                    value={toolSearchTerm}
+                    onChange={(e) => setToolSearchTerm(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
+
+                  <div className="border border-gray-300 rounded-lg p-3 max-h-64 overflow-y-auto bg-white">
+                    {(() => {
+                      const filteredTools = availableTools.filter(tool =>
+                        tool.tool_name?.toLowerCase().includes(toolSearchTerm.toLowerCase()) ||
+                        tool.tool_code?.toLowerCase().includes(toolSearchTerm.toLowerCase()) ||
+                        tool.brand?.toLowerCase().includes(toolSearchTerm.toLowerCase())
+                      )
+
+                      return filteredTools.length === 0 ? (
+                        <p className="text-gray-500 text-sm">
+                          {toolSearchTerm ? 'Arama sonucu bulunamadı' : 'Takım bulunamadı'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredTools.map((tool) => (
+                            <label
+                              key={tool.id}
+                              className={`flex items-start space-x-3 cursor-pointer p-3 rounded-lg border-2 transition-all ${
+                                selectedToolId === tool.id
+                                  ? 'border-orange-500 bg-orange-50'
+                                  : 'border-gray-200 hover:border-orange-300 hover:bg-gray-50'
+                              }`}
+                              onClick={() => setSelectedToolId(tool.id)}
+                            >
+                              <input
+                                type="radio"
+                                name="selectedTool"
+                                checked={selectedToolId === tool.id}
+                                onChange={() => setSelectedToolId(tool.id)}
+                                className="mt-1 w-4 h-4 text-orange-600 border-gray-300 focus:ring-orange-500"
+                              />
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900">{tool.tool_name}</div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  <span className="font-medium">Kod:</span> {tool.tool_code}
+                                  {tool.brand && (
+                                    <span className="ml-3">
+                                      <span className="font-medium">Marka:</span> {tool.brand}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-orange-600 font-semibold mt-1">
+                                  {tool.unit_price?.toFixed(2) || '0.00'} €
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
 
                 {/* Breakage Rate */}
@@ -1369,6 +1421,7 @@ export default function ProjectDetailPage() {
                   setShowToolModal(false)
                   setSelectedToolId('')
                   setToolBreakageRate('')
+                  setToolSearchTerm('')
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >

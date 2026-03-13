@@ -120,6 +120,11 @@ export default function ToolroomPage() {
     maintenance_type: '', performed_by: '', cost: '', notes: '', status_after: 'available' as ToolStatus,
   })
 
+  // Submitting states
+  const [isSubmittingTool, setIsSubmittingTool] = useState(false)
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false)
+  const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false)
+
   // ── Lifecycle ────────────────────────────────────────────
   useEffect(() => { loadAll() }, [])
 
@@ -215,7 +220,10 @@ export default function ToolroomPage() {
 
   const handleSaveTool = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingTool) return
     if (!companyId) return
+
+    setIsSubmittingTool(true)
     setToolModalLoading(true)
 
     const location = toolForm.location_letter && toolForm.location_number
@@ -247,6 +255,7 @@ export default function ToolroomPage() {
     } catch (err) {
       console.error('Takım kaydetme hatası:', err)
     } finally {
+      setIsSubmittingTool(false)
       setToolModalLoading(false)
     }
   }
@@ -270,6 +279,7 @@ export default function ToolroomPage() {
 
   const handleDeliverToMachine = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingDelivery) return
     if (!companyId || !deliveryTarget) return
     if (!deliveryForm.machine_id) {
       alert('Tezgah seçiniz')
@@ -280,6 +290,7 @@ export default function ToolroomPage() {
       return
     }
 
+    setIsSubmittingDelivery(true)
     setDeliveryLoading(true)
     try {
       // 1. Stoktan düş
@@ -302,6 +313,7 @@ export default function ToolroomPage() {
       console.error('Tezgaha teslim hatası:', err)
       alert('Teslim işlemi başarısız!')
     } finally {
+      setIsSubmittingDelivery(false)
       setDeliveryLoading(false)
     }
   }
@@ -328,7 +340,10 @@ export default function ToolroomPage() {
 
   const handleSaveMaintenance = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingMaintenance) return
     if (!companyId || !maintenanceTool) return
+
+    setIsSubmittingMaintenance(true)
     setMaintenanceLoading(true)
 
     try {
@@ -348,6 +363,7 @@ export default function ToolroomPage() {
     } catch (err) {
       console.error('Bakım kaydetme hatası:', err)
     } finally {
+      setIsSubmittingMaintenance(false)
       setMaintenanceLoading(false)
     }
   }
@@ -814,9 +830,9 @@ export default function ToolroomPage() {
                   className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition-colors">
                   İptal
                 </button>
-                <button type="submit" disabled={toolModalLoading}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors disabled:opacity-50">
-                  {toolModalLoading ? 'Kaydediliyor...' : 'Kaydet'}
+                <button type="submit" disabled={isSubmittingTool}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmittingTool ? 'Kaydediliyor...' : 'Kaydet'}
                 </button>
               </div>
             </form>
@@ -874,9 +890,9 @@ export default function ToolroomPage() {
                   className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition-colors">
                   İptal
                 </button>
-                <button type="submit" disabled={deliveryLoading}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors disabled:opacity-50">
-                  {deliveryLoading ? 'Teslim Ediliyor...' : 'Teslim Et'}
+                <button type="submit" disabled={isSubmittingDelivery}
+                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmittingDelivery ? 'Teslim Ediliyor...' : 'Teslim Et'}
                 </button>
               </div>
             </form>
@@ -971,9 +987,9 @@ export default function ToolroomPage() {
                   className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition-colors">
                   İptal
                 </button>
-                <button type="submit" disabled={maintenanceLoading}
-                  className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold transition-colors disabled:opacity-50">
-                  {maintenanceLoading ? 'Kaydediliyor...' : 'Kaydet'}
+                <button type="submit" disabled={isSubmittingMaintenance}
+                  className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmittingMaintenance ? 'Kaydediliyor...' : 'Kaydet'}
                 </button>
               </div>
             </form>

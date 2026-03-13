@@ -43,6 +43,8 @@ export default function CurrentAccountsPage() {
     notes: '',
   })
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
@@ -147,8 +149,10 @@ export default function CurrentAccountsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
+    setIsSubmitting(true)
     try {
       if (editingAccount) {
         // Update
@@ -211,6 +215,8 @@ export default function CurrentAccountsPage() {
       alert(editingAccount ? 'Cari hesap güncellendi!' : 'Cari hesap oluşturuldu!')
     } catch (error: any) {
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -654,9 +660,10 @@ export default function CurrentAccountsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingAccount ? 'Güncelle' : 'Oluştur'}
+                    {isSubmitting ? 'İşlem yapılıyor...' : (editingAccount ? 'Güncelle' : 'Oluştur')}
                   </button>
                 </div>
               </form>

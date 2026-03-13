@@ -27,6 +27,8 @@ export default function CategoriesPage() {
     color: '#3B82F6',
   })
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const COLORS = [
     { name: 'Mavi', value: '#3B82F6' },
     { name: 'Yeşil', value: '#10B981' },
@@ -106,8 +108,10 @@ export default function CategoriesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
+    setIsSubmitting(true)
     try {
       if (editingCategory) {
         // Update
@@ -146,6 +150,8 @@ export default function CategoriesPage() {
       alert(editingCategory ? 'Kategori güncellendi!' : 'Kategori oluşturuldu!')
     } catch (error: any) {
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -433,9 +439,10 @@ export default function CategoriesPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingCategory ? 'Güncelle' : 'Oluştur'}
+                    {isSubmitting ? 'İşlem yapılıyor...' : (editingCategory ? 'Güncelle' : 'Oluştur')}
                   </button>
                 </div>
               </form>

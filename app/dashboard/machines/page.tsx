@@ -56,6 +56,8 @@ export default function MachinesPage() {
     project_id: '',
   })
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   useEffect(() => {
     loadMachines()
     loadProjects()
@@ -229,8 +231,10 @@ export default function MachinesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
+    setIsSubmitting(true)
     try {
       if (editingMachine) {
         // Update existing machine
@@ -287,6 +291,8 @@ export default function MachinesPage() {
       loadMachines()
     } catch (error: any) {
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -596,9 +602,10 @@ export default function MachinesPage() {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingMachine ? 'Güncelle' : 'Oluştur'}
+                  {isSubmitting ? 'İşlem yapılıyor...' : (editingMachine ? 'Güncelle' : 'Oluştur')}
                 </button>
                 <button
                   type="button"

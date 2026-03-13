@@ -51,6 +51,7 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<UnifiedItem | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
   const [isAddMode, setIsAddMode] = useState(false) // Yeni ekleme modu
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Tedarikçiler (dropdown için)
   const [suppliers, setSuppliers] = useState<Array<{id: string, company_name: string}>>([])
@@ -383,7 +384,10 @@ export default function InventoryPage() {
   // KAYDET - Yeni Ekleme veya Güncelleme
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
+
+    setIsSubmitting(true)
     setModalLoading(true)
 
     try {
@@ -531,6 +535,7 @@ export default function InventoryPage() {
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
     } finally {
+      setIsSubmitting(false)
       setModalLoading(false)
     }
   }
@@ -1287,10 +1292,10 @@ export default function InventoryPage() {
                 <div className="flex gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="submit"
-                    disabled={modalLoading}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg font-semibold transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-semibold transition-colors"
                   >
-                    {modalLoading ? 'Kaydediliyor...' : '💾 Kaydet'}
+                    {isSubmitting ? 'Kaydediliyor...' : '💾 Kaydet'}
                   </button>
                   <button
                     type="button"

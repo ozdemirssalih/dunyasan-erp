@@ -102,6 +102,11 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRoleId, setInviteRoleId] = useState('')
 
+  // Submitting states
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false)
+  const [isSubmittingRole, setIsSubmittingRole] = useState(false)
+  const [isSubmittingCompany, setIsSubmittingCompany] = useState(false)
+
   // Role form
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -459,12 +464,14 @@ export default function SettingsPage() {
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingInvite) return
 
     if (!inviteEmail.endsWith('@dunyasan.com')) {
       alert('❌ Sadece @dunyasan.com uzantılı emailler davet edilebilir!')
       return
     }
 
+    setIsSubmittingInvite(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -498,6 +505,8 @@ export default function SettingsPage() {
       loadData()
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmittingInvite(false)
     }
   }
 
@@ -540,7 +549,9 @@ export default function SettingsPage() {
 
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingRole) return
 
+    setIsSubmittingRole(true)
     try {
       if (editingRole) {
         const { error } = await supabase
@@ -571,6 +582,8 @@ export default function SettingsPage() {
       loadData()
     } catch (error: any) {
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmittingRole(false)
     }
   }
 
@@ -616,8 +629,10 @@ export default function SettingsPage() {
 
   const handleCompanyUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingCompany) return
     if (!company) return
 
+    setIsSubmittingCompany(true)
     try {
       console.log('Updating company:', company)
 
@@ -644,6 +659,8 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error('Error updating company:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmittingCompany(false)
     }
   }
 
@@ -1381,12 +1398,13 @@ export default function SettingsPage() {
                 <div className="flex space-x-4 pt-4">
                   <button
                     type="submit"
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl flex items-center space-x-2"
+                    disabled={isSubmittingCompany}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                     </svg>
-                    <span>Değişiklikleri Kaydet</span>
+                    <span>{isSubmittingCompany ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}</span>
                   </button>
                   <button
                     type="button"
@@ -1454,12 +1472,13 @@ export default function SettingsPage() {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
+                  disabled={isSubmittingInvite}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span>Davet Gönder</span>
+                  <span>{isSubmittingInvite ? 'Gönderiliyor...' : 'Davet Gönder'}</span>
                 </button>
                 <button
                   type="button"
@@ -1917,9 +1936,12 @@ export default function SettingsPage() {
               <div className="flex space-x-4 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                  disabled={isSubmittingRole}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingRole ? (
+                  {isSubmittingRole ? (
+                    <span>İşlem yapılıyor...</span>
+                  ) : editingRole ? (
                     <>
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />

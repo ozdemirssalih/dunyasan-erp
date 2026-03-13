@@ -102,6 +102,7 @@ export default function WarehousePage() {
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [showWaybillModal, setShowWaybillModal] = useState(false)
   const [showTransactionEditModal, setShowTransactionEditModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [lastExitTransaction, setLastExitTransaction] = useState<any | null>(null)
@@ -681,8 +682,10 @@ export default function WarehousePage() {
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
+    if (isSubmitting) return
 
     try {
+      setIsSubmitting(true)
       // Sadece gerekli alanları gönder (category TEXT olarak)
       const itemData = {
         company_id: companyId,
@@ -723,14 +726,18 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error saving item:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleStockEntry = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
     try {
+      setIsSubmitting(true)
       // Dosya boyut kontrolü (10 MB = 10 * 1024 * 1024 bytes)
       if (entryForm.delivery_document && entryForm.delivery_document.size > 10 * 1024 * 1024) {
         alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')
@@ -806,6 +813,8 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error entry:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -874,9 +883,11 @@ export default function WarehousePage() {
 
   const handleStockExit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
     try {
+      setIsSubmitting(true)
       // STOK KONTROLÜ - Çok önemli!
       const { data: item, error: itemError } = await supabase
         .from('warehouse_items')
@@ -928,14 +939,18 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error exit:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
     try {
+      setIsSubmitting(true)
       const { error } = await supabase
         .from('purchase_requests')
         .insert({
@@ -959,6 +974,8 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error creating request:', error)
       alert('❌ Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -973,9 +990,11 @@ export default function WarehousePage() {
 
   const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId || !editingTransaction) return
 
     try {
+      setIsSubmitting(true)
       const { error } = await supabase
         .from('warehouse_transactions')
         .update({
@@ -993,6 +1012,8 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error updating transaction:', error)
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1515,9 +1536,10 @@ export default function WarehousePage() {
               <div className="flex space-x-4">
                 <button
                   type="submit"
-                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold"
+                  disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ↓ Giriş Yap
+                  {isSubmitting ? 'İşlem yapılıyor...' : '↓ Giriş Yap'}
                 </button>
                 <button
                   type="button"
@@ -2397,9 +2419,10 @@ export default function WarehousePage() {
                 <div className="flex space-x-4 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Talep Gönder
+                    {isSubmitting ? 'İşlem yapılıyor...' : 'Talep Gönder'}
                   </button>
                   <button
                     type="button"
@@ -2497,9 +2520,10 @@ export default function WarehousePage() {
                 <div className="flex space-x-4 pt-4">
                   <button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold"
+                    disabled={isSubmitting}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Güncelle
+                    {isSubmitting ? 'İşlem yapılıyor...' : 'Güncelle'}
                   </button>
                   <button
                     type="button"

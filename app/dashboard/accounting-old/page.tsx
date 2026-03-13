@@ -73,6 +73,8 @@ export default function AccountingPage() {
     notes: '',
   })
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [selectedPeriod])
@@ -248,8 +250,10 @@ export default function AccountingPage() {
 
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!companyId) return
 
+    setIsSubmitting(true)
     try {
       // İşlemi kaydet
       const { data: transaction, error: transactionError } = await supabase
@@ -307,6 +311,8 @@ export default function AccountingPage() {
     } catch (error: any) {
       console.error('Error saving transaction:', error)
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -675,9 +681,10 @@ export default function AccountingPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Kaydet
+                    {isSubmitting ? 'İşlem yapılıyor...' : 'Kaydet'}
                   </button>
                 </div>
               </form>

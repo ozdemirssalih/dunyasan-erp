@@ -44,6 +44,9 @@ export default function PaymentAccountsPage() {
     transfer_date: new Date().toISOString().split('T')[0],
   })
 
+  const [isSubmittingSave, setIsSubmittingSave] = useState(false)
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
@@ -118,8 +121,10 @@ export default function PaymentAccountsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingSave) return
     if (!companyId) return
 
+    setIsSubmittingSave(true)
     try {
       if (editingAccount) {
         // Update
@@ -175,11 +180,14 @@ export default function PaymentAccountsPage() {
       alert(editingAccount ? 'Hesap güncellendi!' : 'Hesap oluşturuldu!')
     } catch (error: any) {
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmittingSave(false)
     }
   }
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmittingTransfer) return
     if (!companyId) return
 
     if (transferForm.from_account_id === transferForm.to_account_id) {
@@ -187,6 +195,7 @@ export default function PaymentAccountsPage() {
       return
     }
 
+    setIsSubmittingTransfer(true)
     try {
       // Transfer kaydı oluştur
       const { error: transferError } = await supabase
@@ -239,6 +248,8 @@ export default function PaymentAccountsPage() {
       alert('Transfer başarılı!')
     } catch (error: any) {
       alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmittingTransfer(false)
     }
   }
 
@@ -601,9 +612,10 @@ export default function PaymentAccountsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    disabled={isSubmittingSave}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingAccount ? 'Güncelle' : 'Oluştur'}
+                    {isSubmittingSave ? 'İşlem yapılıyor...' : (editingAccount ? 'Güncelle' : 'Oluştur')}
                   </button>
                 </div>
               </form>
@@ -711,9 +723,10 @@ export default function PaymentAccountsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors"
+                    disabled={isSubmittingTransfer}
+                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Transfer Yap
+                    {isSubmittingTransfer ? 'Transfer yapılıyor...' : 'Transfer Yap'}
                   </button>
                 </div>
               </form>

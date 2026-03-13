@@ -656,35 +656,9 @@ export default function QualityControlPage() {
 
       if (transferForm.quality_result === 'passed') {
         // GEÇERSE: Direkt ana depoya ekle (onay bekleme)
+        // NOT: Manuel stok güncelleme kaldırıldı - warehouse_transactions trigger'ı otomatik güncelliyor
 
-        // 1. Ana depoya ekle/güncelle - önce kontrol et var mı
-        const { data: existingWarehouseStock, error: warehouseCheckError } = await supabase
-          .from('warehouse_items')
-          .select('current_stock')
-          .eq('company_id', companyId)
-          .eq('id', transferForm.item_id)
-          .maybeSingle()
-
-        if (warehouseCheckError && warehouseCheckError.code !== 'PGRST116') throw warehouseCheckError
-
-        if (existingWarehouseStock) {
-          // Varsa stoku güncelle
-          const { error: updateError } = await supabase
-            .from('warehouse_items')
-            .update({
-              current_stock: existingWarehouseStock.current_stock + transferForm.quantity,
-              updated_at: new Date().toISOString()
-            })
-            .eq('company_id', companyId)
-            .eq('id', transferForm.item_id)
-
-          if (updateError) throw updateError
-        } else {
-          // Ürün warehouse_items'da yoksa hata ver
-          throw new Error('Ürün ana depoda bulunamadı. Önce depo stok kartı oluşturulmalı.')
-        }
-
-        // 2. Warehouse transactions kayıt ekle
+        // Warehouse transactions kayıt ekle (trigger otomatik olarak stoku güncelleyecek)
         const { error: transactionError } = await supabase
           .from('warehouse_transactions')
           .insert({

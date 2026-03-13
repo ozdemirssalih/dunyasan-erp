@@ -3,14 +3,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
-import { usePermissions } from '@/lib/hooks/usePermissions'
 import { Package, Factory, ClipboardCheck, Upload, Download, FileText, X } from 'lucide-react'
 
 type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history' | 'warehouse-qc'
 
 export default function QualityControlPage() {
-  const { canCreate } = usePermissions()
-
   const [activeTab, setActiveTab] = useState<Tab>('inventory')
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -1002,14 +999,12 @@ export default function QualityControlPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-gray-600">Test bekleyen ürünler</p>
-              {canCreate('production') && (
-                <button
-                  onClick={() => setShowTransferModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
-                >
-                  + Test Sonucu Kaydet
-                </button>
-              )}
+              <button
+                onClick={() => setShowTransferModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+              >
+                + Test Sonucu Kaydet
+              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

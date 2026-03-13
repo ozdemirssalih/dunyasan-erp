@@ -772,7 +772,6 @@ export default function WarehousePage() {
             notes: entryForm.notes,
             requested_by: currentUserId,
             status: 'pending',
-            transaction_date: entryForm.transaction_date,
             delivery_document_url: deliveryDocumentUrl,
           })
 

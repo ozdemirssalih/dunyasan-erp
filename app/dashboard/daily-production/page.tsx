@@ -81,7 +81,7 @@ export default function DailyProductionPage() {
   const [formData, setFormData] = useState({
     project_id: '',
     machine_id: '',
-    employee_id: '',
+    employee_ids: [] as string[],
     production_date: new Date().toISOString().split('T')[0],
     capacity_target: '',
     actual_production: '',
@@ -253,7 +253,7 @@ export default function DailyProductionPage() {
         company_id: companyId,
         project_id: formData.project_id,
         machine_id: formData.machine_id,
-        employee_id: formData.employee_id || null,
+        employee_ids: formData.employee_ids.length > 0 ? formData.employee_ids : null,
         production_date: formData.production_date,
         capacity_target: parseInt(formData.capacity_target),
         actual_production: parseInt(formData.actual_production),
@@ -302,10 +302,18 @@ export default function DailyProductionPage() {
       await loadProjectMachines(production.project_id)
     }
 
+    // Backward compatibility: employee_id varsa array'e çevir
+    let employeeIds: string[] = []
+    if ((production as any).employee_ids && Array.isArray((production as any).employee_ids)) {
+      employeeIds = (production as any).employee_ids
+    } else if (production.employee_id) {
+      employeeIds = [production.employee_id]
+    }
+
     setFormData({
       project_id: production.project_id,
       machine_id: production.machine_id,
-      employee_id: production.employee_id || '',
+      employee_ids: employeeIds,
       production_date: production.production_date,
       capacity_target: production.capacity_target.toString(),
       actual_production: production.actual_production.toString(),
@@ -338,7 +346,7 @@ export default function DailyProductionPage() {
     setFormData({
       project_id: '',
       machine_id: '',
-      employee_id: '',
+      employee_ids: [],
       production_date: new Date().toISOString().split('T')[0],
       capacity_target: '',
       actual_production: '',
@@ -661,24 +669,53 @@ export default function DailyProductionPage() {
                   </div>
                 )}
 
-                {/* Employee Selection */}
+                {/* Employee Selection - Multi Select */}
                 {formData.machine_id && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Çalışan Personel
+                      Çalışan Personel (Birden fazla seçilebilir)
                     </label>
-                    <select
-                      value={formData.employee_id}
-                      onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="">Personel Seçiniz (Opsiyonel)</option>
-                      {employees.map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.full_name} ({employee.employee_code})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
+                      {employees.length === 0 ? (
+                        <p className="text-gray-500 text-sm">Personel bulunamadı</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {employees.map((employee) => (
+                            <label
+                              key={employee.id}
+                              className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.employee_ids.includes(employee.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({
+                                      ...formData,
+                                      employee_ids: [...formData.employee_ids, employee.id]
+                                    })
+                                  } else {
+                                    setFormData({
+                                      ...formData,
+                                      employee_ids: formData.employee_ids.filter(id => id !== employee.id)
+                                    })
+                                  }
+                                }}
+                                className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                              />
+                              <span className="text-sm text-gray-700">
+                                {employee.full_name} <span className="text-gray-500">({employee.employee_code})</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {formData.employee_ids.length > 0 && (
+                      <p className="text-xs text-green-600 mt-1">
+                        {formData.employee_ids.length} personel seçildi
+                      </p>
+                    )}
                   </div>
                 )}
 

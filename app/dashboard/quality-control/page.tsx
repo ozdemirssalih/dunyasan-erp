@@ -1717,9 +1717,10 @@ export default function QualityControlPage() {
                 <div className="flex space-x-4 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+                    disabled={submittingTransfer}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Sonucu Kaydet & Gönder
+                    {submittingTransfer ? 'İşlem yapılıyor...' : 'Sonucu Kaydet & Gönder'}
                   </button>
                   <button
                     type="button"

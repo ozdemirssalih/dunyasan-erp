@@ -17,9 +17,18 @@ interface ChatMessage {
   }
 }
 
+interface ChatGroup {
+  id: string
+  name: string
+  last_message?: string
+  last_message_time?: string
+  unread_count: number
+}
+
 export default function CompanyChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
+  const [view, setView] = useState<'groups' | 'chat'>('groups')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
@@ -27,6 +36,7 @@ export default function CompanyChat() {
   const [companyId, setCompanyId] = useState<string>('')
   const [userChatGroups, setUserChatGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string>('all')
+  const [groups, setGroups] = useState<ChatGroup[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [groupUnreadCounts, setGroupUnreadCounts] = useState<Record<string, number>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -51,16 +61,10 @@ export default function CompanyChat() {
   }, [isOpen, isMinimized, messages])
 
   useEffect(() => {
-    if (companyId) {
-      loadMessages(companyId)
-      if (isOpen && !isMinimized) {
-        setGroupUnreadCounts(prev => ({
-          ...prev,
-          [selectedGroup]: 0
-        }))
-      }
+    if (companyId && userChatGroups.length > 0) {
+      loadGroups(companyId, userChatGroups)
     }
-  }, [selectedGroup])
+  }, [companyId, userChatGroups, groupUnreadCounts])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -107,9 +111,8 @@ export default function CompanyChat() {
     setCompanyId(profile.company_id)
     setUserChatGroups(profile.chat_group || [])
     setCurrentUserName(profile.full_name || user.email || 'Sen')
-    setSelectedGroup('all')
 
-    await loadMessages(profile.company_id)
+    await loadGroups(profile.company_id, profile.chat_group || [])
 
     const channel = supabase
       .channel('company-chat')
@@ -133,12 +136,22 @@ export default function CompanyChat() {
               [msgGroup]: (prev[msgGroup] || 0) + 1
             }))
 
-            if (!isOpen || isMinimized || selectedGroup !== msgGroup) {
+            if (!isOpen || isMinimized) {
               setUnreadCount(prev => prev + 1)
             }
           }
 
-          loadMessages(profile.company_id)
+          // Grup listesini güncelle
+          loadGroups(profile.company_id, profile.chat_group || [])
+
+          // Eğer o grup seçiliyse mesajları yenile
+          const msgGroup = newMsg.chat_group || 'all'
+          setSelectedGroup(currentGroup => {
+            if (currentGroup === msgGroup) {
+              loadMessages(profile.company_id, msgGroup)
+            }
+            return currentGroup
+          })
         }
       )
       .subscribe()
@@ -148,7 +161,48 @@ export default function CompanyChat() {
     }
   }
 
-  const loadMessages = async (companyId: string) => {
+  const loadGroups = async (companyId: string, userGroups: string[]) => {
+    const allGroups: ChatGroup[] = [
+      {
+        id: 'all',
+        name: 'Genel Chat',
+        unread_count: groupUnreadCounts['all'] || 0
+      },
+      ...userGroups.map(g => ({
+        id: g,
+        name: g,
+        unread_count: groupUnreadCounts[g] || 0
+      }))
+    ]
+
+    // Her grup için son mesajı al
+    for (const group of allGroups) {
+      let query = supabase
+        .from('company_chat_messages')
+        .select('message, created_at')
+        .eq('company_id', companyId)
+
+      if (group.id === 'all') {
+        query = query.is('chat_group', null)
+      } else {
+        query = query.eq('chat_group', group.id)
+      }
+
+      const { data } = await query
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (data) {
+        group.last_message = data.message
+        group.last_message_time = data.created_at
+      }
+    }
+
+    setGroups(allGroups)
+  }
+
+  const loadMessages = async (companyId: string, groupId: string) => {
     let query = supabase
       .from('company_chat_messages')
       .select(`
@@ -157,10 +211,10 @@ export default function CompanyChat() {
       `)
       .eq('company_id', companyId)
 
-    if (selectedGroup === 'all') {
+    if (groupId === 'all') {
       query = query.is('chat_group', null)
     } else {
-      query = query.eq('chat_group', selectedGroup)
+      query = query.eq('chat_group', groupId)
     }
 
     const { data } = await query
@@ -170,6 +224,12 @@ export default function CompanyChat() {
     if (data) {
       setMessages(data)
     }
+  }
+
+  const selectGroup = (groupId: string) => {
+    setSelectedGroup(groupId)
+    setView('chat')
+    loadMessages(companyId, groupId)
   }
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -265,13 +325,26 @@ export default function CompanyChat() {
           {/* Header - WhatsApp Green */}
           <div className="bg-gradient-to-r from-green-600 to-green-500 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-3 flex-1 min-w-0">
+              {view === 'chat' && (
+                <button
+                  onClick={() => setView('groups')}
+                  className="hover:bg-green-700/30 rounded-full p-1.5 transition-colors flex-shrink-0"
+                  title="Geri"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              )}
               <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-lg font-bold">
-                {getGroupIcon(selectedGroup)}
+                {view === 'groups' ? '💬' : getGroupIcon(selectedGroup)}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-base truncate">Şirket Sohbeti</h3>
+                <h3 className="font-bold text-base truncate">
+                  {view === 'groups' ? 'Şirket Sohbeti' : groups.find(g => g.id === selectedGroup)?.name || 'Sohbet'}
+                </h3>
                 <p className="text-xs text-green-100 truncate">
-                  {messages.length} mesaj
+                  {view === 'groups' ? `${groups.length} grup` : `${messages.length} mesaj`}
                 </p>
               </div>
             </div>
@@ -284,7 +357,10 @@ export default function CompanyChat() {
                 <Minimize2 className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false)
+                  setView('groups')
+                }}
                 className="hover:bg-green-700/30 rounded-full p-2 transition-colors"
                 title="Kapat"
               >
@@ -293,25 +369,85 @@ export default function CompanyChat() {
             </div>
           </div>
 
-          {!isMinimized && (
+          {!isMinimized && view === 'groups' && (
             <>
-              {/* Group Selector - Modern Tabs */}
-              <div className="bg-green-50 px-4 py-3 border-b border-green-100">
-                <select
-                  value={selectedGroup}
-                  onChange={(e) => setSelectedGroup(e.target.value)}
-                  className="w-full px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm"
-                >
-                  <option value="all">
-                    {getGroupIcon('all')} Genel Chat {groupUnreadCounts.all > 0 ? `(${groupUnreadCounts.all} yeni)` : ''}
-                  </option>
-                  {userChatGroups.map((group) => (
-                    <option key={group} value={group}>
-                      {getGroupIcon(group)} {group} {groupUnreadCounts[group] > 0 ? `(${groupUnreadCounts[group]} yeni)` : ''}
-                    </option>
-                  ))}
-                </select>
+              {/* Search */}
+              <div className="px-4 py-3 bg-white border-b border-gray-200">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Sohbet ara"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
               </div>
+
+              {/* Groups List - WhatsApp Style */}
+              <div className="flex-1 overflow-y-auto">
+                {/* GRUPLAR BÖLÜMÜ */}
+                <div className="px-4 py-2 bg-gray-50">
+                  <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Gruplar
+                  </h3>
+                </div>
+                {groups
+                  .filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map((group) => (
+                  <button
+                    key={group.id}
+                    onClick={() => selectGroup(group.id)}
+                    className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${
+                        group.id === 'all' ? 'from-blue-400 to-blue-600' :
+                        group.id === 'Yönetim' ? 'from-purple-400 to-purple-600' :
+                        group.id === 'Üretim' ? 'from-orange-400 to-orange-600' :
+                        group.id === 'Satış' ? 'from-green-400 to-green-600' :
+                        group.id === 'Teknik' ? 'from-red-400 to-red-600' :
+                        'from-gray-400 to-gray-600'
+                      } flex items-center justify-center text-white text-xl shadow-md`}>
+                        {getGroupIcon(group.id)}
+                      </div>
+                      {group.unread_count > 0 && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                          <span className="text-xs text-white font-bold">
+                            {group.unread_count > 9 ? '9+' : group.unread_count}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h4 className="font-bold text-gray-900 truncate text-sm">
+                          {group.name}
+                        </h4>
+                        {group.last_message_time && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            {formatTime(group.last_message_time)}
+                          </span>
+                        )}
+                      </div>
+                      {group.last_message && (
+                        <p className="text-sm text-gray-600 truncate">
+                          {group.last_message}
+                        </p>
+                      )}
+                      {!group.last_message && (
+                        <p className="text-sm text-gray-400 italic">Henüz mesaj yok</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {!isMinimized && view === 'chat' && (
+            <>
 
               {/* Messages - WhatsApp Style Background */}
               <div

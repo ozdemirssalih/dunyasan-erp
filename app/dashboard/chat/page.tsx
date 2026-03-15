@@ -54,6 +54,7 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, UserPresence>>({})
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({})
   const [isTyping, setIsTyping] = useState(false)
+  const [activeTab, setActiveTab] = useState<'all' | 'groups'>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
@@ -64,7 +65,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (selectedRoom) {
       loadMessages(selectedRoom.id)
-      subscribeToMessages(selectedRoom.id)
+      const cleanup = subscribeToMessages(selectedRoom.id)
+      return cleanup
     }
   }, [selectedRoom])
 
@@ -118,11 +120,19 @@ export default function ChatPage() {
 
     // Her oda için son mesajı yükle
     for (const room of allRooms) {
-      const { data: lastMsg } = await supabase
+      let query = supabase
         .from('company_chat_messages')
         .select('message, created_at, sender_id, sender:profiles!company_chat_messages_sender_id_fkey(full_name)')
         .eq('company_id', compId)
-        .eq(room.id === 'general' ? 'chat_group' : 'chat_group', room.id === 'general' ? null : room.id)
+
+      // Genel chat için chat_group null, diğerleri için grup adı
+      if (room.id === 'general') {
+        query = query.is('chat_group', null)
+      } else {
+        query = query.eq('chat_group', room.id)
+      }
+
+      const { data: lastMsg } = await query
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -152,7 +162,7 @@ export default function ChatPage() {
   const loadMessages = async (roomId: string) => {
     if (!companyId) return
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('company_chat_messages')
       .select(`
         id,
@@ -163,7 +173,15 @@ export default function ChatPage() {
         sender:profiles!company_chat_messages_sender_id_fkey(full_name, email, avatar_url)
       `)
       .eq('company_id', companyId)
-      .eq(roomId === 'general' ? 'chat_group' : 'chat_group', roomId === 'general' ? null : roomId)
+
+    // Genel chat için chat_group null, diğerleri için grup adı
+    if (roomId === 'general') {
+      query = query.is('chat_group', null)
+    } else {
+      query = query.eq('chat_group', roomId)
+    }
+
+    const { data, error } = await query
       .order('created_at', { ascending: true })
       .limit(100)
 
@@ -191,13 +209,43 @@ export default function ChatPage() {
           table: 'company_chat_messages',
           filter: `company_id=eq.${companyId}`
         },
-        (payload) => {
+        async (payload) => {
           const newMsg = payload.new as any
           const msgRoomId = newMsg.chat_group || 'general'
 
+          // Mesajları yenile
           if (msgRoomId === roomId) {
             loadMessages(roomId)
           }
+
+          // Room listesindeki son mesajı güncelle
+          const { data: senderData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', newMsg.sender_id)
+            .single()
+
+          setRooms(prevRooms => {
+            const updatedRooms = prevRooms.map(room => {
+              if (room.id === msgRoomId) {
+                return {
+                  ...room,
+                  last_message: {
+                    message: newMsg.message,
+                    sender_name: senderData?.full_name || 'Bilinmeyen',
+                    created_at: newMsg.created_at,
+                    is_own: newMsg.sender_id === currentUserId
+                  },
+                  last_message_at: newMsg.created_at
+                }
+              }
+              return room
+            })
+            // Son mesaja göre sırala
+            return updatedRooms.sort((a, b) =>
+              new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+            )
+          })
 
           // Ses çal
           if (newMsg.sender_id !== currentUserId) {
@@ -384,9 +432,37 @@ export default function ChatPage() {
     return colors[roomId] || 'from-gray-400 to-gray-600'
   }
 
-  const filteredRooms = rooms.filter(room =>
-    room.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const getGroupDescription = (roomId: string) => {
+    const descriptions: Record<string, string> = {
+      'general': 'Tüm şirket çalışanları için genel sohbet odası',
+      'Yönetim': 'Yönetim ekibi için özel grup',
+      'Üretim': 'Üretim departmanı çalışanları',
+      'Satış': 'Satış ekibi ve müşteri ilişkileri',
+      'Teknik': 'Teknik destek ve mühendislik ekibi'
+    }
+    return descriptions[roomId] || 'Grup sohbeti'
+  }
+
+  const getGroupMemberCount = async (roomId: string) => {
+    if (!companyId) return 0
+    const { count } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .contains('chat_group', roomId === 'general' ? [] : [roomId])
+    return count || 0
+  }
+
+  const filteredRooms = rooms.filter(room => {
+    const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase())
+    if (activeTab === 'groups') {
+      return matchesSearch && room.type === 'group'
+    }
+    return matchesSearch
+  })
+
+  const groupRooms = filteredRooms.filter(room => room.type === 'group')
+  const directRooms = filteredRooms.filter(room => room.type === 'direct')
 
   return (
       <div className="flex h-screen bg-gray-100">
@@ -419,13 +495,44 @@ export default function ChatPage() {
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="flex bg-white border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`flex-1 py-3 text-sm font-semibold transition-all relative ${
+                activeTab === 'all'
+                  ? 'text-green-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Tüm Sohbetler
+              {activeTab === 'all' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('groups')}
+              className={`flex-1 py-3 text-sm font-semibold transition-all relative flex items-center justify-center gap-2 ${
+                activeTab === 'groups'
+                  ? 'text-green-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Gruplar ({groupRooms.length})
+              {activeTab === 'groups' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600"></div>
+              )}
+            </button>
+          </div>
+
           {/* Arama */}
           <div className="px-3 py-2 bg-white border-b border-gray-200">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Sohbet ara veya yeni başlat"
+                placeholder={activeTab === 'groups' ? 'Grup ara' : 'Sohbet ara veya yeni başlat'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-11 pr-4 py-2 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 placeholder-gray-500"
@@ -435,63 +542,217 @@ export default function ChatPage() {
 
           {/* Konuşma Listesi */}
           <div className="flex-1 overflow-y-auto">
-            {filteredRooms.map((room) => (
-              <button
-                key={room.id}
-                onClick={() => setSelectedRoom(room)}
-                className={`w-full p-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 ${
-                  selectedRoom?.id === room.id ? 'bg-gray-100' : ''
-                }`}
-              >
-                {/* Avatar */}
-                <div className="relative flex-shrink-0">
-                  <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getGroupColor(room.id)} flex items-center justify-center text-white text-xl shadow-sm`}>
-                    {getGroupIcon(room.id)}
-                  </div>
-                  {room.unread_count > 0 && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">{room.unread_count > 9 ? '9+' : room.unread_count}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* İçerik */}
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <h4 className="font-semibold text-gray-900 truncate text-sm">
-                      {room.name}
-                    </h4>
-                    {room.last_message && (
-                      <span className="text-xs text-gray-500 ml-2">
-                        {formatTime(room.last_message.created_at)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {room.last_message && (
-                      <>
-                        {room.last_message.is_own && (
-                          <CheckCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            {activeTab === 'groups' ? (
+              /* Gruplar Görünümü - Daha Büyük Kartlar */
+              <div className="p-3 space-y-3">
+                {filteredRooms.map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => setSelectedRoom(room)}
+                    className={`w-full p-4 rounded-xl transition-all shadow-sm hover:shadow-md border-2 ${
+                      selectedRoom?.id === room.id
+                        ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Büyük Avatar */}
+                      <div className="relative flex-shrink-0">
+                        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${getGroupColor(room.id)} flex items-center justify-center text-white text-3xl shadow-lg`}>
+                          {getGroupIcon(room.id)}
+                        </div>
+                        {room.unread_count > 0 && (
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-2 border-white">
+                            <span className="text-xs text-white font-bold">{room.unread_count > 9 ? '9+' : room.unread_count}</span>
+                          </div>
                         )}
-                        <p className="text-sm text-gray-600 truncate">
-                          {room.last_message.is_own ? '' : `${room.last_message.sender_name}: `}
-                          {room.last_message.message}
-                        </p>
-                      </>
-                    )}
-                    {!room.last_message && (
-                      <p className="text-sm text-gray-400 italic">Henüz mesaj yok</p>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
+                      </div>
 
-            {filteredRooms.length === 0 && (
-              <div className="p-8 text-center">
-                <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">Sohbet bulunamadı</p>
+                      {/* İçerik */}
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-gray-900 text-base">
+                            {room.name}
+                          </h3>
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <Users className="w-3.5 h-3.5" />
+                            <span>Grup</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-1">
+                          {getGroupDescription(room.id)}
+                        </p>
+                        {room.last_message && (
+                          <div className="flex items-center gap-2">
+                            {room.last_message.is_own && (
+                              <CheckCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                            )}
+                            <p className="text-sm text-gray-700 truncate flex-1">
+                              <span className="font-medium">
+                                {room.last_message.is_own ? 'Sen' : room.last_message.sender_name}:
+                              </span>
+                              {' '}{room.last_message.message}
+                            </p>
+                            <span className="text-xs text-gray-500 flex-shrink-0">
+                              {formatTime(room.last_message.created_at)}
+                            </span>
+                          </div>
+                        )}
+                        {!room.last_message && (
+                          <p className="text-sm text-gray-400 italic">Henüz mesaj yok</p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                {filteredRooms.length === 0 && (
+                  <div className="p-8 text-center">
+                    <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white text-4xl shadow-lg">
+                      <Users className="w-10 h-10" />
+                    </div>
+                    <p className="text-gray-900 font-bold text-lg mb-2">Grup bulunamadı</p>
+                    <p className="text-gray-500 text-sm">Henüz hiçbir gruba dahil değilsiniz</p>
+                  </div>
+                )}
               </div>
+            ) : (
+              /* Tüm Sohbetler Görünümü - WhatsApp Stili */
+              <>
+                {/* GRUPLAR BÖLÜMÜ */}
+                {groupRooms.length > 0 && (
+                  <div className="mb-2">
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                      <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Gruplar
+                      </h3>
+                    </div>
+                    {groupRooms.map((room) => (
+                      <button
+                        key={room.id}
+                        onClick={() => setSelectedRoom(room)}
+                        className={`w-full p-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 ${
+                          selectedRoom?.id === room.id ? 'bg-gray-100' : ''
+                        }`}
+                      >
+                        {/* Avatar */}
+                        <div className="relative flex-shrink-0">
+                          <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${getGroupColor(room.id)} flex items-center justify-center text-white text-2xl shadow-md`}>
+                            {getGroupIcon(room.id)}
+                          </div>
+                          {room.unread_count > 0 && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                              <span className="text-xs text-white font-bold">{room.unread_count > 9 ? '9+' : room.unread_count}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* İçerik */}
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <h4 className="font-bold text-gray-900 truncate text-base">
+                              {room.name}
+                            </h4>
+                            {room.last_message && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                {formatTime(room.last_message.created_at)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {room.last_message && (
+                              <>
+                                {room.last_message.is_own && (
+                                  <CheckCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                                )}
+                                <p className="text-sm text-gray-600 truncate">
+                                  <span className="font-medium text-gray-700">
+                                    {room.last_message.is_own ? 'Sen' : room.last_message.sender_name}:
+                                  </span>
+                                  {' '}{room.last_message.message}
+                                </p>
+                              </>
+                            )}
+                            {!room.last_message && (
+                              <p className="text-sm text-gray-400 italic">Henüz mesaj yok</p>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* DİREKT MESAJLAR BÖLÜMÜ */}
+                {directRooms.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                      <h3 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4" />
+                        Direkt Mesajlar
+                      </h3>
+                    </div>
+                    {directRooms.map((room) => (
+                      <button
+                        key={room.id}
+                        onClick={() => setSelectedRoom(room)}
+                        className={`w-full p-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 ${
+                          selectedRoom?.id === room.id ? 'bg-gray-100' : ''
+                        }`}
+                      >
+                        {/* Avatar */}
+                        <div className="relative flex-shrink-0">
+                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getGroupColor(room.id)} flex items-center justify-center text-white text-lg shadow-sm`}>
+                            {getInitials(room.name)}
+                          </div>
+                          {room.unread_count > 0 && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                              <span className="text-xs text-white font-bold">{room.unread_count > 9 ? '9+' : room.unread_count}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* İçerik */}
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <h4 className="font-semibold text-gray-900 truncate text-sm">
+                              {room.name}
+                            </h4>
+                            {room.last_message && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                {formatTime(room.last_message.created_at)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {room.last_message && (
+                              <>
+                                {room.last_message.is_own && (
+                                  <CheckCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                                )}
+                                <p className="text-sm text-gray-600 truncate">
+                                  {room.last_message.message}
+                                </p>
+                              </>
+                            )}
+                            {!room.last_message && (
+                              <p className="text-sm text-gray-400 italic">Henüz mesaj yok</p>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* BOŞ DURUM */}
+                {filteredRooms.length === 0 && (
+                  <div className="p-8 text-center">
+                    <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">Sohbet bulunamadı</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -500,29 +761,60 @@ export default function ChatPage() {
         {selectedRoom ? (
           <div className="flex-1 flex flex-col">
             {/* Chat Header */}
-            <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-b border-gray-200">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getGroupColor(selectedRoom.id)} flex items-center justify-center text-white text-lg shadow-sm`}>
-                  {getGroupIcon(selectedRoom.id)}
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getGroupColor(selectedRoom.id)} flex items-center justify-center text-white text-2xl shadow-md`}>
+                    {getGroupIcon(selectedRoom.id)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-gray-900 text-lg">{selectedRoom.name}</h2>
+                      {selectedRoom.type === 'group' && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                          Grup
+                        </span>
+                      )}
+                    </div>
+                    {selectedRoom.type === 'group' ? (
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-sm text-gray-600 flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          Grup sohbeti
+                        </p>
+                        <span className="text-gray-400">•</span>
+                        <p className="text-sm text-gray-600">
+                          {messages.length} mesaj
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-green-600 flex items-center gap-1">
+                        <Circle className="w-2 h-2 fill-current" />
+                        Çevrimiçi
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-semibold text-gray-900 text-base">{selectedRoom.name}</h2>
-                  <p className="text-xs text-gray-500">
-                    {selectedRoom.type === 'group' ? `Grup sohbeti • ${messages.length} mesaj` : 'Çevrimiçi'}
+                <div className="flex items-center gap-2">
+                  <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Sesli arama">
+                    <Phone className="w-5 h-5" />
+                  </button>
+                  <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Görüntülü arama">
+                    <Video className="w-5 h-5" />
+                  </button>
+                  <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Grup bilgisi">
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              {/* Grup Açıklaması */}
+              {selectedRoom.type === 'group' && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {getGroupDescription(selectedRoom.id)}
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Sesli arama">
-                  <Phone className="w-5 h-5" />
-                </button>
-                <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Görüntülü arama">
-                  <Video className="w-5 h-5" />
-                </button>
-                <button className="p-2.5 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="Daha fazla">
-                  <MoreVertical className="w-5 h-5" />
-                </button>
-              </div>
+              )}
             </div>
 
             {/* Mesajlar */}

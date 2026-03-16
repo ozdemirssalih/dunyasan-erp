@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
-import { Factory, TrendingUp, Clock, Package, Activity, Settings, Wrench, AlertCircle, FolderKanban } from 'lucide-react'
+import { Factory, TrendingUp, Clock, Package, Activity, Settings, Wrench, AlertCircle, FolderKanban, Eye } from 'lucide-react'
 
 interface Machine {
   id: string
@@ -27,6 +28,7 @@ interface Machine {
 }
 
 export default function MachinesPage() {
+  const router = useRouter()
   const [machines, setMachines] = useState<Machine[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -492,19 +494,28 @@ export default function MachinesPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex space-x-2">
+              <div className="flex flex-col space-y-2">
                 <button
-                  onClick={() => handleEdit(machine)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                  onClick={() => router.push(`/dashboard/machines/${machine.id}`)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                 >
-                  Düzenle
+                  <Eye className="w-4 h-4" />
+                  Detayları Görüntüle
                 </button>
-                <button
-                  onClick={() => handleDelete(machine.id)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  Sil
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEdit(machine)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    Düzenle
+                  </button>
+                  <button
+                    onClick={() => handleDelete(machine.id)}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    Sil
+                  </button>
+                </div>
               </div>
             </div>
           ))

@@ -462,7 +462,7 @@ export default function AccountingPageV2() {
         const now = new Date()
         transactionDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
 
-        await supabase.from('current_account_transactions').insert({
+        const { data: insertedData, error: insertError } = await supabase.from('current_account_transactions').insert({
           company_id: companyId,
           transaction_type: isReceivable ? 'receivable' : 'payable',
           customer_id: isReceivable ? transactionForm.customer_id : null,
@@ -478,6 +478,13 @@ export default function AccountingPageV2() {
           document_url: documentUrl,
           created_by: user?.id
         })
+
+        if (insertError) {
+          console.error('Cari kayıt hatası:', insertError)
+          return alert('Cari kayıt eklenirken hata oluştu: ' + insertError.message)
+        }
+
+        console.log('✅ Cari kayıt başarıyla eklendi:', insertedData)
 
       } else if (formMode === 'payment') {
         // ÖDEME KAYDI (Kasa işlemi)
@@ -514,7 +521,14 @@ export default function AccountingPageV2() {
           cashData.supplier_id = transactionForm.supplier_id
         }
 
-        await supabase.from('cash_transactions').insert(cashData)
+        const { data: cashInsertedData, error: cashInsertError } = await supabase.from('cash_transactions').insert(cashData)
+
+        if (cashInsertError) {
+          console.error('Kasa işlem hatası:', cashInsertError)
+          return alert('Kasa işlemi eklenirken hata oluştu: ' + cashInsertError.message)
+        }
+
+        console.log('✅ Kasa işlemi başarıyla eklendi:', cashInsertedData)
       }
 
       alert('İşlem başarıyla kaydedildi!')

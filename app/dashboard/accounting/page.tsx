@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
-  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown, FileCheck
+  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown, FileCheck, Edit2, Trash2
 } from 'lucide-react'
 
 type TransactionType = 'receivable' | 'payable' | 'payment'
@@ -42,6 +42,13 @@ export default function AccountingPageV2() {
   // Modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showCheckModal, setShowCheckModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<any>(null)
+  const [editingTransactionType, setEditingTransactionType] = useState<'cash' | 'account' | null>(null)
+  const [deletingTransaction, setDeletingTransaction] = useState<any>(null)
+  const [deletingTransactionType, setDeletingTransactionType] = useState<'cash' | 'account' | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
@@ -88,6 +95,18 @@ export default function AccountingPageV2() {
     customer_id: '',
     supplier_id: '',
     related_account_transaction_id: '' // Ödeme yaparken hangi alacak/borcu kapatıyoruz
+  })
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    description: '',
+    transaction_date: '',
+    due_date: '',
+    payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
+    currency: 'TRY',
+    customer_id: '',
+    supplier_id: ''
   })
 
   useEffect(() => {
@@ -618,6 +637,237 @@ export default function AccountingPageV2() {
     }
   }
 
+  // Kasa İşlemi Düzenleme
+  const handleEditCashTransaction = (transaction: any) => {
+    setEditingTransaction(transaction)
+    setEditingTransactionType('cash')
+    setEditForm({
+      amount: transaction.amount.toString(),
+      description: transaction.description || '',
+      transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
+      due_date: '',
+      payment_method: transaction.payment_method || 'cash',
+      currency: transaction.currency || 'TRY',
+      customer_id: transaction.customer_id || '',
+      supplier_id: transaction.supplier_id || ''
+    })
+    setShowEditModal(true)
+  }
+
+  // Cari İşlemi Düzenleme
+  const handleEditAccountTransaction = (transaction: any) => {
+    setEditingTransaction(transaction)
+    setEditingTransactionType('account')
+    setEditForm({
+      amount: transaction.amount.toString(),
+      description: transaction.description || '',
+      transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
+      due_date: transaction.due_date ? new Date(transaction.due_date).toISOString().split('T')[0] : '',
+      payment_method: 'cash',
+      currency: transaction.currency || 'TRY',
+      customer_id: transaction.customer_id || '',
+      supplier_id: transaction.supplier_id || ''
+    })
+    setShowEditModal(true)
+  }
+
+  // Düzenleme Kaydet
+  const handleSaveEdit = async () => {
+    if (!editingTransaction || !companyId || isSubmitting) return
+    if (!editForm.amount) {
+      return alert('Tutar zorunludur!')
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const oldAmount = parseFloat(editingTransaction.amount)
+      const newAmount = parseFloat(editForm.amount)
+      const oldCurrency = editingTransaction.currency || 'TRY'
+      const newCurrency = editForm.currency
+
+      if (editingTransactionType === 'cash') {
+        // KASA İŞLEMİ DÜZENLEME
+        const oldType = editingTransaction.transaction_type
+
+        // Güncellemeyi yap
+        const { error } = await supabase
+          .from('cash_transactions')
+          .update({
+            amount: newAmount,
+            description: editForm.description,
+            transaction_date: new Date(editForm.transaction_date).toISOString(),
+            payment_method: editForm.payment_method,
+            currency: newCurrency,
+            customer_id: editForm.customer_id || null,
+            supplier_id: editForm.supplier_id || null
+          })
+          .eq('id', editingTransaction.id)
+          .eq('company_id', companyId)
+
+        if (error) throw error
+
+        alert('İşlem başarıyla güncellendi!')
+        setShowEditModal(false)
+        setEditingTransaction(null)
+        setEditingTransactionType(null)
+        loadData()
+
+      } else if (editingTransactionType === 'account') {
+        // CARİ İŞLEMİ DÜZENLEME
+        if (!editForm.due_date) {
+          setIsSubmitting(false)
+          return alert('Vade tarihi zorunludur!')
+        }
+
+        const oldPaidAmount = parseFloat(editingTransaction.paid_amount || 0)
+
+        // Eğer tutar değişiyorsa ve ödeme yapılmışsa kontrol et
+        if (newAmount < oldPaidAmount) {
+          setIsSubmitting(false)
+          return alert(`Yeni tutar ödenen tutardan (${formatCurrency(oldPaidAmount, oldCurrency)}) küçük olamaz!`)
+        }
+
+        // Güncellemeyi yap
+        const { error } = await supabase
+          .from('current_account_transactions')
+          .update({
+            amount: newAmount,
+            description: editForm.description,
+            transaction_date: new Date(editForm.transaction_date).toISOString(),
+            due_date: editForm.due_date,
+            currency: newCurrency,
+            customer_id: editForm.customer_id || null,
+            supplier_id: editForm.supplier_id || null,
+            // Status'u yeniden hesapla
+            status: oldPaidAmount === 0 ? 'unpaid' : (oldPaidAmount >= newAmount ? 'paid' : 'partial')
+          })
+          .eq('id', editingTransaction.id)
+          .eq('company_id', companyId)
+
+        if (error) throw error
+
+        alert('İşlem başarıyla güncellendi!')
+        setShowEditModal(false)
+        setEditingTransaction(null)
+        setEditingTransactionType(null)
+        loadData()
+      }
+    } catch (error: any) {
+      console.error('Edit error:', error)
+      alert('İşlem güncellenirken hata oluştu: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Silme modalını aç
+  const handleDeleteCashTransaction = (transaction: any) => {
+    setDeletingTransaction(transaction)
+    setDeletingTransactionType('cash')
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteAccountTransaction = (transaction: any) => {
+    setDeletingTransaction(transaction)
+    setDeletingTransactionType('account')
+    setShowDeleteModal(true)
+  }
+
+  // Silme işlemi
+  const handleConfirmDelete = async () => {
+    if (!deletingTransaction || !companyId || isSubmitting) return
+
+    setIsSubmitting(true)
+
+    try {
+      if (deletingTransactionType === 'cash') {
+        // KASA İŞLEMİ SİLME
+        // Eğer bu işlem bir cari işlemle bağlantılıysa, cari işlemi güncelle
+        if (deletingTransaction.related_account_transaction_id) {
+          const { data: accountTxn } = await supabase
+            .from('current_account_transactions')
+            .select('*')
+            .eq('id', deletingTransaction.related_account_transaction_id)
+            .single()
+
+          if (accountTxn) {
+            const newPaidAmount = parseFloat(accountTxn.paid_amount || 0) - parseFloat(deletingTransaction.amount)
+            const totalAmount = parseFloat(accountTxn.amount)
+            const newStatus = newPaidAmount === 0 ? 'unpaid' : (newPaidAmount >= totalAmount ? 'paid' : 'partial')
+
+            await supabase
+              .from('current_account_transactions')
+              .update({
+                paid_amount: Math.max(0, newPaidAmount),
+                status: newStatus
+              })
+              .eq('id', deletingTransaction.related_account_transaction_id)
+          }
+        }
+
+        // Kasa işlemini sil
+        const { error } = await supabase
+          .from('cash_transactions')
+          .delete()
+          .eq('id', deletingTransaction.id)
+          .eq('company_id', companyId)
+
+        if (error) throw error
+
+        alert('İşlem başarıyla silindi!')
+        setShowDeleteModal(false)
+        setDeletingTransaction(null)
+        setDeletingTransactionType(null)
+        loadData()
+
+      } else if (deletingTransactionType === 'account') {
+        // CARİ İŞLEMİ SİLME
+        const paidAmount = parseFloat(deletingTransaction.paid_amount || 0)
+
+        // Eğer ödeme yapılmışsa, silme işlemini engelle
+        if (paidAmount > 0) {
+          setIsSubmitting(false)
+          setShowDeleteModal(false)
+          return alert('Ödeme yapılmış işlemler silinemez! Önce ilgili ödemeleri silmelisiniz.')
+        }
+
+        // Önce bu işleme bağlı kasa işlemlerini kontrol et
+        const { data: relatedCashTxns } = await supabase
+          .from('cash_transactions')
+          .select('*')
+          .eq('related_account_transaction_id', deletingTransaction.id)
+          .eq('company_id', companyId)
+
+        if (relatedCashTxns && relatedCashTxns.length > 0) {
+          setIsSubmitting(false)
+          setShowDeleteModal(false)
+          return alert('Bu işleme bağlı ödeme kayıtları var! Önce ödemeleri silmelisiniz.')
+        }
+
+        // Cari işlemi sil
+        const { error } = await supabase
+          .from('current_account_transactions')
+          .delete()
+          .eq('id', deletingTransaction.id)
+          .eq('company_id', companyId)
+
+        if (error) throw error
+
+        alert('İşlem başarıyla silindi!')
+        setShowDeleteModal(false)
+        setDeletingTransaction(null)
+        setDeletingTransactionType(null)
+        loadData()
+      }
+    } catch (error: any) {
+      console.error('Delete error:', error)
+      alert('İşlem silinirken hata oluştu: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -943,11 +1193,27 @@ export default function AccountingPageV2() {
                           <div className="font-medium text-gray-900">
                             {customer?.customer_name || 'Müşteri'}
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            rec.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                          }`}>
-                            {rec.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              rec.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                            }`}>
+                              {rec.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
+                            </span>
+                            <button
+                              onClick={() => handleEditAccountTransaction(rec)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Düzenle"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAccountTransaction(rec)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
@@ -984,11 +1250,27 @@ export default function AccountingPageV2() {
                           <div className="font-medium text-gray-900">
                             {supplier?.company_name || 'Tedarikçi'}
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            pay.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {pay.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              pay.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {pay.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
+                            </span>
+                            <button
+                              onClick={() => handleEditAccountTransaction(pay)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Düzenle"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAccountTransaction(pay)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
@@ -1097,6 +1379,7 @@ export default function AccountingPageV2() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referans</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Belge</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1189,12 +1472,30 @@ export default function AccountingPageV2() {
                             <span className="text-xs text-gray-400">-</span>
                           )}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleEditCashTransaction(transaction)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Düzenle"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCashTransaction(transaction)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}
                   {filteredCashTransactions.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                         {allCashTransactions.length === 0
                           ? 'Henüz işlem bulunmuyor'
                           : 'Filtrelere uyan işlem bulunamadı. Filtreleri değiştirmeyi deneyin.'
@@ -2157,6 +2458,236 @@ export default function AccountingPageV2() {
             </div>
           </div>
         )}
+
+        {/* Düzenleme Modalı */}
+        {showEditModal && editingTransaction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  İşlemi Düzenle
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {editingTransactionType === 'cash' ? 'Kasa İşlemi' : 'Cari Hesap İşlemi'}
+                </p>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {/* Müşteri/Tedarikçi Seçimi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {editingTransaction.customer_id ? 'Müşteri' : 'Tedarikçi'} *
+                  </label>
+                  {editingTransaction.customer_id ? (
+                    <select
+                      value={editForm.customer_id}
+                      onChange={(e) => setEditForm({...editForm, customer_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Seçiniz...</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.customer_name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={editForm.supplier_id}
+                      onChange={(e) => setEditForm({...editForm, supplier_id: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Seçiniz...</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>{s.company_name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Tutar ve Para Birimi */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tutar *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.amount}
+                      onChange={(e) => setEditForm({...editForm, amount: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Para Birimi *</label>
+                    <select
+                      value={editForm.currency}
+                      onChange={(e) => setEditForm({...editForm, currency: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="TRY">TRY - Türk Lirası</option>
+                      <option value="USD">USD - Amerikan Doları</option>
+                      <option value="EUR">EUR - Euro</option>
+                      <option value="GBP">GBP - İngiliz Sterlini</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tarih(ler) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">İşlem Tarihi *</label>
+                    <input
+                      type="date"
+                      value={editForm.transaction_date}
+                      onChange={(e) => setEditForm({...editForm, transaction_date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    />
+                  </div>
+                  {editingTransactionType === 'account' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi *</label>
+                      <input
+                        type="date"
+                        value={editForm.due_date}
+                        onChange={(e) => setEditForm({...editForm, due_date: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      />
+                    </div>
+                  )}
+                  {editingTransactionType === 'cash' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Yöntemi *</label>
+                      <select
+                        value={editForm.payment_method}
+                        onChange={(e) => setEditForm({...editForm, payment_method: e.target.value as any})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      >
+                        <option value="cash">Nakit</option>
+                        <option value="transfer">Havale</option>
+                        <option value="check">Çek</option>
+                        <option value="other">Diğer</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Açıklama */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    rows={3}
+                    placeholder="İşlem açıklaması..."
+                  />
+                </div>
+
+                {/* Uyarı Mesajları */}
+                {editingTransactionType === 'account' && parseFloat(editingTransaction.paid_amount || 0) > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      Bu işlem için {formatCurrency(parseFloat(editingTransaction.paid_amount), editingTransaction.currency)} ödeme yapılmış.
+                      Yeni tutar ödenen tutardan küçük olamaz.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setEditingTransaction(null)
+                    setEditingTransactionType(null)
+                  }}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                  disabled={isSubmitting}
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSubmitting ? 'Kaydediliyor...' : 'Güncelle'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Silme Onay Modalı */}
+        {showDeleteModal && deletingTransaction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  İşlemi Sil
+                </h2>
+              </div>
+
+              <div className="p-6">
+                <p className="text-gray-700 mb-4">
+                  Bu işlemi silmek istediğinizden emin misiniz?
+                </p>
+
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-red-800 font-medium mb-2">
+                    Silme işlemi geri alınamaz!
+                  </p>
+                  <div className="text-sm text-red-700 space-y-1">
+                    <p><strong>Tutar:</strong> {formatCurrency(parseFloat(deletingTransaction.amount), deletingTransaction.currency)}</p>
+                    <p><strong>Tarih:</strong> {formatDate(deletingTransaction.transaction_date)}</p>
+                    {deletingTransaction.description && (
+                      <p><strong>Açıklama:</strong> {deletingTransaction.description}</p>
+                    )}
+                  </div>
+                </div>
+
+                {deletingTransactionType === 'cash' && deletingTransaction.related_account_transaction_id && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-yellow-800">
+                      Bu ödeme kaydı bir cari işlemle bağlantılı. Silme işlemi cari işlemin ödeme durumunu da güncelleyecektir.
+                    </p>
+                  </div>
+                )}
+
+                {deletingTransactionType === 'account' && parseFloat(deletingTransaction.paid_amount || 0) > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-yellow-800 font-medium">
+                      Bu işlem için ödeme yapılmış! İşlem silinemez. Önce ilgili ödemeleri silmelisiniz.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setDeletingTransaction(null)
+                    setDeletingTransactionType(null)
+                  }}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg"
+                  disabled={isSubmitting}
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {isSubmitting ? 'Siliniyor...' : 'Sil'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </PermissionGuard>
   )

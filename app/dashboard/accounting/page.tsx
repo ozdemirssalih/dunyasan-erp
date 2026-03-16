@@ -181,81 +181,7 @@ export default function AccountingPageV2() {
       })
       setCashBalances(cashByCurrency)
 
-      // Tüm alacak kayıtlarını yükle
-      const { data: receivables, error: recError } = await supabase
-        .from('current_account_transactions')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('transaction_type', 'receivable')
-        .order('transaction_date', { ascending: false })
-
-      if (recError) console.error('Receivables error:', recError)
-
-      setUnpaidReceivables(receivables || [])
-
-      // Alacak toplamını hesapla (Tüm receivable işlemler)
-      const receivableByCurrency: Record<string, number> = {}
-      receivables?.forEach(r => {
-        const currency = r.currency || 'TRY'
-        const amount = parseFloat(r.amount)
-        receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + amount
-      })
-
-      // Her müşteri için tahsilatları çıkar
-      const receivablePaymentsByCurrency: Record<string, number> = {}
-      cashTxns?.forEach(t => {
-        if (t.transaction_type === 'income' && t.customer_id) {
-          const currency = t.currency || 'TRY'
-          const amount = parseFloat(t.amount)
-          receivablePaymentsByCurrency[currency] = (receivablePaymentsByCurrency[currency] || 0) + amount
-        }
-      })
-
-      // Net alacak = Toplam Alacak - Toplam Tahsilat
-      Object.keys(receivablePaymentsByCurrency).forEach(currency => {
-        receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) - receivablePaymentsByCurrency[currency]
-      })
-
-      setTotalReceivables(receivableByCurrency)
-
-      // Tüm borç kayıtlarını yükle
-      const { data: payables, error: payError } = await supabase
-        .from('current_account_transactions')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('transaction_type', 'payable')
-        .order('transaction_date', { ascending: false })
-
-      if (payError) console.error('Payables error:', payError)
-
-      setUnpaidPayables(payables || [])
-
-      // Borç toplamını hesapla (Tüm payable işlemler)
-      const payableByCurrency: Record<string, number> = {}
-      payables?.forEach(p => {
-        const currency = p.currency || 'TRY'
-        const amount = parseFloat(p.amount)
-        payableByCurrency[currency] = (payableByCurrency[currency] || 0) + amount
-      })
-
-      // Her tedarikçi için ödemeleri çıkar
-      const payablePaymentsByCurrency: Record<string, number> = {}
-      cashTxns?.forEach(t => {
-        if (t.transaction_type === 'expense' && t.supplier_id) {
-          const currency = t.currency || 'TRY'
-          const amount = parseFloat(t.amount)
-          payablePaymentsByCurrency[currency] = (payablePaymentsByCurrency[currency] || 0) + amount
-        }
-      })
-
-      // Net borç = Toplam Borç - Toplam Ödeme
-      Object.keys(payablePaymentsByCurrency).forEach(currency => {
-        payableByCurrency[currency] = (payableByCurrency[currency] || 0) - payablePaymentsByCurrency[currency]
-      })
-
-      setTotalPayables(payableByCurrency)
-
-      // Müşterileri ve tedarikçileri yükle
+      // Müşterileri ve tedarikçileri önce yükle
       const { data: customersData } = await supabase
         .from('customer_companies')
         .select('id, customer_name')
@@ -271,6 +197,146 @@ export default function AccountingPageV2() {
 
       setCustomers(customersData || [])
       setSuppliers(suppliersData || [])
+
+      // Tüm alacak kayıtlarını yükle
+      const { data: receivables, error: recError } = await supabase
+        .from('current_account_transactions')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('transaction_type', 'receivable')
+        .order('transaction_date', { ascending: false })
+
+      if (recError) console.error('Receivables error:', recError)
+
+      // MÜŞTERİ BAZLI BAKIYE HESAPLAMA
+      const customerBalances: any[] = []
+      const receivableByCurrency: Record<string, number> = {}
+
+      customersData?.forEach(customer => {
+        // Bu müşterinin alacak kayıtları
+        const customerReceivables = receivables?.filter(r => r.customer_id === customer.id) || []
+
+        // Bu müşterinin tahsilat kayıtları
+        const customerPayments = cashTxns?.filter(t =>
+          t.transaction_type === 'income' && t.customer_id === customer.id
+        ) || []
+
+        // Para birimi bazında hesapla
+        const balancesByCurrency: Record<string, { receivable: number, payment: number, remaining: number }> = {}
+
+        customerReceivables.forEach(r => {
+          const currency = r.currency || 'TRY'
+          const amount = parseFloat(r.amount)
+          if (!balancesByCurrency[currency]) {
+            balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
+          }
+          balancesByCurrency[currency].receivable += amount
+        })
+
+        customerPayments.forEach(p => {
+          const currency = p.currency || 'TRY'
+          const amount = parseFloat(p.amount)
+          if (!balancesByCurrency[currency]) {
+            balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
+          }
+          balancesByCurrency[currency].payment += amount
+        })
+
+        // Kalan bakiyeleri hesapla
+        Object.keys(balancesByCurrency).forEach(currency => {
+          balancesByCurrency[currency].remaining =
+            balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
+
+          // Toplam alacaklara ekle
+          if (balancesByCurrency[currency].remaining > 0) {
+            receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
+          }
+        })
+
+        // Eğer bu müşterinin kalan borcu varsa listeye ekle
+        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        if (hasRemaining) {
+          customerBalances.push({
+            customer_id: customer.id,
+            customer_name: customer.customer_name,
+            balancesByCurrency,
+            transaction_date: customerReceivables[0]?.transaction_date
+          })
+        }
+      })
+
+      setUnpaidReceivables(customerBalances)
+      setTotalReceivables(receivableByCurrency)
+
+      // Tüm borç kayıtlarını yükle
+      const { data: payables, error: payError } = await supabase
+        .from('current_account_transactions')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('transaction_type', 'payable')
+        .order('transaction_date', { ascending: false })
+
+      if (payError) console.error('Payables error:', payError)
+
+      // TEDARİKÇİ BAZLI BAKIYE HESAPLAMA
+      const supplierBalances: any[] = []
+      const payableByCurrency: Record<string, number> = {}
+
+      suppliersData?.forEach(supplier => {
+        // Bu tedarikçinin borç kayıtları
+        const supplierPayables = payables?.filter(p => p.supplier_id === supplier.id) || []
+
+        // Bu tedarikçinin ödeme kayıtları
+        const supplierPayments = cashTxns?.filter(t =>
+          t.transaction_type === 'expense' && t.supplier_id === supplier.id
+        ) || []
+
+        // Para birimi bazında hesapla
+        const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
+
+        supplierPayables.forEach(p => {
+          const currency = p.currency || 'TRY'
+          const amount = parseFloat(p.amount)
+          if (!balancesByCurrency[currency]) {
+            balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
+          }
+          balancesByCurrency[currency].payable += amount
+        })
+
+        supplierPayments.forEach(p => {
+          const currency = p.currency || 'TRY'
+          const amount = parseFloat(p.amount)
+          if (!balancesByCurrency[currency]) {
+            balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
+          }
+          balancesByCurrency[currency].payment += amount
+        })
+
+        // Kalan bakiyeleri hesapla
+        Object.keys(balancesByCurrency).forEach(currency => {
+          balancesByCurrency[currency].remaining =
+            balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
+
+          // Toplam borçlara ekle
+          if (balancesByCurrency[currency].remaining > 0) {
+            payableByCurrency[currency] = (payableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
+          }
+        })
+
+        // Eğer bu tedarikçinin kalan borcu varsa listeye ekle
+        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        if (hasRemaining) {
+          supplierBalances.push({
+            supplier_id: supplier.id,
+            supplier_name: supplier.company_name,
+            balancesByCurrency,
+            transaction_date: supplierPayables[0]?.transaction_date
+          })
+        }
+      })
+
+      setUnpaidPayables(supplierBalances)
+      setTotalPayables(payableByCurrency)
 
       // Bu ayki gelir/gider hesapla
       const now = new Date()
@@ -1091,38 +1157,26 @@ export default function AccountingPageV2() {
                 </div>
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidReceivables.slice(0, 10).map((rec) => {
-                    const amount = parseFloat(rec.amount)
-                    const customer = customers.find(c => c.id === rec.customer_id)
                     return (
-                      <div key={rec.id} className="p-4 hover:bg-gray-50">
+                      <div key={rec.customer_id} className="p-4 hover:bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium text-gray-900">
-                            {customer?.customer_name || 'Müşteri'}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleEditAccountTransaction(rec)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="Düzenle"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAccountTransaction(rec)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Sil"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {rec.customer_name}
                           </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
                             <Calendar className="w-4 h-4 inline mr-1" />
-                            {formatDate(rec.transaction_date)}
+                            {rec.transaction_date ? formatDate(rec.transaction_date) : '-'}
                           </div>
-                          <div className="text-lg font-semibold text-green-600">
-                            {formatCurrency(amount, rec.currency || 'TRY')}
+                          <div className="space-y-1 text-right">
+                            {Object.entries(rec.balancesByCurrency).map(([currency, balance]: [string, any]) => (
+                              balance.remaining > 0 && (
+                                <div key={currency} className="text-lg font-semibold text-green-600">
+                                  {formatCurrency(balance.remaining, currency)}
+                                </div>
+                              )
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1143,38 +1197,26 @@ export default function AccountingPageV2() {
                 </div>
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidPayables.slice(0, 10).map((pay) => {
-                    const amount = parseFloat(pay.amount)
-                    const supplier = suppliers.find(s => s.id === pay.supplier_id)
                     return (
-                      <div key={pay.id} className="p-4 hover:bg-gray-50">
+                      <div key={pay.supplier_id} className="p-4 hover:bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium text-gray-900">
-                            {supplier?.company_name || 'Tedarikçi'}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleEditAccountTransaction(pay)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="Düzenle"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAccountTransaction(pay)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Sil"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {pay.supplier_name}
                           </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
                             <Calendar className="w-4 h-4 inline mr-1" />
-                            {formatDate(pay.transaction_date)}
+                            {pay.transaction_date ? formatDate(pay.transaction_date) : '-'}
                           </div>
-                          <div className="text-lg font-semibold text-red-600">
-                            {formatCurrency(amount, pay.currency || 'TRY')}
+                          <div className="space-y-1 text-right">
+                            {Object.entries(pay.balancesByCurrency).map(([currency, balance]: [string, any]) => (
+                              balance.remaining > 0 && (
+                                <div key={currency} className="text-lg font-semibold text-red-600">
+                                  {formatCurrency(balance.remaining, currency)}
+                                </div>
+                              )
+                            ))}
                           </div>
                         </div>
                       </div>

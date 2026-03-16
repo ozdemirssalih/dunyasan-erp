@@ -7,7 +7,7 @@ import PermissionGuard from '@/components/PermissionGuard'
 type SourceFilter = 'all' | 'inventory' | 'warehouse' | 'production' | 'toolroom'
 
 // ── Sabit Konfigürasyonlar ───────────────
-const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül', 'Kızak Yağı', 'Şartlandırıcı Yağ', 'Hidrolik Yağı']
+const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Hırdavat', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül', 'Kızak Yağı', 'Şartlandırıcı Yağ', 'Hidrolik Yağı']
 const TOOL_TYPES = ['Kesici Takım', 'Ölçüm Aleti', 'Kumpas', 'Mikrometre', 'Matkap', 'Freze', 'Parmak Freze', 'Pafta', 'Diğer']
 const LOCATION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 const LOCATION_NUMBERS = Array.from({ length: 20 }, (_, i) => String(i + 1))

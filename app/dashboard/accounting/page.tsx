@@ -14,7 +14,7 @@ export default function AccountingPageV2() {
   const { canCreate } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'checks'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'current-history' | 'checks'>('dashboard')
 
   // Döviz kurları
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
@@ -34,6 +34,7 @@ export default function AccountingPageV2() {
   // Lists
   const [recentCashTransactions, setRecentCashTransactions] = useState<any[]>([])
   const [allCashTransactions, setAllCashTransactions] = useState<any[]>([])
+  const [allCurrentTransactions, setAllCurrentTransactions] = useState<any[]>([])
   const [unpaidReceivables, setUnpaidReceivables] = useState<any[]>([])
   const [unpaidPayables, setUnpaidPayables] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
@@ -80,6 +81,12 @@ export default function AccountingPageV2() {
   const [searchQuery, setSearchQuery] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  // Cari geçmişi filtreleme state'leri
+  const [currentSearchQuery, setCurrentSearchQuery] = useState('')
+  const [currentStartDate, setCurrentStartDate] = useState('')
+  const [currentEndDate, setCurrentEndDate] = useState('')
+  const [currentAccountFilter, setCurrentAccountFilter] = useState<'all' | 'customer' | 'supplier'>('all')
 
   // Form state
   const [formMode, setFormMode] = useState<'account' | 'payment'>('account') // Cari kayıt mı, ödeme mi?
@@ -337,6 +344,14 @@ export default function AccountingPageV2() {
 
       setUnpaidPayables(supplierBalances)
       setTotalPayables(payableByCurrency)
+
+      // Tüm cari işlemleri birleştir (geçmiş için)
+      const allCurrentTxns = [
+        ...(receivables || []),
+        ...(payables || [])
+      ].sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
+
+      setAllCurrentTransactions(allCurrentTxns)
 
       // Bu ayki gelir/gider hesapla
       const now = new Date()
@@ -893,6 +908,41 @@ export default function AccountingPageV2() {
 
   const filteredCashTransactions = getFilteredCashTransactions()
 
+  // Cari geçmişi filtreleme
+  const getFilteredCurrentTransactions = () => {
+    return allCurrentTransactions.filter(transaction => {
+      // Arama filtresi (açıklama veya referans)
+      if (currentSearchQuery) {
+        const query = currentSearchQuery.toLowerCase()
+        const matchesDescription = transaction.description?.toLowerCase().includes(query)
+        const matchesReference = transaction.reference_number?.toLowerCase().includes(query)
+        if (!matchesDescription && !matchesReference) {
+          return false
+        }
+      }
+
+      // Firma filtresi
+      if (currentAccountFilter === 'customer' && !transaction.customer_id) return false
+      if (currentAccountFilter === 'supplier' && !transaction.supplier_id) return false
+
+      // Tarih filtreleri
+      const txDate = new Date(transaction.transaction_date)
+      if (currentStartDate) {
+        const start = new Date(currentStartDate)
+        if (txDate < start) return false
+      }
+      if (currentEndDate) {
+        const end = new Date(currentEndDate)
+        end.setHours(23, 59, 59, 999)
+        if (txDate > end) return false
+      }
+
+      return true
+    })
+  }
+
+  const filteredCurrentTransactions = getFilteredCurrentTransactions()
+
   // Yaklaşan çekleri filtrele (belirtilen tarih aralığında vadesi dolacak çekler)
   const getUpcomingChecks = (checkType: 'incoming' | 'outgoing') => {
     const startDate = new Date(upcomingChecksStartDate)
@@ -976,6 +1026,17 @@ export default function AccountingPageV2() {
             >
               <History className="w-4 h-4" />
               Kasa Geçmişi
+            </button>
+            <button
+              onClick={() => setActiveTab('current-history')}
+              className={`px-4 py-2 font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                activeTab === 'current-history'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Cari Geçmişi
             </button>
             <button
               onClick={() => setActiveTab('checks')}
@@ -1436,6 +1497,225 @@ export default function AccountingPageV2() {
                       <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                         {allCashTransactions.length === 0
                           ? 'Henüz işlem bulunmuyor'
+                          : 'Filtrelere uyan işlem bulunamadı. Filtreleri değiştirmeyi deneyin.'
+                        }
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : activeTab === 'current-history' ? (
+          // Cari Geçmişi
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-900">Cari İşlem Geçmişi</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {filteredCurrentTransactions.length} işlem gösteriliyor
+                {filteredCurrentTransactions.length !== allCurrentTransactions.length && (
+                  <span className="text-gray-500"> (Toplam {allCurrentTransactions.length})</span>
+                )}
+              </p>
+            </div>
+
+            {/* Filtreleme Alanları */}
+            <div className="p-6 bg-gray-50 border-b border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {/* Arama */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Arama
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Açıklama veya referans ara..."
+                    value={currentSearchQuery}
+                    onChange={(e) => setCurrentSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Firma Tipi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Firma Tipi
+                  </label>
+                  <select
+                    value={currentAccountFilter}
+                    onChange={(e) => setCurrentAccountFilter(e.target.value as any)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">Tümü</option>
+                    <option value="customer">Müşteriler</option>
+                    <option value="supplier">Tedarikçiler</option>
+                  </select>
+                </div>
+
+                {/* Başlangıç Tarihi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Başlangıç
+                  </label>
+                  <input
+                    type="date"
+                    value={currentStartDate}
+                    onChange={(e) => setCurrentStartDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Bitiş Tarihi */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Bitiş
+                  </label>
+                  <input
+                    type="date"
+                    value={currentEndDate}
+                    onChange={(e) => setCurrentEndDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Temizle Butonu */}
+              {(currentSearchQuery || currentStartDate || currentEndDate || currentAccountFilter !== 'all') && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setCurrentSearchQuery('')
+                      setCurrentStartDate('')
+                      setCurrentEndDate('')
+                      setCurrentAccountFilter('all')
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Filtreleri Temizle
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Firma</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tip</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Açıklama</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referans</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tutar</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Belge</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredCurrentTransactions.map((transaction) => {
+                    // Firma bilgisini bul
+                    let companyName = '-'
+                    let companyType = ''
+
+                    if (transaction.customer_id) {
+                      const customer = customers.find(c => c.id === transaction.customer_id)
+                      if (customer) {
+                        companyName = customer.customer_name
+                        companyType = 'Müşteri'
+                      }
+                    } else if (transaction.supplier_id) {
+                      const supplier = suppliers.find(s => s.id === transaction.supplier_id)
+                      if (supplier) {
+                        companyName = supplier.company_name
+                        companyType = 'Tedarikçi'
+                      }
+                    }
+
+                    return (
+                      <tr key={transaction.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div>
+                            {formatDate(transaction.transaction_date)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(transaction.transaction_date).toLocaleTimeString('tr-TR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {companyName !== '-' ? (
+                            <div>
+                              <div className="font-medium text-gray-900">{companyName}</div>
+                              <div className="text-xs text-gray-500">{companyType}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            transaction.transaction_type === 'receivable'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {transaction.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                          <div className="line-clamp-2" title={transaction.description}>
+                            {transaction.description || '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {transaction.reference_number || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-right">
+                          <span className={transaction.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}>
+                            {formatCurrency(parseFloat(transaction.amount), transaction.currency || 'TRY')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {transaction.document_url ? (
+                            <button
+                              onClick={() => handleDownloadDocument(transaction.document_url)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
+                              title="Belgeyi İndir"
+                            >
+                              <FileDown className="w-3 h-3" />
+                              PDF
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleEditAccountTransaction(transaction)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Düzenle"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAccountTransaction(transaction)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filteredCurrentTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                        {allCurrentTransactions.length === 0
+                          ? 'Henüz cari işlem bulunmuyor'
                           : 'Filtrelere uyan işlem bulunamadı. Filtreleri değiştirmeyi deneyin.'
                         }
                       </td>

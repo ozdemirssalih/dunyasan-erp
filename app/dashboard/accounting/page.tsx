@@ -89,12 +89,10 @@ export default function AccountingPageV2() {
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0],
-    due_date: '',
     payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
-    supplier_id: '',
-    related_account_transaction_id: '' // Ödeme yaparken hangi alacak/borcu kapatıyoruz
+    supplier_id: ''
   })
 
   // Edit form state
@@ -102,7 +100,6 @@ export default function AccountingPageV2() {
     amount: '',
     description: '',
     transaction_date: '',
-    due_date: '',
     payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
@@ -184,48 +181,78 @@ export default function AccountingPageV2() {
       })
       setCashBalances(cashByCurrency)
 
-      // Ödenmeyi bekleyen alacakları yükle
+      // Tüm alacak kayıtlarını yükle
       const { data: receivables, error: recError } = await supabase
         .from('current_account_transactions')
         .select('*')
         .eq('company_id', companyId)
         .eq('transaction_type', 'receivable')
-        .in('status', ['unpaid', 'partial'])
-        .order('due_date')
+        .order('transaction_date', { ascending: false })
 
       if (recError) console.error('Receivables error:', recError)
 
       setUnpaidReceivables(receivables || [])
 
-      // Alacak toplamını hesapla
+      // Alacak toplamını hesapla (Tüm receivable işlemler)
       const receivableByCurrency: Record<string, number> = {}
       receivables?.forEach(r => {
         const currency = r.currency || 'TRY'
-        const remaining = parseFloat(r.amount) - parseFloat(r.paid_amount || 0)
-        receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + remaining
+        const amount = parseFloat(r.amount)
+        receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + amount
       })
+
+      // Her müşteri için tahsilatları çıkar
+      const receivablePaymentsByCurrency: Record<string, number> = {}
+      cashTxns?.forEach(t => {
+        if (t.transaction_type === 'income' && t.customer_id) {
+          const currency = t.currency || 'TRY'
+          const amount = parseFloat(t.amount)
+          receivablePaymentsByCurrency[currency] = (receivablePaymentsByCurrency[currency] || 0) + amount
+        }
+      })
+
+      // Net alacak = Toplam Alacak - Toplam Tahsilat
+      Object.keys(receivablePaymentsByCurrency).forEach(currency => {
+        receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) - receivablePaymentsByCurrency[currency]
+      })
+
       setTotalReceivables(receivableByCurrency)
 
-      // Ödenmeyi bekleyen borçları yükle
+      // Tüm borç kayıtlarını yükle
       const { data: payables, error: payError } = await supabase
         .from('current_account_transactions')
         .select('*')
         .eq('company_id', companyId)
         .eq('transaction_type', 'payable')
-        .in('status', ['unpaid', 'partial'])
-        .order('due_date')
+        .order('transaction_date', { ascending: false })
 
       if (payError) console.error('Payables error:', payError)
 
       setUnpaidPayables(payables || [])
 
-      // Borç toplamını hesapla
+      // Borç toplamını hesapla (Tüm payable işlemler)
       const payableByCurrency: Record<string, number> = {}
       payables?.forEach(p => {
         const currency = p.currency || 'TRY'
-        const remaining = parseFloat(p.amount) - parseFloat(p.paid_amount || 0)
-        payableByCurrency[currency] = (payableByCurrency[currency] || 0) + remaining
+        const amount = parseFloat(p.amount)
+        payableByCurrency[currency] = (payableByCurrency[currency] || 0) + amount
       })
+
+      // Her tedarikçi için ödemeleri çıkar
+      const payablePaymentsByCurrency: Record<string, number> = {}
+      cashTxns?.forEach(t => {
+        if (t.transaction_type === 'expense' && t.supplier_id) {
+          const currency = t.currency || 'TRY'
+          const amount = parseFloat(t.amount)
+          payablePaymentsByCurrency[currency] = (payablePaymentsByCurrency[currency] || 0) + amount
+        }
+      })
+
+      // Net borç = Toplam Borç - Toplam Ödeme
+      Object.keys(payablePaymentsByCurrency).forEach(currency => {
+        payableByCurrency[currency] = (payableByCurrency[currency] || 0) - payablePaymentsByCurrency[currency]
+      })
+
       setTotalPayables(payableByCurrency)
 
       // Müşterileri ve tedarikçileri yükle
@@ -346,9 +373,6 @@ export default function AccountingPageV2() {
         if (!transactionForm.customer_id && !transactionForm.supplier_id) {
           return alert('Müşteri veya tedarikçi seçimi zorunludur!')
         }
-        if (!transactionForm.due_date) {
-          return alert('Vade tarihi zorunludur!')
-        }
 
         const isReceivable = !!transactionForm.customer_id
 
@@ -367,7 +391,7 @@ export default function AccountingPageV2() {
           currency: transactionForm.currency,
           status: 'unpaid',
           transaction_date: transactionDate.toISOString(),
-          due_date: transactionForm.due_date,
+          due_date: null,
           description: transactionForm.description,
           reference_number: `${isReceivable ? 'RCV' : 'PAY'}-${Date.now()}`,
           document_url: documentUrl,
@@ -377,22 +401,6 @@ export default function AccountingPageV2() {
       } else if (formMode === 'payment') {
         // ÖDEME KAYDI (Kasa işlemi)
         const amount = parseFloat(transactionForm.amount)
-
-        // Validasyon: Eğer bir işlem seçildiyse, tutar kalan tutardan fazla olamaz
-        if (transactionForm.related_account_transaction_id) {
-          const { data: accountTxn } = await supabase
-            .from('current_account_transactions')
-            .select('*')
-            .eq('id', transactionForm.related_account_transaction_id)
-            .single()
-
-          if (accountTxn) {
-            const remaining = parseFloat(accountTxn.amount) - parseFloat(accountTxn.paid_amount || 0)
-            if (amount > remaining) {
-              return alert(`Ödeme tutarı kalan tutardan (${formatCurrency(remaining, accountTxn.currency)}) fazla olamaz!`)
-            }
-          }
-        }
 
         // Validasyon: Müşteri veya tedarikçi seçilmeli
         if (!transactionForm.customer_id && !transactionForm.supplier_id) {
@@ -424,34 +432,8 @@ export default function AccountingPageV2() {
         if (transactionForm.supplier_id) {
           cashData.supplier_id = transactionForm.supplier_id
         }
-        if (transactionForm.related_account_transaction_id) {
-          cashData.related_account_transaction_id = transactionForm.related_account_transaction_id
-        }
 
         await supabase.from('cash_transactions').insert(cashData)
-
-        // Eğer bir alacak/borcu kapatıyorsa, cari kaydı güncelle
-        if (transactionForm.related_account_transaction_id) {
-          const { data: accountTxn } = await supabase
-            .from('current_account_transactions')
-            .select('*')
-            .eq('id', transactionForm.related_account_transaction_id)
-            .single()
-
-          if (accountTxn) {
-            const newPaidAmount = parseFloat(accountTxn.paid_amount || 0) + amount
-            const totalAmount = parseFloat(accountTxn.amount)
-            const newStatus = newPaidAmount >= totalAmount ? 'paid' : 'partial'
-
-            await supabase
-              .from('current_account_transactions')
-              .update({
-                paid_amount: newPaidAmount,
-                status: newStatus
-              })
-              .eq('id', transactionForm.related_account_transaction_id)
-          }
-        }
       }
 
       alert('İşlem başarıyla kaydedildi!')
@@ -472,12 +454,10 @@ export default function AccountingPageV2() {
       amount: '',
       description: '',
       transaction_date: new Date().toISOString().split('T')[0],
-      due_date: '',
       payment_method: 'cash',
       currency: 'TRY',
       customer_id: '',
-      supplier_id: '',
-      related_account_transaction_id: ''
+      supplier_id: ''
     })
   }
 
@@ -645,7 +625,6 @@ export default function AccountingPageV2() {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      due_date: '',
       payment_method: transaction.payment_method || 'cash',
       currency: transaction.currency || 'TRY',
       customer_id: transaction.customer_id || '',
@@ -662,7 +641,6 @@ export default function AccountingPageV2() {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      due_date: transaction.due_date ? new Date(transaction.due_date).toISOString().split('T')[0] : '',
       payment_method: 'cash',
       currency: transaction.currency || 'TRY',
       customer_id: transaction.customer_id || '',
@@ -715,19 +693,6 @@ export default function AccountingPageV2() {
 
       } else if (editingTransactionType === 'account') {
         // CARİ İŞLEMİ DÜZENLEME
-        if (!editForm.due_date) {
-          setIsSubmitting(false)
-          return alert('Vade tarihi zorunludur!')
-        }
-
-        const oldPaidAmount = parseFloat(editingTransaction.paid_amount || 0)
-
-        // Eğer tutar değişiyorsa ve ödeme yapılmışsa kontrol et
-        if (newAmount < oldPaidAmount) {
-          setIsSubmitting(false)
-          return alert(`Yeni tutar ödenen tutardan (${formatCurrency(oldPaidAmount, oldCurrency)}) küçük olamaz!`)
-        }
-
         // Güncellemeyi yap
         const { error } = await supabase
           .from('current_account_transactions')
@@ -735,12 +700,9 @@ export default function AccountingPageV2() {
             amount: newAmount,
             description: editForm.description,
             transaction_date: new Date(editForm.transaction_date).toISOString(),
-            due_date: editForm.due_date,
             currency: newCurrency,
             customer_id: editForm.customer_id || null,
-            supplier_id: editForm.supplier_id || null,
-            // Status'u yeniden hesapla
-            status: oldPaidAmount === 0 ? 'unpaid' : (oldPaidAmount >= newAmount ? 'paid' : 'partial')
+            supplier_id: editForm.supplier_id || null
           })
           .eq('id', editingTransaction.id)
           .eq('company_id', companyId)
@@ -783,29 +745,6 @@ export default function AccountingPageV2() {
     try {
       if (deletingTransactionType === 'cash') {
         // KASA İŞLEMİ SİLME
-        // Eğer bu işlem bir cari işlemle bağlantılıysa, cari işlemi güncelle
-        if (deletingTransaction.related_account_transaction_id) {
-          const { data: accountTxn } = await supabase
-            .from('current_account_transactions')
-            .select('*')
-            .eq('id', deletingTransaction.related_account_transaction_id)
-            .single()
-
-          if (accountTxn) {
-            const newPaidAmount = parseFloat(accountTxn.paid_amount || 0) - parseFloat(deletingTransaction.amount)
-            const totalAmount = parseFloat(accountTxn.amount)
-            const newStatus = newPaidAmount === 0 ? 'unpaid' : (newPaidAmount >= totalAmount ? 'paid' : 'partial')
-
-            await supabase
-              .from('current_account_transactions')
-              .update({
-                paid_amount: Math.max(0, newPaidAmount),
-                status: newStatus
-              })
-              .eq('id', deletingTransaction.related_account_transaction_id)
-          }
-        }
-
         // Kasa işlemini sil
         const { error } = await supabase
           .from('cash_transactions')
@@ -823,28 +762,6 @@ export default function AccountingPageV2() {
 
       } else if (deletingTransactionType === 'account') {
         // CARİ İŞLEMİ SİLME
-        const paidAmount = parseFloat(deletingTransaction.paid_amount || 0)
-
-        // Eğer ödeme yapılmışsa, silme işlemini engelle
-        if (paidAmount > 0) {
-          setIsSubmitting(false)
-          setShowDeleteModal(false)
-          return alert('Ödeme yapılmış işlemler silinemez! Önce ilgili ödemeleri silmelisiniz.')
-        }
-
-        // Önce bu işleme bağlı kasa işlemlerini kontrol et
-        const { data: relatedCashTxns } = await supabase
-          .from('cash_transactions')
-          .select('*')
-          .eq('related_account_transaction_id', deletingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (relatedCashTxns && relatedCashTxns.length > 0) {
-          setIsSubmitting(false)
-          setShowDeleteModal(false)
-          return alert('Bu işleme bağlı ödeme kayıtları var! Önce ödemeleri silmelisiniz.')
-        }
-
         // Cari işlemi sil
         const { error } = await supabase
           .from('current_account_transactions')
@@ -877,17 +794,6 @@ export default function AccountingPageV2() {
         </div>
       </div>
     )
-  }
-
-  // Ödeme formunda gösterilecek açık alacak/borçlar
-  const getUnpaidTransactions = () => {
-    if (transactionForm.customer_id) {
-      return unpaidReceivables.filter(r => r.customer_id === transactionForm.customer_id)
-    }
-    if (transactionForm.supplier_id) {
-      return unpaidPayables.filter(p => p.supplier_id === transactionForm.supplier_id)
-    }
-    return []
   }
 
   // Kasa geçmişi filtreleme
@@ -1178,14 +1084,14 @@ export default function AccountingPageV2() {
 
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Vadesi Gelecek Alacaklar */}
+              {/* Bekleyen Alacaklar */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900">Vadesi Gelecek Alacaklar</h3>
+                  <h3 className="text-xl font-bold text-gray-900">Bekleyen Alacaklar</h3>
                 </div>
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidReceivables.slice(0, 10).map((rec) => {
-                    const remaining = parseFloat(rec.amount) - parseFloat(rec.paid_amount || 0)
+                    const amount = parseFloat(rec.amount)
                     const customer = customers.find(c => c.id === rec.customer_id)
                     return (
                       <div key={rec.id} className="p-4 hover:bg-gray-50">
@@ -1194,11 +1100,6 @@ export default function AccountingPageV2() {
                             {customer?.customer_name || 'Müşteri'}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              rec.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                            }`}>
-                              {rec.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
-                            </span>
                             <button
                               onClick={() => handleEditAccountTransaction(rec)}
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -1218,10 +1119,10 @@ export default function AccountingPageV2() {
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
                             <Calendar className="w-4 h-4 inline mr-1" />
-                            Vade: {formatDate(rec.due_date)}
+                            {formatDate(rec.transaction_date)}
                           </div>
                           <div className="text-lg font-semibold text-green-600">
-                            {formatCurrency(remaining, rec.currency || 'TRY')}
+                            {formatCurrency(amount, rec.currency || 'TRY')}
                           </div>
                         </div>
                       </div>
@@ -1235,14 +1136,14 @@ export default function AccountingPageV2() {
                 </div>
               </div>
 
-              {/* Vadesi Gelecek Borçlar */}
+              {/* Bekleyen Borçlar */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900">Vadesi Gelecek Borçlar</h3>
+                  <h3 className="text-xl font-bold text-gray-900">Bekleyen Borçlar</h3>
                 </div>
                 <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
                   {unpaidPayables.slice(0, 10).map((pay) => {
-                    const remaining = parseFloat(pay.amount) - parseFloat(pay.paid_amount || 0)
+                    const amount = parseFloat(pay.amount)
                     const supplier = suppliers.find(s => s.id === pay.supplier_id)
                     return (
                       <div key={pay.id} className="p-4 hover:bg-gray-50">
@@ -1251,11 +1152,6 @@ export default function AccountingPageV2() {
                             {supplier?.company_name || 'Tedarikçi'}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              pay.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {pay.status === 'partial' ? 'Kısmi Ödendi' : 'Ödenmedi'}
-                            </span>
                             <button
                               onClick={() => handleEditAccountTransaction(pay)}
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -1275,10 +1171,10 @@ export default function AccountingPageV2() {
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">
                             <Calendar className="w-4 h-4 inline mr-1" />
-                            Vade: {formatDate(pay.due_date)}
+                            {formatDate(pay.transaction_date)}
                           </div>
                           <div className="text-lg font-semibold text-red-600">
-                            {formatCurrency(remaining, pay.currency || 'TRY')}
+                            {formatCurrency(amount, pay.currency || 'TRY')}
                           </div>
                         </div>
                       </div>
@@ -1920,7 +1816,7 @@ export default function AccountingPageV2() {
                     <button
                       onClick={() => {
                         setFormMode('account')
-                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: '', related_account_transaction_id: ''})
+                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: ''})
                       }}
                       className={`px-4 py-2 rounded-lg font-medium border ${
                         formMode === 'account'
@@ -1933,7 +1829,7 @@ export default function AccountingPageV2() {
                     <button
                       onClick={() => {
                         setFormMode('payment')
-                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: '', related_account_transaction_id: '', due_date: ''})
+                        setTransactionForm({...transactionForm, customer_id: '', supplier_id: ''})
                       }}
                       className={`px-4 py-2 rounded-lg font-medium border ${
                         formMode === 'payment'
@@ -2010,25 +1906,14 @@ export default function AccountingPageV2() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
-                        <input
-                          type="date"
-                          value={transactionForm.transaction_date}
-                          onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Vade Günü *</label>
-                        <input
-                          type="date"
-                          value={transactionForm.due_date}
-                          onChange={(e) => setTransactionForm({...transactionForm, due_date: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
+                      <input
+                        type="date"
+                        value={transactionForm.transaction_date}
+                        onChange={(e) => setTransactionForm({...transactionForm, transaction_date: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      />
                     </div>
                   </>
                 )}
@@ -2041,7 +1926,7 @@ export default function AccountingPageV2() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri (Tahsilat)</label>
                         <select
                           value={transactionForm.customer_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: '', related_account_transaction_id: ''})}
+                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                         >
                           <option value="">Seçiniz...</option>
@@ -2056,7 +1941,7 @@ export default function AccountingPageV2() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi (Ödeme)</label>
                         <select
                           value={transactionForm.supplier_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: '', related_account_transaction_id: ''})}
+                          onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: ''})}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                         >
                           <option value="">Seçiniz...</option>
@@ -2068,55 +1953,6 @@ export default function AccountingPageV2() {
                         </select>
                       </div>
                     </div>
-
-                    {/* Açık Alacak/Borç Seçimi */}
-                    {(transactionForm.customer_id || transactionForm.supplier_id) && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <label className="block text-sm font-bold text-blue-900 mb-3">
-                          💡 Hangi {transactionForm.customer_id ? 'Alacağı' : 'Borcu'} Kapatıyorsunuz?
-                        </label>
-                        {getUnpaidTransactions().length > 0 ? (
-                          <>
-                            <select
-                              value={transactionForm.related_account_transaction_id}
-                              onChange={(e) => {
-                                const selectedTxn = getUnpaidTransactions().find(t => t.id === e.target.value)
-                                if (selectedTxn) {
-                                  const remaining = parseFloat(selectedTxn.amount) - parseFloat(selectedTxn.paid_amount || 0)
-                                  setTransactionForm({
-                                    ...transactionForm,
-                                    related_account_transaction_id: e.target.value,
-                                    amount: remaining.toString(),
-                                    currency: selectedTxn.currency || 'TRY'
-                                  })
-                                } else {
-                                  setTransactionForm({...transactionForm, related_account_transaction_id: e.target.value})
-                                }
-                              }}
-                              className="w-full px-4 py-2 border border-blue-300 rounded-lg text-gray-900 bg-white"
-                            >
-                              <option value="">Genel Ödeme (Belirli bir işleme bağlanmaz)</option>
-                              {getUnpaidTransactions().map(txn => {
-                                const remaining = parseFloat(txn.amount) - parseFloat(txn.paid_amount || 0)
-                                const statusLabel = txn.status === 'partial' ? '⚠️ Kısmi Ödenmiş' : '🔴 Ödenmedi'
-                                return (
-                                  <option key={txn.id} value={txn.id}>
-                                    {statusLabel} | Vade: {formatDate(txn.due_date)} | Kalan: {formatCurrency(remaining, txn.currency)} | Ref: {txn.reference_number || '-'} | {txn.description || 'Açıklama yok'}
-                                  </option>
-                                )
-                              })}
-                            </select>
-                            <p className="text-xs text-blue-700 mt-2">
-                              ℹ️ Seçilen işlemin kalan tutarı otomatik olarak doldurulacaktır. İsterseniz değiştirebilirsiniz.
-                            </p>
-                          </>
-                        ) : (
-                          <div className="bg-white border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                            ✅ Bu {transactionForm.customer_id ? 'müşterinin açık alacağı' : 'tedarikçinin açık borcu'} bulunmuyor. Direkt kasa işlemi olarak kaydedilecektir.
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -2531,7 +2367,7 @@ export default function AccountingPageV2() {
                   </div>
                 </div>
 
-                {/* Tarih(ler) */}
+                {/* Tarih ve Ödeme Yöntemi */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">İşlem Tarihi *</label>
@@ -2542,17 +2378,6 @@ export default function AccountingPageV2() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>
-                  {editingTransactionType === 'account' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi *</label>
-                      <input
-                        type="date"
-                        value={editForm.due_date}
-                        onChange={(e) => setEditForm({...editForm, due_date: e.target.value})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      />
-                    </div>
-                  )}
                   {editingTransactionType === 'cash' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Yöntemi *</label>
@@ -2581,16 +2406,6 @@ export default function AccountingPageV2() {
                     placeholder="İşlem açıklaması..."
                   />
                 </div>
-
-                {/* Uyarı Mesajları */}
-                {editingTransactionType === 'account' && parseFloat(editingTransaction.paid_amount || 0) > 0 && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800">
-                      Bu işlem için {formatCurrency(parseFloat(editingTransaction.paid_amount), editingTransaction.currency)} ödeme yapılmış.
-                      Yeni tutar ödenen tutardan küçük olamaz.
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div className="p-6 border-t border-gray-200 flex gap-3">
@@ -2645,22 +2460,6 @@ export default function AccountingPageV2() {
                     )}
                   </div>
                 </div>
-
-                {deletingTransactionType === 'cash' && deletingTransaction.related_account_transaction_id && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      Bu ödeme kaydı bir cari işlemle bağlantılı. Silme işlemi cari işlemin ödeme durumunu da güncelleyecektir.
-                    </p>
-                  </div>
-                )}
-
-                {deletingTransactionType === 'account' && parseFloat(deletingTransaction.paid_amount || 0) > 0 && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-yellow-800 font-medium">
-                      Bu işlem için ödeme yapılmış! İşlem silinemez. Önce ilgili ödemeleri silmelisiniz.
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div className="p-6 border-t border-gray-200 flex gap-3">

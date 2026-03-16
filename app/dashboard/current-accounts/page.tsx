@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, TrendingUp, TrendingDown, Plus, Eye, DollarSign, Calendar, AlertCircle, FileDown, Edit2, Trash2 } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, Plus, Eye, DollarSign, Calendar, FileDown, Edit2, Trash2 } from 'lucide-react'
 
 interface Account {
   id: string
@@ -14,7 +14,6 @@ interface Account {
   balancesByCurrency: Record<string, { receivable: number, payable: number }> // Para birimi bazında bakiyeler
   lastTransactionDate?: string
   transactionCount: number
-  overdueCount: number // Vadesi geçmiş işlem sayısı
 }
 
 interface AccountTransaction {
@@ -69,7 +68,6 @@ export default function CurrentAccountsPage() {
     amount: '',
     description: '',
     transaction_date: '',
-    due_date: '',
     payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
@@ -181,11 +179,6 @@ export default function CurrentAccountsPage() {
         const totalReceivable = Object.values(balancesByCurrency)
           .reduce((sum, b) => sum + b.receivable, 0)
 
-        // Vadesi geçmiş işlem sayısı
-        const overdueCount = customerTxs.filter(t =>
-          t.status !== 'paid' &&
-          new Date(t.due_date) < today
-        ).length
 
         // Tüm işlemleri birleştir (cari + kasa) ve sırala
         const allCustomerTxs = [
@@ -207,8 +200,7 @@ export default function CurrentAccountsPage() {
           currency: mainCurrency,
           balancesByCurrency,
           lastTransactionDate: allCustomerTxs[0]?.transaction_date,
-          transactionCount: customerTxs.length + customerCashTxs.length, // Hem cari hem kasa işlemleri
-          overdueCount
+          transactionCount: customerTxs.length + customerCashTxs.length // Hem cari hem kasa işlemleri
         })
       })
 
@@ -236,11 +228,6 @@ export default function CurrentAccountsPage() {
         const totalPayable = Object.values(balancesByCurrency)
           .reduce((sum, b) => sum + b.payable, 0)
 
-        // Vadesi geçmiş işlem sayısı
-        const overdueCount = supplierTxs.filter(t =>
-          t.status !== 'paid' &&
-          new Date(t.due_date) < today
-        ).length
 
         // Tüm işlemleri birleştir (cari + kasa) ve sırala
         const allSupplierTxs = [
@@ -262,8 +249,7 @@ export default function CurrentAccountsPage() {
           currency: mainCurrency,
           balancesByCurrency,
           lastTransactionDate: allSupplierTxs[0]?.transaction_date,
-          transactionCount: supplierTxs.length + supplierCashTxs.length, // Hem cari hem kasa işlemleri
-          overdueCount
+          transactionCount: supplierTxs.length + supplierCashTxs.length // Hem cari hem kasa işlemleri
         })
       })
 
@@ -364,10 +350,6 @@ export default function CurrentAccountsPage() {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date()
-  }
-
   const handleDownloadDocument = async (documentPath: string) => {
     try {
       const { data, error } = await supabase.storage
@@ -397,7 +379,6 @@ export default function CurrentAccountsPage() {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      due_date: '',
       payment_method: transaction.payment_method || 'cash',
       currency: transaction.currency || 'TRY',
       customer_id: transaction.customer_id || '',
@@ -414,7 +395,6 @@ export default function CurrentAccountsPage() {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      due_date: transaction.due_date ? new Date(transaction.due_date).toISOString().split('T')[0] : '',
       payment_method: 'cash',
       currency: transaction.currency || 'TRY',
       customer_id: transaction.customer_id || '',
@@ -466,19 +446,6 @@ export default function CurrentAccountsPage() {
 
       } else if (editingTransactionType === 'account') {
         // CARİ İŞLEMİ DÜZENLEME
-        if (!editForm.due_date) {
-          setIsSubmitting(false)
-          return alert('Vade tarihi zorunludur!')
-        }
-
-        const oldPaidAmount = parseFloat(editingTransaction.paid_amount || 0)
-
-        // Eğer tutar değişiyorsa ve ödeme yapılmışsa kontrol et
-        if (newAmount < oldPaidAmount) {
-          setIsSubmitting(false)
-          return alert(`Yeni tutar ödenen tutardan (${formatCurrency(oldPaidAmount, editingTransaction.currency)}) küçük olamaz!`)
-        }
-
         // Güncellemeyi yap
         const { error } = await supabase
           .from('current_account_transactions')
@@ -486,12 +453,9 @@ export default function CurrentAccountsPage() {
             amount: newAmount,
             description: editForm.description,
             transaction_date: new Date(editForm.transaction_date).toISOString(),
-            due_date: editForm.due_date,
             currency: editForm.currency,
             customer_id: editForm.customer_id || null,
-            supplier_id: editForm.supplier_id || null,
-            // Status'u yeniden hesapla
-            status: oldPaidAmount === 0 ? 'unpaid' : (oldPaidAmount >= newAmount ? 'paid' : 'partial')
+            supplier_id: editForm.supplier_id || null
           })
           .eq('id', editingTransaction.id)
           .eq('company_id', companyId)
@@ -584,28 +548,6 @@ export default function CurrentAccountsPage() {
 
       } else if (deletingTransactionType === 'account') {
         // CARİ İŞLEMİ SİLME
-        const paidAmount = parseFloat(deletingTransaction.paid_amount || 0)
-
-        // Eğer ödeme yapılmışsa, silme işlemini engelle
-        if (paidAmount > 0) {
-          setIsSubmitting(false)
-          setShowDeleteModal(false)
-          return alert('❌ Ödeme yapılmış işlemler silinemez! Önce ilgili ödemeleri silmelisiniz.')
-        }
-
-        // Önce bu işleme bağlı kasa işlemlerini kontrol et
-        const { data: relatedCashTxns } = await supabase
-          .from('cash_transactions')
-          .select('*')
-          .eq('related_account_transaction_id', deletingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (relatedCashTxns && relatedCashTxns.length > 0) {
-          setIsSubmitting(false)
-          setShowDeleteModal(false)
-          return alert('❌ Bu işleme bağlı ödeme kayıtları var! Önce ödemeleri silmelisiniz.')
-        }
-
         // Cari işlemi sil
         const { error } = await supabase
           .from('current_account_transactions')
@@ -783,7 +725,6 @@ export default function CurrentAccountsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alacak</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Borç</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlem Sayısı</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vadesi Geçmiş</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Son İşlem</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
               </tr>
@@ -842,16 +783,6 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {account.transactionCount}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {account.overdueCount > 0 ? (
-                      <span className="flex items-center text-xs text-red-700 font-medium">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        {account.overdueCount}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-500">-</span>
-                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {account.lastTransactionDate
@@ -915,12 +846,8 @@ export default function CurrentAccountsPage() {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Kaynak</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tarih</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Vade</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tip</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tutar</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Ödenen</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Kalan</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Durum</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Açıklama</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Referans</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Belge</th>
@@ -932,13 +859,8 @@ export default function CurrentAccountsPage() {
                     const isCashTransaction = tx.source === 'cash'
                     const amount = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount)
 
-                    // Cari işlem hesaplamaları
-                    const paidAmount = tx.paid_amount ? (typeof tx.paid_amount === 'number' ? tx.paid_amount : parseFloat(tx.paid_amount)) : 0
-                    const remaining = amount - paidAmount
-                    const overdue = !isCashTransaction && tx.due_date && isOverdue(tx.due_date) && tx.status !== 'paid'
-
                     return (
-                      <tr key={tx.id} className={`hover:bg-gray-50 ${overdue ? 'bg-red-50' : ''} ${isCashTransaction ? 'bg-blue-50' : ''}`}>
+                      <tr key={tx.id} className={`hover:bg-gray-50 ${isCashTransaction ? 'bg-blue-50' : ''}`}>
                         {/* Kaynak */}
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 text-xs font-medium rounded ${
@@ -951,20 +873,6 @@ export default function CurrentAccountsPage() {
                         {/* Tarih */}
                         <td className="px-4 py-3 text-sm text-gray-900">
                           {formatDate(tx.transaction_date)}
-                        </td>
-
-                        {/* Vade */}
-                        <td className="px-4 py-3 text-sm">
-                          {isCashTransaction ? (
-                            <span className="text-gray-400">-</span>
-                          ) : (
-                            <div className="flex items-center">
-                              {overdue && <AlertCircle className="w-4 h-4 text-red-600 mr-1" />}
-                              <span className={overdue ? 'text-red-600 font-medium' : 'text-gray-900'}>
-                                {formatDate(tx.due_date)}
-                              </span>
-                            </div>
-                          )}
                         </td>
 
                         {/* Tip */}
@@ -991,40 +899,6 @@ export default function CurrentAccountsPage() {
                         {/* Tutar */}
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
                           {formatCurrency(amount, tx.currency)}
-                        </td>
-
-                        {/* Ödenen */}
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {isCashTransaction ? (
-                            <span className="text-green-600 font-bold">{formatCurrency(amount, tx.currency)}</span>
-                          ) : (
-                            formatCurrency(paidAmount, tx.currency)
-                          )}
-                        </td>
-
-                        {/* Kalan */}
-                        <td className={`px-4 py-3 text-sm font-bold ${
-                          isCashTransaction ? 'text-gray-400' :
-                          tx.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {isCashTransaction ? '-' : formatCurrency(remaining, tx.currency)}
-                        </td>
-
-                        {/* Durum */}
-                        <td className="px-4 py-3">
-                          {isCashTransaction ? (
-                            <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
-                              Tamamlandı
-                            </span>
-                          ) : (
-                            <span className={`px-2 py-1 text-xs font-medium rounded ${
-                              tx.status === 'paid' ? 'bg-gray-100 text-gray-800' :
-                              tx.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
-                              {tx.status === 'paid' ? 'Ödendi' : tx.status === 'partial' ? 'Kısmi' : 'Bekliyor'}
-                            </span>
-                          )}
                         </td>
 
                         {/* Açıklama */}
@@ -1162,22 +1036,6 @@ export default function CurrentAccountsPage() {
                 />
               </div>
 
-              {/* Vade Tarihi (sadece cari işlemler için) */}
-              {editingTransactionType === 'account' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vade Tarihi *
-                  </label>
-                  <input
-                    type="date"
-                    value={editForm.due_date}
-                    onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              )}
-
               {/* Ödeme Yöntemi (sadece kasa işlemleri için) */}
               {editingTransactionType === 'cash' && (
                 <div>
@@ -1211,16 +1069,6 @@ export default function CurrentAccountsPage() {
                   disabled={isSubmitting}
                 />
               </div>
-
-              {/* Uyarı */}
-              {editingTransactionType === 'account' && parseFloat(editingTransaction.paid_amount || 0) > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ Bu işlemde {formatCurrency(parseFloat(editingTransaction.paid_amount), editingTransaction.currency)} ödeme yapılmış.
-                    Yeni tutar ödenen tutardan küçük olamaz.
-                  </p>
-                </div>
-              )}
 
               {/* Buttons */}
               <div className="flex gap-3 justify-end pt-4 border-t">
@@ -1286,13 +1134,6 @@ export default function CurrentAccountsPage() {
                 )}
               </div>
 
-              {deletingTransactionType === 'account' && parseFloat(deletingTransaction.paid_amount || 0) > 0 && (
-                <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ Bu işlemde ödeme yapılmış! Önce ilgili ödemeleri silmelisiniz.
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 justify-end">

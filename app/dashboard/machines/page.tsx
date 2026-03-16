@@ -25,6 +25,7 @@ interface Machine {
   calculated_efficiency?: number
   total_given?: number
   total_produced?: number
+  total_defects?: number
 }
 
 export default function MachinesPage() {
@@ -167,58 +168,48 @@ export default function MachinesPage() {
 
       if (error) throw error
 
-      // Her tezgah için üretim istatistiklerini çek
+      // Her tezgah için günlük üretim istatistiklerini çek
       const machinesWithStats = await Promise.all(
         (data || []).map(async (machine) => {
-          // Üretim sayısı
-          const { count: productionCount } = await supabase
-            .from('production_outputs')
-            .select('*', { count: 'exact', head: true })
-            .eq('machine_id', machine.id)
-
-          // Hammadde atama sayısı
-          const { count: assignmentsCount } = await supabase
-            .from('production_material_assignments')
-            .select('*', { count: 'exact', head: true })
-            .eq('machine_id', machine.id)
-
-          // Son üretim tarihi
-          const { data: lastProduction } = await supabase
-            .from('production_outputs')
-            .select('production_date')
+          // Günlük üretim kayıtları (machine_daily_production)
+          const { data: dailyProductions } = await supabase
+            .from('machine_daily_production')
+            .select('actual_production, capacity_target, defect_count, production_date, efficiency_rate')
             .eq('machine_id', machine.id)
             .order('production_date', { ascending: false })
-            .limit(1)
-            .single()
 
-          // VERİMLİLİK HESAPLAMA
-          // 1. Tezgaha verilen toplam hammadde
-          const { data: givenMaterials } = await supabase
-            .from('production_to_machine_transfers')
-            .select('quantity')
-            .eq('machine_id', machine.id)
+          // Üretim sayısı (günlük kayıt sayısı)
+          const productionCount = dailyProductions?.length || 0
 
-          const totalGiven = givenMaterials?.reduce((sum, item) => sum + item.quantity, 0) || 0
+          // Son üretim tarihi
+          const lastProductionDate = dailyProductions?.[0]?.production_date || null
 
-          // 2. Tezgahın ürettiği toplam mamül
-          const { data: producedItems } = await supabase
-            .from('production_outputs')
-            .select('quantity')
-            .eq('machine_id', machine.id)
+          // Toplam üretim ve hedef
+          const totalProduced = dailyProductions?.reduce((sum, item) => sum + (item.actual_production || 0), 0) || 0
+          const totalTarget = dailyProductions?.reduce((sum, item) => sum + (item.capacity_target || 0), 0) || 0
+          const totalDefects = dailyProductions?.reduce((sum, item) => sum + (item.defect_count || 0), 0) || 0
 
-          const totalProduced = producedItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
+          // Verimlilik hesaplama
+          // Verimlilik = (Toplam Üretim / Toplam Hedef) × 100
+          const calculatedEfficiency = totalTarget > 0 ? (totalProduced / totalTarget) * 100 : 0
 
-          // 3. Verimlilik = (Üretilen / Verilen) × 100
-          const calculatedEfficiency = totalGiven > 0 ? (totalProduced / totalGiven) * 100 : 0
+          // Alternatif: Ortalama verimlilik (günlük kayıtlarda varsa)
+          const avgEfficiencyFromRecords = dailyProductions && dailyProductions.length > 0
+            ? dailyProductions.reduce((sum, item) => sum + (item.efficiency_rate || 0), 0) / dailyProductions.length
+            : 0
+
+          // En yüksek verimliliği kullan
+          const finalEfficiency = Math.max(calculatedEfficiency, avgEfficiencyFromRecords)
 
           return {
             ...machine,
-            production_count: productionCount || 0,
-            material_assignments_count: assignmentsCount || 0,
-            last_production_date: lastProduction?.production_date || null,
-            total_given: totalGiven,
+            production_count: productionCount,
+            material_assignments_count: 0, // Artık kullanılmıyor
+            last_production_date: lastProductionDate,
+            total_given: totalTarget,
             total_produced: totalProduced,
-            calculated_efficiency: calculatedEfficiency
+            total_defects: totalDefects,
+            calculated_efficiency: finalEfficiency
           }
         })
       )
@@ -456,14 +447,18 @@ export default function MachinesPage() {
 
               {/* Production Stats */}
               <div className="bg-blue-50 rounded-lg p-3 mb-4 space-y-2">
-                <p className="text-xs font-semibold text-blue-900 mb-2">Üretim İstatistikleri</p>
+                <p className="text-xs font-semibold text-blue-900 mb-2">Üretim İstatistikleri (Günlük Kayıtlar)</p>
                 <div className="flex justify-between text-xs">
-                  <span className="text-blue-700">Toplam Üretim:</span>
-                  <span className="font-bold text-blue-900">{machine.production_count || 0} kayıt</span>
+                  <span className="text-blue-700">Günlük Kayıt:</span>
+                  <span className="font-bold text-blue-900">{machine.production_count || 0} gün</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-blue-700">Hammadde Atamaları:</span>
-                  <span className="font-bold text-blue-900">{machine.material_assignments_count || 0} atama</span>
+                  <span className="text-blue-700">Toplam Üretim:</span>
+                  <span className="font-bold text-blue-900">{machine.total_produced?.toFixed(0) || 0} adet</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-blue-700">Toplam Hedef:</span>
+                  <span className="font-bold text-blue-900">{machine.total_given?.toFixed(0) || 0} adet</span>
                 </div>
                 {machine.last_production_date && (
                   <div className="flex justify-between text-xs">
@@ -478,7 +473,7 @@ export default function MachinesPage() {
               {/* Efficiency Bar */}
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">Verimlilik</span>
+                  <span className="text-sm font-medium text-gray-700">Verimlilik Oranı</span>
                   <span className="text-sm font-semibold text-gray-800">%{machine.calculated_efficiency?.toFixed(1) || '0.0'}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
@@ -488,8 +483,8 @@ export default function MachinesPage() {
                   ></div>
                 </div>
                 <div className="flex justify-between text-xs text-gray-600 mt-1">
-                  <span>Verilen: {machine.total_given?.toFixed(2) || '0'}</span>
-                  <span>Üretilen: {machine.total_produced?.toFixed(2) || '0'}</span>
+                  <span>Hedef: {machine.total_given?.toFixed(0) || '0'} adet</span>
+                  <span>Üretim: {machine.total_produced?.toFixed(0) || '0'} adet</span>
                 </div>
               </div>
 

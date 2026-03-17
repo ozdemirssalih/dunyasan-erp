@@ -943,7 +943,11 @@ export default function CurrentAccountsPage() {
                         </td>
 
                         {/* Tutar */}
-                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                        <td className={`px-4 py-3 text-sm font-bold ${
+                          isCashTransaction
+                            ? (tx.transaction_type === 'income' ? 'text-green-600' : 'text-green-600')
+                            : (tx.transaction_type === 'receivable' ? 'text-blue-600' : 'text-orange-600')
+                        }`}>
                           {formatCurrency(amount, tx.currency)}
                         </td>
 

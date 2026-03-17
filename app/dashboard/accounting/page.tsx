@@ -298,6 +298,16 @@ export default function AccountingPageV2() {
           t.transaction_type === 'expense' && t.supplier_id === supplier.id
         ) || []
 
+        // Debug log - BAŞLANGIÇ
+        if (supplierPayables.length > 0 || supplierPayments.length > 0) {
+          console.log(`🔍 ${supplier.company_name} - BAŞLANGIÇ:`, {
+            borç_sayısı: supplierPayables.length,
+            ödeme_sayısı: supplierPayments.length,
+            borçlar: supplierPayables.map(p => ({ tutar: p.amount, currency: p.currency })),
+            ödemeler: supplierPayments.map(p => ({ tutar: p.amount, currency: p.currency, method: p.payment_method }))
+          })
+        }
+
         // Para birimi bazında hesapla
         const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
 
@@ -329,6 +339,14 @@ export default function AccountingPageV2() {
             payableByCurrency[currency] = (payableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
           }
         })
+
+        // Debug log - HESAPLAMA SONUCU
+        if (supplierPayables.length > 0 || supplierPayments.length > 0) {
+          console.log(`💰 ${supplier.company_name} - HESAPLAMA:`, {
+            balancesByCurrency,
+            toplam_kalan_borç: Object.values(balancesByCurrency).reduce((sum, b) => sum + b.remaining, 0)
+          })
+        }
 
         // Eğer bu tedarikçinin kalan borcu varsa listeye ekle
         const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining > 0)

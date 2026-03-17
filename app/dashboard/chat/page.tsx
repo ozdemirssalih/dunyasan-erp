@@ -54,11 +54,16 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, UserPresence>>({})
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({})
   const [isTyping, setIsTyping] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const originalTitle = useRef<string>('')
 
   useEffect(() => {
     initializeData()
+    requestNotificationPermission()
+    originalTitle.current = document.title
   }, [])
 
   useEffect(() => {
@@ -72,6 +77,27 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Tab title güncelleme
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) ${originalTitle.current}`
+    } else {
+      document.title = originalTitle.current
+    }
+  }, [unreadCount])
+
+  // Sayfa görünürlüğü değiştiğinde unread count sıfırla
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && selectedRoom) {
+        setUnreadCount(0)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [selectedRoom])
 
   const initializeData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -246,9 +272,18 @@ export default function ChatPage() {
             )
           })
 
-          // Ses çal
+          // Bildirimler (sadece başkasının mesajıysa)
           if (newMsg.sender_id !== currentUserId) {
             playNotificationSound()
+
+            // Browser notification göster
+            const senderName = senderData?.full_name || 'Bilinmeyen'
+            showBrowserNotification(senderName, newMsg.message)
+
+            // Sayfa aktif değilse unread count artır
+            if (document.hidden) {
+              setUnreadCount(prev => prev + 1)
+            }
           }
         }
       )
@@ -349,6 +384,42 @@ export default function ChatPage() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      try {
+        const permission = await Notification.requestPermission()
+        setNotificationPermission(permission)
+      } catch (error) {
+        console.error('Notification permission error:', error)
+      }
+    }
+  }
+
+  const showBrowserNotification = (senderName: string, message: string) => {
+    // Sadece sayfa aktif değilse ve izin varsa göster
+    if (document.hidden && notificationPermission === 'granted') {
+      try {
+        const notification = new Notification(`${senderName}`, {
+          body: message,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: 'chat-message',
+          requireInteraction: false,
+          silent: false
+        })
+
+        notification.onclick = () => {
+          window.focus()
+          notification.close()
+        }
+
+        setTimeout(() => notification.close(), 5000)
+      } catch (error) {
+        console.error('Browser notification error:', error)
+      }
+    }
   }
 
   const playNotificationSound = () => {

@@ -11,7 +11,7 @@ interface Account {
   totalReceivable: number // Toplam alacak (ödenecek)
   totalPayable: number // Toplam borç (ödenecek)
   currency: string
-  balancesByCurrency: Record<string, { receivable: number, payable: number }> // Para birimi bazında bakiyeler
+  balancesByCurrency: Record<string, any> // Para birimi bazında bakiyeler (receivable/payable, payment, remaining)
   lastTransactionDate?: string
   transactionCount: number
 }
@@ -160,24 +160,44 @@ export default function CurrentAccountsPage() {
         const customerTxs = allTransactions?.filter(t => t.customer_id === customer.id) || []
         const customerCashTxs = allCashTransactions?.filter(t => t.customer_id === customer.id) || []
 
-        // Para birimi bazında bakiyeleri hesapla
-        const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
+        // Para birimi bazında bakiyeleri hesapla - YENİ MANTIK
+        const balancesByCurrency: Record<string, { receivable: number, payment: number, remaining: number }> = {}
 
+        // Alacak kayıtları
         customerTxs
-          .filter(t => t.transaction_type === 'receivable' && t.status !== 'paid')
+          .filter(t => t.transaction_type === 'receivable')
           .forEach(tx => {
             const currency = tx.currency || 'TRY'
-            const remaining = parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)
+            const amount = parseFloat(tx.amount)
 
             if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { receivable: 0, payable: 0 }
+              balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
             }
-            balancesByCurrency[currency].receivable += remaining
+            balancesByCurrency[currency].receivable += amount
           })
 
-        // Toplam alacak (TRY bazlı - backward compatibility için)
+        // Tahsilat kayıtları (cash_transactions'dan)
+        customerCashTxs
+          .filter(t => t.transaction_type === 'income')
+          .forEach(tx => {
+            const currency = tx.currency || 'TRY'
+            const amount = parseFloat(tx.amount)
+
+            if (!balancesByCurrency[currency]) {
+              balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
+            }
+            balancesByCurrency[currency].payment += amount
+          })
+
+        // Kalan bakiyeleri hesapla
+        Object.keys(balancesByCurrency).forEach(currency => {
+          balancesByCurrency[currency].remaining =
+            balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
+        })
+
+        // Toplam alacak (sadece kalan bakiye)
         const totalReceivable = Object.values(balancesByCurrency)
-          .reduce((sum, b) => sum + b.receivable, 0)
+          .reduce((sum, b) => sum + (b.remaining > 0 ? b.remaining : 0), 0)
 
 
         // Tüm işlemleri birleştir (cari + kasa) ve sırala
@@ -209,24 +229,44 @@ export default function CurrentAccountsPage() {
         const supplierTxs = allTransactions?.filter(t => t.supplier_id === supplier.id) || []
         const supplierCashTxs = allCashTransactions?.filter(t => t.supplier_id === supplier.id) || []
 
-        // Para birimi bazında bakiyeleri hesapla
-        const balancesByCurrency: Record<string, { receivable: number, payable: number }> = {}
+        // Para birimi bazında bakiyeleri hesapla - YENİ MANTIK
+        const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
 
+        // Borç kayıtları
         supplierTxs
-          .filter(t => t.transaction_type === 'payable' && t.status !== 'paid')
+          .filter(t => t.transaction_type === 'payable')
           .forEach(tx => {
             const currency = tx.currency || 'TRY'
-            const remaining = parseFloat(tx.amount) - parseFloat(tx.paid_amount || 0)
+            const amount = parseFloat(tx.amount)
 
             if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { receivable: 0, payable: 0 }
+              balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
             }
-            balancesByCurrency[currency].payable += remaining
+            balancesByCurrency[currency].payable += amount
           })
 
-        // Toplam borç (TRY bazlı - backward compatibility için)
+        // Ödeme kayıtları (cash_transactions'dan)
+        supplierCashTxs
+          .filter(t => t.transaction_type === 'expense')
+          .forEach(tx => {
+            const currency = tx.currency || 'TRY'
+            const amount = parseFloat(tx.amount)
+
+            if (!balancesByCurrency[currency]) {
+              balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
+            }
+            balancesByCurrency[currency].payment += amount
+          })
+
+        // Kalan bakiyeleri hesapla
+        Object.keys(balancesByCurrency).forEach(currency => {
+          balancesByCurrency[currency].remaining =
+            balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
+        })
+
+        // Toplam borç (sadece kalan bakiye)
         const totalPayable = Object.values(balancesByCurrency)
-          .reduce((sum, b) => sum + b.payable, 0)
+          .reduce((sum, b) => sum + (b.remaining > 0 ? b.remaining : 0), 0)
 
 
         // Tüm işlemleri birleştir (cari + kasa) ve sırala

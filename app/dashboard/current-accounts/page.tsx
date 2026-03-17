@@ -906,11 +906,11 @@ export default function CurrentAccountsPage() {
                     const amount = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount)
 
                     return (
-                      <tr key={tx.id} className={`hover:bg-gray-50 ${isCashTransaction ? 'bg-blue-50' : ''}`}>
+                      <tr key={tx.id} className={`hover:bg-gray-50 ${isCashTransaction ? 'bg-green-50' : ''}`}>
                         {/* Kaynak */}
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            isCashTransaction ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                            isCashTransaction ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                           }`}>
                             {isCashTransaction ? 'Kasa' : 'Cari'}
                           </span>

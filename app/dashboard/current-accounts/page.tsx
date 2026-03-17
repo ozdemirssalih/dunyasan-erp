@@ -346,13 +346,22 @@ export default function CurrentAccountsPage() {
 
   accounts.forEach(acc => {
     Object.entries(acc.balancesByCurrency).forEach(([currency, balance]) => {
-      // Müşteri için: remaining > 0 ise alacak var
-      if (acc.type === 'customer' && balance.remaining > 0) {
-        receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.remaining
-      }
-      // Tedarikçi için: remaining > 0 ise borç var
-      if (acc.type === 'supplier' && balance.remaining > 0) {
-        payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.remaining
+      if (acc.type === 'customer') {
+        if (balance.remaining > 0) {
+          // Müşteri bize borçlu - alacak
+          receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.remaining
+        } else if (balance.remaining < 0) {
+          // Fazla ödeme yaptık, müşteriye borçluyuz
+          payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + Math.abs(balance.remaining)
+        }
+      } else if (acc.type === 'supplier') {
+        if (balance.remaining > 0) {
+          // Tedarikçiye borçluyuz
+          payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.remaining
+        } else if (balance.remaining < 0) {
+          // Fazla ödeme yaptık, tedarikçi bize borçlu - alacak
+          receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + Math.abs(balance.remaining)
+        }
       }
     })
   })
@@ -365,10 +374,11 @@ export default function CurrentAccountsPage() {
       if (!netBalancesByCurrency[currency]) {
         netBalancesByCurrency[currency] = 0
       }
-      // Alacak (müşteri remaining) - Borç (tedarikçi remaining) = Net Bakiye
-      if (account.type === 'customer' && balances.remaining > 0) {
+      // Müşteri: pozitif = alacak, negatif = borç
+      // Tedarikçi: pozitif = borç, negatif = alacak
+      if (account.type === 'customer') {
         netBalancesByCurrency[currency] += balances.remaining
-      } else if (account.type === 'supplier' && balances.remaining > 0) {
+      } else if (account.type === 'supplier') {
         netBalancesByCurrency[currency] -= balances.remaining
       }
     })
@@ -793,16 +803,20 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-green-600">
-                      {account.type === 'customer' && Object.keys(account.balancesByCurrency).length > 0 ? (
+                      {Object.keys(account.balancesByCurrency).length > 0 ? (
                         <div className="space-y-1">
                           {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => balance.remaining > 0)
+                            .filter(([_, balance]) => {
+                              // Müşteri ile pozitif remaining VEYA tedarikçi ile negatif remaining (fazla ödeme)
+                              return (account.type === 'customer' && balance.remaining > 0) ||
+                                     (account.type === 'supplier' && balance.remaining < 0)
+                            })
                             .map(([currency, balance]) => (
                               <div key={currency}>
                                 {new Intl.NumberFormat('tr-TR', {
                                   style: 'currency',
                                   currency: currency
-                                }).format(balance.remaining)}
+                                }).format(Math.abs(balance.remaining))}
                               </div>
                             ))}
                         </div>
@@ -811,16 +825,20 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-red-600">
-                      {account.type === 'supplier' && Object.keys(account.balancesByCurrency).length > 0 ? (
+                      {Object.keys(account.balancesByCurrency).length > 0 ? (
                         <div className="space-y-1">
                           {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => balance.remaining > 0)
+                            .filter(([_, balance]) => {
+                              // Tedarikçi ile pozitif remaining VEYA müşteri ile negatif remaining (fazla ödeme)
+                              return (account.type === 'supplier' && balance.remaining > 0) ||
+                                     (account.type === 'customer' && balance.remaining < 0)
+                            })
                             .map(([currency, balance]) => (
                               <div key={currency}>
                                 {new Intl.NumberFormat('tr-TR', {
                                   style: 'currency',
                                   currency: currency
-                                }).format(balance.remaining)}
+                                }).format(Math.abs(balance.remaining))}
                               </div>
                             ))}
                         </div>
@@ -867,12 +885,42 @@ export default function CurrentAccountsPage() {
                 <h3 className="text-2xl font-bold text-gray-800">{selectedAccount.name}</h3>
                 <p className="text-gray-600">
                   {selectedAccount.type === 'customer' ? 'Müşteri' : 'Tedarikçi'} -
-                  <span className="ml-2 font-bold text-green-600">
-                    Alacak: {formatCurrency(selectedAccount.totalReceivable)}
-                  </span>
-                  <span className="ml-2 font-bold text-red-600">
-                    Borç: {formatCurrency(selectedAccount.totalPayable)}
-                  </span>
+                  {(() => {
+                    // Bakiyeleri para birimi bazında düzgün hesapla
+                    const receivableByCurrency: Record<string, number> = {}
+                    const payableByCurrency: Record<string, number> = {}
+
+                    Object.entries(selectedAccount.balancesByCurrency).forEach(([currency, balance]) => {
+                      if (selectedAccount.type === 'customer') {
+                        if (balance.remaining > 0) {
+                          receivableByCurrency[currency] = balance.remaining
+                        } else if (balance.remaining < 0) {
+                          payableByCurrency[currency] = Math.abs(balance.remaining)
+                        }
+                      } else if (selectedAccount.type === 'supplier') {
+                        if (balance.remaining > 0) {
+                          payableByCurrency[currency] = balance.remaining
+                        } else if (balance.remaining < 0) {
+                          receivableByCurrency[currency] = Math.abs(balance.remaining)
+                        }
+                      }
+                    })
+
+                    return (
+                      <>
+                        <span className="ml-2 font-bold text-green-600">
+                          Alacak: {Object.keys(receivableByCurrency).length > 0
+                            ? Object.entries(receivableByCurrency).map(([cur, amt]) => formatCurrency(amt, cur)).join(', ')
+                            : '₺0,00'}
+                        </span>
+                        <span className="ml-2 font-bold text-red-600">
+                          Borç: {Object.keys(payableByCurrency).length > 0
+                            ? Object.entries(payableByCurrency).map(([cur, amt]) => formatCurrency(amt, cur)).join(', ')
+                            : '₺0,00'}
+                        </span>
+                      </>
+                    )
+                  })()}
                 </p>
               </div>
               <button

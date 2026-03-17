@@ -793,16 +793,16 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-green-600">
-                      {Object.keys(account.balancesByCurrency).length > 0 ? (
+                      {account.type === 'customer' && Object.keys(account.balancesByCurrency).length > 0 ? (
                         <div className="space-y-1">
                           {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => balance.receivable > 0)
+                            .filter(([_, balance]) => balance.remaining > 0)
                             .map(([currency, balance]) => (
                               <div key={currency}>
                                 {new Intl.NumberFormat('tr-TR', {
                                   style: 'currency',
                                   currency: currency
-                                }).format(balance.receivable)}
+                                }).format(balance.remaining)}
                               </div>
                             ))}
                         </div>
@@ -811,16 +811,16 @@ export default function CurrentAccountsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-red-600">
-                      {Object.keys(account.balancesByCurrency).length > 0 ? (
+                      {account.type === 'supplier' && Object.keys(account.balancesByCurrency).length > 0 ? (
                         <div className="space-y-1">
                           {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => balance.payable > 0)
+                            .filter(([_, balance]) => balance.remaining > 0)
                             .map(([currency, balance]) => (
                               <div key={currency}>
                                 {new Intl.NumberFormat('tr-TR', {
                                   style: 'currency',
                                   currency: currency
-                                }).format(balance.payable)}
+                                }).format(balance.remaining)}
                               </div>
                             ))}
                         </div>

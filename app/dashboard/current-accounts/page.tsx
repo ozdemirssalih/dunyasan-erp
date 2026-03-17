@@ -346,11 +346,13 @@ export default function CurrentAccountsPage() {
 
   accounts.forEach(acc => {
     Object.entries(acc.balancesByCurrency).forEach(([currency, balance]) => {
-      if (balance.receivable > 0) {
-        receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.receivable
+      // Müşteri için: remaining > 0 ise alacak var
+      if (acc.type === 'customer' && balance.remaining > 0) {
+        receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.remaining
       }
-      if (balance.payable > 0) {
-        payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.payable
+      // Tedarikçi için: remaining > 0 ise borç var
+      if (acc.type === 'supplier' && balance.remaining > 0) {
+        payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.remaining
       }
     })
   })
@@ -363,8 +365,12 @@ export default function CurrentAccountsPage() {
       if (!netBalancesByCurrency[currency]) {
         netBalancesByCurrency[currency] = 0
       }
-      // Alacak - Borç = Net Bakiye
-      netBalancesByCurrency[currency] += (balances.receivable - balances.payable)
+      // Alacak (müşteri remaining) - Borç (tedarikçi remaining) = Net Bakiye
+      if (account.type === 'customer' && balances.remaining > 0) {
+        netBalancesByCurrency[currency] += balances.remaining
+      } else if (account.type === 'supplier' && balances.remaining > 0) {
+        netBalancesByCurrency[currency] -= balances.remaining
+      }
     })
   })
 

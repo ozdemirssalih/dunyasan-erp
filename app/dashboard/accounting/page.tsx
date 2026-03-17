@@ -659,12 +659,51 @@ export default function AccountingPageV2() {
     }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      // Çek durumunu güncelle
       const { error } = await supabase
         .from('checks')
         .update({ status })
         .eq('id', check.id)
 
       if (error) throw error
+
+      // Eğer çek tahsil edildi veya ödendi ise, cash_transactions'a otomatik kayıt ekle
+      if ((status === 'collected' || status === 'paid') && check.status === 'pending') {
+        const isIncoming = check.check_type === 'incoming'
+
+        const cashData: any = {
+          company_id: companyId,
+          transaction_type: isIncoming ? 'income' : 'expense',
+          amount: parseFloat(check.amount),
+          currency: check.currency,
+          payment_method: 'check',
+          transaction_date: new Date().toISOString(),
+          description: `${check.check_number} numaralı çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}`,
+          reference_number: `CHECK-${check.check_number}-${Date.now()}`,
+          created_by: user?.id
+        }
+
+        if (check.customer_id) {
+          cashData.customer_id = check.customer_id
+        }
+        if (check.supplier_id) {
+          cashData.supplier_id = check.supplier_id
+        }
+
+        const { error: cashError } = await supabase
+          .from('cash_transactions')
+          .insert(cashData)
+
+        if (cashError) {
+          console.error('Kasa kaydı oluşturulamadı:', cashError)
+          alert('⚠️ Çek durumu güncellendi ancak kasa kaydı oluşturulamadı: ' + cashError.message)
+          return
+        }
+
+        console.log('✅ Çek tahsil/ödeme kaydı kasa işlemlerine eklendi')
+      }
 
       alert('Çek durumu güncellendi!')
       loadData()

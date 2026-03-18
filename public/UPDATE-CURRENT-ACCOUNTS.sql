@@ -50,7 +50,101 @@ CREATE INDEX idx_current_accounts_type ON current_accounts(account_type);
 CREATE INDEX idx_current_accounts_balance ON current_accounts(current_balance);
 CREATE INDEX idx_current_accounts_code ON current_accounts(account_code);
 
--- ADIM 4: current_account_transactions tablosunu kontrol et ve oluştur
+-- ADIM 4: current_account_transactions tablosunu güncelle (mevcut yapıyı koru)
+-- Önce eksik kolonları ekle
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS account_id UUID;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(30);
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS direction VARCHAR(10);
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS amount DECIMAL(15,2);
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'TL';
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS exchange_rate DECIMAL(10,4) DEFAULT 1;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS invoice_id UUID;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS waybill_id UUID;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS payment_id UUID;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS transaction_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE current_account_transactions ADD COLUMN IF NOT EXISTS due_date DATE;
+
+-- amount_tl kolonunu generated column olarak ekle (eğer yoksa)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'current_account_transactions'
+        AND column_name = 'amount_tl'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD COLUMN amount_tl DECIMAL(15,2) GENERATED ALWAYS AS (amount * exchange_rate) STORED;
+    END IF;
+END $$;
+
+-- Foreign key constraint ekle (eğer yoksa)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_account_id_fkey'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_account_id_fkey
+        FOREIGN KEY (account_id) REFERENCES current_accounts(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_invoice_id_fkey'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_invoice_id_fkey
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_waybill_id_fkey'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_waybill_id_fkey
+        FOREIGN KEY (waybill_id) REFERENCES waybills(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Check constraint ekle (eğer yoksa)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_transaction_type_check'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_transaction_type_check
+        CHECK (transaction_type IN (
+            'sales', 'purchase', 'incoming_return', 'outgoing_return',
+            'withholding', 'exempt', 'purchase_fx', 'sales_fx',
+            'payment', 'receipt', 'manual'
+        ));
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_direction_check'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_direction_check
+        CHECK (direction IN ('debit', 'credit'));
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'current_account_transactions_amount_check'
+    ) THEN
+        ALTER TABLE current_account_transactions
+        ADD CONSTRAINT current_account_transactions_amount_check
+        CHECK (amount > 0);
+    END IF;
+END $$;
+
+-- Eğer tablo hiç yoksa oluştur (ancak muhtemelen var)
 CREATE TABLE IF NOT EXISTS current_account_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -108,6 +202,40 @@ CREATE INDEX idx_ca_transactions_account ON current_account_transactions(account
 CREATE INDEX idx_ca_transactions_type ON current_account_transactions(transaction_type);
 CREATE INDEX idx_ca_transactions_date ON current_account_transactions(transaction_date);
 CREATE INDEX idx_ca_transactions_invoice ON current_account_transactions(invoice_id);
+
+-- ADIM 4.5: Mevcut transaction kayıtlarını yeni sisteme bağla
+-- customer_id veya supplier_id'den account_id'yi belirle
+UPDATE current_account_transactions cat
+SET account_id = ca.id
+FROM current_accounts ca
+WHERE cat.account_id IS NULL
+AND cat.customer_id IS NOT NULL
+AND ca.customer_id = cat.customer_id;
+
+UPDATE current_account_transactions cat
+SET account_id = ca.id
+FROM current_accounts ca
+WHERE cat.account_id IS NULL
+AND cat.supplier_id IS NOT NULL
+AND ca.supplier_id = cat.supplier_id;
+
+-- transaction_type'ı belirle (eğer yoksa)
+UPDATE current_account_transactions
+SET transaction_type = CASE
+    WHEN customer_id IS NOT NULL THEN 'receipt' -- Müşteriden tahsilat
+    WHEN supplier_id IS NOT NULL THEN 'payment' -- Tedarikçiye ödeme
+    ELSE 'manual'
+END
+WHERE transaction_type IS NULL;
+
+-- direction'ı belirle (eğer yoksa)
+UPDATE current_account_transactions
+SET direction = CASE
+    WHEN customer_id IS NOT NULL THEN 'credit' -- Tahsilat = alacak
+    WHEN supplier_id IS NOT NULL THEN 'debit'  -- Ödeme = borç
+    ELSE 'debit'
+END
+WHERE direction IS NULL;
 
 -- ADIM 5: Mevcut verilerden account_type'ı belirle
 -- Eğer customer_id varsa customer, supplier_id varsa supplier

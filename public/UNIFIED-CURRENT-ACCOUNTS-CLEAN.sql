@@ -165,7 +165,8 @@ END $$;
 -- ========================================
 
 -- account_type check constraint
-ALTER TABLE current_accounts ADD CONSTRAINT IF NOT EXISTS current_accounts_account_type_check
+ALTER TABLE current_accounts DROP CONSTRAINT IF EXISTS current_accounts_account_type_check;
+ALTER TABLE current_accounts ADD CONSTRAINT current_accounts_account_type_check
     CHECK (account_type IN ('customer', 'supplier', 'both'));
 
 -- ========================================

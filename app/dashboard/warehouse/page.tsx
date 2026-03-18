@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers'
+type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers'
 
 // ── Sabit Konfigürasyonlar ───────────────
 const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
@@ -30,7 +30,7 @@ interface Transaction {
   item_id: string
   item_name: string
   item_code: string
-  type: 'entry' | 'exit'
+  type: 'entry' | 'exit' | 'scrap'
   quantity: number
   unit: string
   supplier: string
@@ -1159,6 +1159,7 @@ export default function WarehousePage() {
               { id: 'items', label: 'Stok Kalemleri', count: items.length },
               { id: 'entry', label: 'Giriş İşlemleri', icon: '↓' },
               { id: 'exit', label: 'Çıkış İşlemleri', icon: '↑' },
+              { id: 'scrap', label: 'Hurda', icon: '🗑️', count: transactions.filter(t => t.type === 'scrap').length },
               { id: 'history', label: 'Geçmiş', count: transactions.length },
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
@@ -1741,6 +1742,68 @@ export default function WarehousePage() {
           </div>
         )}
 
+        {/* SCRAP TAB */}
+        {activeTab === 'scrap' && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-gray-900 mb-2">🗑️ Hurda Deposu</h3>
+              <p className="text-sm text-gray-700">
+                Kalite kontrolden hurda olarak işaretlenen ürünler burada listelenir.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kaynak</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referans</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Not</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemi Yapan</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {transactions.filter(tx => tx.type === 'scrap').map(tx => (
+                    <tr key={tx.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{tx.item_name}</div>
+                        <div className="text-xs text-gray-500">{tx.item_code}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-red-600">
+                        {tx.quantity} {tx.unit}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {tx.supplier || 'Kalite Kontrol'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {tx.reference_number || '-'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                        {tx.notes || '-'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {tx.created_by_name}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {transactions.filter(tx => tx.type === 'scrap').length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Henüz hurda kaydı yok</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* HISTORY TAB */}
         {activeTab === 'history' && (
           <div className="space-y-4">
@@ -1768,9 +1831,11 @@ export default function WarehousePage() {
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                           tx.type === 'entry'
                             ? 'bg-green-100 text-green-700'
+                            : tx.type === 'scrap'
+                            ? 'bg-gray-100 text-gray-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {tx.type === 'entry' ? '↓ Giriş' : '↑ Çıkış'}
+                          {tx.type === 'entry' ? '↓ Giriş' : tx.type === 'scrap' ? '🗑️ Hurda' : '↑ Çıkış'}
                         </span>
                       </td>
                       <td className="px-6 py-4">

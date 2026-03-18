@@ -693,6 +693,45 @@ export default function QualityControlPage() {
         if (transferError) throw transferError
 
         alert('✅ Kalite test sonucu kaydedildi! Ürün kalite deposundan düşüldü ve ana depoya eklendi.')
+      } else if (transferForm.quality_result === 'scrap') {
+        // HURDA: Direkt hurda deposuna gönder
+        // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı
+
+        // Warehouse transactions kayıt ekle - hurda olarak (trigger otomatik olarak stoku güncelleyecek)
+        const { error: transactionError } = await supabase
+          .from('warehouse_transactions')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            type: 'scrap',
+            quantity: transferForm.quantity,
+            supplier: 'Kalite Kontrol',
+            reference_number: `KK-HURDA-${new Date().getTime()}`,
+            notes: `Kalite kontrolde hurda olarak işaretlendi - ${transferForm.notes || ''}`,
+            created_by: currentUserId,
+            transaction_date: new Date().toISOString().split('T')[0],
+          })
+
+        if (transactionError) throw transactionError
+
+        // Transfer kaydı oluştur (kayıt amaçlı)
+        const { error: transferError } = await supabase
+          .from('qc_to_warehouse_transfers')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            quantity: transferForm.quantity,
+            quality_result: transferForm.quality_result,
+            notes: transferForm.notes,
+            requested_by: currentUserId,
+            status: 'approved',
+            approved_by: currentUserId,
+            approved_at: new Date().toISOString(),
+          })
+
+        if (transferError) throw transferError
+
+        alert('✅ Ürün hurda olarak işaretlendi ve hurda deposuna gönderildi.')
       } else {
         // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
         // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı
@@ -1138,7 +1177,8 @@ export default function QualityControlPage() {
 
                 const qualityColors: Record<string, string> = {
                   passed: 'bg-green-100 text-green-700',
-                  failed: 'bg-red-100 text-red-700'
+                  failed: 'bg-red-100 text-red-700',
+                  scrap: 'bg-gray-100 text-gray-700'
                 }
 
                 return (
@@ -1150,7 +1190,7 @@ export default function QualityControlPage() {
                       </div>
                       <div className="flex gap-2">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${qualityColors[transfer.quality_result] || 'bg-gray-100 text-gray-700'}`}>
-                          {transfer.quality_result === 'passed' ? 'GEÇTİ' : 'KALDI'}
+                          {transfer.quality_result === 'passed' ? 'GEÇTİ' : transfer.quality_result === 'scrap' ? 'HURDA' : 'KALDI'}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
                           {transfer.status.toUpperCase()}
@@ -1170,7 +1210,7 @@ export default function QualityControlPage() {
                       <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Hedef</span>
                         <span className="font-semibold text-gray-900">
-                          {transfer.quality_result === 'passed' ? '→ Ana Depo' : '→ Üretim (Geri Dönüş)'}
+                          {transfer.quality_result === 'passed' ? '→ Ana Depo' : transfer.quality_result === 'scrap' ? '→ Hurda Deposu' : '→ Üretim (Geri Dönüş)'}
                         </span>
                       </div>
                       {transfer.notes && (
@@ -1544,7 +1584,8 @@ export default function QualityControlPage() {
 
                 const qualityColors: Record<string, string> = {
                   passed: 'bg-green-100 text-green-700',
-                  failed: 'bg-red-100 text-red-700'
+                  failed: 'bg-red-100 text-red-700',
+                  scrap: 'bg-gray-100 text-gray-700'
                 }
 
                 const isIncoming = item.transfer_type === 'incoming'
@@ -1673,6 +1714,7 @@ export default function QualityControlPage() {
                     >
                       <option value="passed">✅ Geçti (Ana Depoya Gönder)</option>
                       <option value="failed">❌ Kaldı (Üretime Geri Gönder)</option>
+                      <option value="scrap">🗑️ Hurda (Hurda Deposuna Gönder)</option>
                     </select>
                   </div>
 

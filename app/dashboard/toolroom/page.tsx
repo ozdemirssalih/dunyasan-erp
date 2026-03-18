@@ -18,6 +18,7 @@ interface Tool {
   tool_type: string | null
   supplier_id: string | null
   model: string | null
+  supplier_brand: string | null
   location: string | null
   quantity: number
   min_quantity: number
@@ -598,8 +599,8 @@ export default function ToolroomPage() {
                               </td>
                               {/* Marka / Model */}
                               <td className="px-4 py-3.5">
-                                {tool.model ? (
-                                  <div className="text-sm font-semibold text-gray-900">{tool.model}</div>
+                                {(tool.model || tool.supplier_brand) ? (
+                                  <div className="text-sm font-semibold text-gray-900">{tool.model || tool.supplier_brand}</div>
                                 ) : (
                                   <span className="text-gray-400 text-sm">—</span>
                                 )}

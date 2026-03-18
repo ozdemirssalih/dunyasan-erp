@@ -28,6 +28,7 @@ interface UnifiedItem {
   supplier: string | null
   supplierId?: string | null
   model?: string | null  // Takımhane için
+  supplier_brand?: string | null  // Takımhane için (SQL'deki alan adı)
   notes?: string | null  // Takımhane için
   status?: string | null // Takımhane için (available, maintenance, broken, lost)
   description?: string | null // Depo için
@@ -294,6 +295,7 @@ export default function InventoryPage() {
         supplier: item.supplier?.company_name || item.supplier_name || item.supplier || null,
         supplierId: item.supplier_id || null,
         model: item.model || null,
+        supplier_brand: item.supplier_brand || null,
         notes: item.notes || null,
         status: item.status || null,
         source: 'toolroom',
@@ -793,8 +795,8 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">{item.category}</td>
                       <td className="px-5 py-3.5">
-                        {item.model ? (
-                          <span className="text-sm font-semibold text-gray-900">{item.model}</span>
+                        {(item.model || item.supplier_brand) ? (
+                          <span className="text-sm font-semibold text-gray-900">{item.model || item.supplier_brand}</span>
                         ) : (
                           <span className="text-sm text-gray-400">—</span>
                         )}

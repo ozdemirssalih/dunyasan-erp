@@ -64,8 +64,7 @@ CREATE INDEX idx_current_accounts_supplier ON current_accounts(supplier_id) WHER
 -- Müşteriler için (eğer current_accounts'ta yoksa)
 INSERT INTO current_accounts (
     company_id, account_code, account_name, account_type,
-    tax_number, tax_office, address, phone, email, contact_person,
-    current_balance, currency, payment_term_days, notes,
+    current_balance, currency, payment_term_days,
     is_active, created_at, customer_id
 )
 SELECT DISTINCT
@@ -73,16 +72,9 @@ SELECT DISTINCT
     'CA-C-' || LPAD(c.id::TEXT, 6, '0') as account_code,
     c.customer_name as account_name,
     'customer' as account_type,
-    c.tax_number,
-    c.tax_office,
-    c.address,
-    c.phone,
-    c.email,
-    c.contact_person,
     0 as current_balance,
     'TL' as currency,
     0 as payment_term_days,
-    c.notes,
     COALESCE(c.is_active, true),
     COALESCE(c.created_at, NOW()),
     c.id as customer_id
@@ -95,8 +87,7 @@ WHERE NOT EXISTS (
 -- Tedarikçiler için (eğer current_accounts'ta yoksa)
 INSERT INTO current_accounts (
     company_id, account_code, account_name, account_type,
-    tax_number, tax_office, address, phone, email, contact_person,
-    current_balance, currency, payment_term_days, notes,
+    current_balance, currency, payment_term_days,
     is_active, created_at, supplier_id
 )
 SELECT DISTINCT
@@ -104,16 +95,9 @@ SELECT DISTINCT
     'CA-S-' || LPAD(s.id::TEXT, 6, '0') as account_code,
     s.company_name as account_name,
     'supplier' as account_type,
-    s.tax_number,
-    s.tax_office,
-    s.address,
-    s.phone,
-    s.email,
-    s.contact_person,
     0 as current_balance,
     'TL' as currency,
     0 as payment_term_days,
-    s.notes,
     COALESCE(s.is_active, true),
     COALESCE(s.created_at, NOW()),
     s.id as supplier_id

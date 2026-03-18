@@ -647,9 +647,25 @@ export default function InvoicesPage() {
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{invoice.invoice_number}</td>
                       <td className="px-6 py-4 text-sm">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          invoice.invoice_type === 'sales' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                          invoice.invoice_type === 'sales' ? 'bg-green-100 text-green-800' :
+                          invoice.invoice_type === 'outgoing_return' ? 'bg-green-100 text-green-700' :
+                          invoice.invoice_type === 'sales_fx' ? 'bg-green-100 text-green-700' :
+                          invoice.invoice_type === 'purchase' ? 'bg-orange-100 text-orange-800' :
+                          invoice.invoice_type === 'incoming_return' ? 'bg-red-100 text-red-700' :
+                          invoice.invoice_type === 'withholding' ? 'bg-purple-100 text-purple-700' :
+                          invoice.invoice_type === 'exempt' ? 'bg-blue-100 text-blue-700' :
+                          invoice.invoice_type === 'purchase_fx' ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-100 text-gray-800'
                         }`}>
-                          {invoice.invoice_type === 'sales' ? 'Satış' : 'Alış'}
+                          {invoice.invoice_type === 'sales' ? '💰 Satış' :
+                           invoice.invoice_type === 'purchase' ? '🛒 Alış' :
+                           invoice.invoice_type === 'incoming_return' ? '↪️ Gelen İade' :
+                           invoice.invoice_type === 'outgoing_return' ? '↩️ Giden İade' :
+                           invoice.invoice_type === 'withholding' ? '📋 Tevkifatlı' :
+                           invoice.invoice_type === 'exempt' ? '🆓 İstisna' :
+                           invoice.invoice_type === 'purchase_fx' ? '💱 Alış KF' :
+                           invoice.invoice_type === 'sales_fx' ? '💱 Satış KF' :
+                           invoice.invoice_type}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
@@ -779,25 +795,43 @@ export default function InvoicesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tür *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Türü *</label>
                     <select
                       value={invoiceForm.invoice_type}
                       onChange={(e) => setInvoiceForm({...invoiceForm, invoice_type: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     >
-                      <option value="sales">Satış Faturası</option>
-                      <option value="purchase">Alış Faturası</option>
+                      <optgroup label="📈 Alacak (Gelir - Müşteri İşlemleri)">
+                        <option value="sales">💰 Satış Faturası (+)</option>
+                        <option value="outgoing_return">↩️ Giden İade Faturası (+)</option>
+                        <option value="sales_fx">💱 Satış Kur Farkı Faturası (+)</option>
+                      </optgroup>
+                      <optgroup label="📉 Borç (Gider - Tedarikçi İşlemleri)">
+                        <option value="purchase">🛒 Alış Faturası (-)</option>
+                        <option value="incoming_return">↪️ Gelen İade Faturası (-)</option>
+                        <option value="withholding">📋 Tevkifatlı Fatura (-)</option>
+                        <option value="exempt">🆓 İstisna Fatura (-)</option>
+                        <option value="purchase_fx">💱 Alış Kur Farkı Faturası (-)</option>
+                      </optgroup>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      (+) = Alacak artırır | (-) = Borç artırır
+                    </p>
                   </div>
                 </div>
 
-                {invoiceForm.invoice_type === 'sales' && (
+                {/* Müşteri İşlemleri: Satış, Giden İade, Satış Kur Farkı */}
+                {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Müşteri *
+                      <span className="text-xs text-gray-500 ml-2">(Alacak artırır)</span>
+                    </label>
                     <select
                       value={invoiceForm.customer_id}
                       onChange={(e) => setInvoiceForm({...invoiceForm, customer_id: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      required
                     >
                       <option value="">Müşteri seçin</option>
                       {customers.map(c => (
@@ -807,13 +841,18 @@ export default function InvoicesPage() {
                   </div>
                 )}
 
-                {invoiceForm.invoice_type === 'purchase' && (
+                {/* Tedarikçi İşlemleri: Alış, Gelen İade, Tevkifatlı, İstisna, Alış Kur Farkı */}
+                {['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx'].includes(invoiceForm.invoice_type) && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tedarikçi *
+                      <span className="text-xs text-gray-500 ml-2">(Borç artırır)</span>
+                    </label>
                     <select
                       value={invoiceForm.supplier_id}
                       onChange={(e) => setInvoiceForm({...invoiceForm, supplier_id: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      required
                     >
                       <option value="">Tedarikçi seçin</option>
                       {suppliers.map(s => (

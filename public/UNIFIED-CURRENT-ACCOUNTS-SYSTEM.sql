@@ -57,6 +57,11 @@ CREATE TABLE IF NOT EXISTS current_accounts (
     UNIQUE(company_id, account_code)
 );
 
+-- Index'leri önce sil, sonra oluştur (idempotent)
+DROP INDEX IF EXISTS idx_current_accounts_company;
+DROP INDEX IF EXISTS idx_current_accounts_type;
+DROP INDEX IF EXISTS idx_current_accounts_balance;
+
 CREATE INDEX idx_current_accounts_company ON current_accounts(company_id);
 CREATE INDEX idx_current_accounts_type ON current_accounts(account_type);
 CREATE INDEX idx_current_accounts_balance ON current_accounts(current_balance);
@@ -112,6 +117,13 @@ CREATE TABLE IF NOT EXISTS current_account_transactions (
     CHECK (amount > 0)
 );
 
+-- Index'leri önce sil, sonra oluştur (idempotent)
+DROP INDEX IF EXISTS idx_ca_transactions_company;
+DROP INDEX IF EXISTS idx_ca_transactions_account;
+DROP INDEX IF EXISTS idx_ca_transactions_type;
+DROP INDEX IF EXISTS idx_ca_transactions_date;
+DROP INDEX IF EXISTS idx_ca_transactions_invoice;
+
 CREATE INDEX idx_ca_transactions_company ON current_account_transactions(company_id);
 CREATE INDEX idx_ca_transactions_account ON current_account_transactions(account_id);
 CREATE INDEX idx_ca_transactions_type ON current_account_transactions(transaction_type);
@@ -125,7 +137,7 @@ COMMENT ON COLUMN current_account_transactions.direction IS 'debit=borç(-), cre
 -- ADIM 2: MEVCUT VERİLERİ MIGRATE ET
 -- ========================================
 
--- 2.1: Tedarikçileri (suppliers) cari hesaba taşı
+-- 2.1: Tedarikçileri (suppliers) cari hesaba taşı (sadece yoksa ekle)
 INSERT INTO current_accounts (
     company_id, account_code, account_name, account_type,
     tax_number, tax_office, address, phone, email, contact_person,
@@ -401,6 +413,10 @@ $$ LANGUAGE plpgsql;
 
 ALTER TABLE current_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE current_account_transactions ENABLE ROW LEVEL SECURITY;
+
+-- Policy'leri önce sil, sonra oluştur (idempotent)
+DROP POLICY IF EXISTS current_accounts_company_isolation ON current_accounts;
+DROP POLICY IF EXISTS ca_transactions_company_isolation ON current_account_transactions;
 
 -- Kullanıcılar sadece kendi şirketlerinin verilerini görebilir
 CREATE POLICY current_accounts_company_isolation ON current_accounts

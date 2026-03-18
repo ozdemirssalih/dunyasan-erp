@@ -8,6 +8,32 @@
 -- ADIM 1: current_accounts tablosunu güncelle
 -- ========================================
 
+-- ESKİ 'type' kolonunu temizle (eski sistemden kalma)
+DO $$
+BEGIN
+    -- Önce NOT NULL constraint'i kaldır (eğer varsa)
+    ALTER TABLE current_accounts ALTER COLUMN type DROP NOT NULL;
+EXCEPTION
+    WHEN undefined_column THEN
+        -- type kolonu yoksa sorun yok
+        NULL;
+    WHEN others THEN
+        -- Diğer hatalar için de devam et
+        NULL;
+END $$;
+
+-- Eski type kolonunu account_type'a kopyala (eğer varsa)
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET account_type = type
+    WHERE type IS NOT NULL AND account_type IS NULL;
+EXCEPTION
+    WHEN undefined_column THEN
+        -- type kolonu yoksa sorun yok
+        NULL;
+END $$;
+
 -- Eksik kolonları ekle
 ALTER TABLE current_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(20);
 ALTER TABLE current_accounts ADD COLUMN IF NOT EXISTS account_code VARCHAR(50);
@@ -140,6 +166,18 @@ SET account_type = CASE
     ELSE 'customer'
 END
 WHERE account_type IS NULL;
+
+-- Eski 'type' kolonunu account_type ile senkronize et (geriye uyumluluk)
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET type = account_type
+    WHERE account_type IS NOT NULL;
+EXCEPTION
+    WHEN undefined_column THEN
+        -- type kolonu yoksa sorun yok, atla
+        NULL;
+END $$;
 
 -- ========================================
 -- ADIM 3: current_account_transactions tablosunu güncelle

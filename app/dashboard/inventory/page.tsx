@@ -769,6 +769,7 @@ export default function InventoryPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kaynak</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kod / Ad</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kategori</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Marka / Model</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tedarikçi</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Miktar</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Durum</th>
@@ -791,7 +792,20 @@ export default function InventoryPage() {
                         <p className="text-gray-500 text-xs mt-0.5">{item.name}</p>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-gray-600">{item.category}</td>
-                      <td className="px-5 py-3.5 text-sm text-gray-600">{item.supplier || '—'}</td>
+                      <td className="px-5 py-3.5">
+                        {item.model ? (
+                          <span className="text-sm font-semibold text-gray-900">{item.model}</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {item.supplier ? (
+                          <span className="text-sm text-gray-700">{item.supplier}</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5">
                         <span className={`text-lg font-bold ${item.quantity === 0 ? 'text-red-500' : 'text-gray-800'}`}>{item.quantity}</span>
                         <span className="text-gray-400 text-sm ml-1">{item.unit}</span>

@@ -567,7 +567,9 @@ export default function ToolroomPage() {
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
                           <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Kod / Takım</th>
-                          <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Tür / Tedarikçi</th>
+                          <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Tür</th>
+                          <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Marka / Model</th>
+                          <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Tedarikçi</th>
                           <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Lokasyon</th>
                           <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Adet</th>
                           <th className="px-4 py-3.5 text-left text-sm font-semibold text-gray-700">Durum</th>
@@ -586,10 +588,29 @@ export default function ToolroomPage() {
                                   <span className="text-sm text-gray-600">{tool.tool_name}</span>
                                 </div>
                               </td>
-                              {/* Tür / Tedarikçi */}
+                              {/* Tür */}
                               <td className="px-4 py-3.5">
-                                {tool.tool_type && <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium block w-fit">{tool.tool_type}</span>}
-                                {tool.supplier && <p className="text-xs text-gray-400 mt-0.5">{tool.supplier.company_name}{tool.model ? ` · ${tool.model}` : ''}</p>}
+                                {tool.tool_type ? (
+                                  <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium">{tool.tool_type}</span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                              {/* Marka / Model */}
+                              <td className="px-4 py-3.5">
+                                {tool.model ? (
+                                  <div className="text-sm font-semibold text-gray-900">{tool.model}</div>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                              {/* Tedarikçi */}
+                              <td className="px-4 py-3.5">
+                                {tool.supplier ? (
+                                  <span className="text-sm text-gray-700">{tool.supplier.company_name}</span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
                               </td>
                               {/* Lokasyon */}
                               <td className="px-4 py-3.5">

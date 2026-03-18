@@ -2,102 +2,60 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, TrendingUp, TrendingDown, Plus, Eye, DollarSign, Calendar, FileDown, Edit2, Trash2 } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, Plus, Eye, DollarSign, Calendar, FileDown, Edit2, Trash2, Users } from 'lucide-react'
 
-interface Account {
+interface CurrentAccount {
   id: string
-  type: 'customer' | 'supplier'
-  name: string
-  totalReceivable: number // Toplam alacak (ödenecek)
-  totalPayable: number // Toplam borç (ödenecek)
+  account_code: string
+  account_name: string
+  account_type: 'customer' | 'supplier' | 'both'
+  current_balance: number
   currency: string
-  balancesByCurrency: Record<string, any> // Para birimi bazında bakiyeler (receivable/payable, payment, remaining)
-  lastTransactionDate?: string
-  transactionCount: number
+  tax_number?: string
+  phone?: string
+  email?: string
+  is_active: boolean
+  created_at: string
+  updated_at?: string
 }
 
 interface AccountTransaction {
   id: string
-  transaction_type: 'receivable' | 'payable'
+  transaction_type: string
+  direction: 'debit' | 'credit'
   amount: number
-  paid_amount: number
   currency: string
-  status: 'unpaid' | 'partial' | 'paid'
+  exchange_rate: number
+  amount_tl?: number
+  invoice_id?: string
+  description?: string
   transaction_date: string
-  due_date: string
-  description: string
-  reference_number: string
-  customer_id?: string
-  supplier_id?: string
+  due_date?: string
+  created_at: string
+  invoice?: {
+    invoice_number: string
+    invoice_type: string
+  }
 }
 
 export default function CurrentAccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<CurrentAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
-  // Döviz kurları
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
-    'TRY': 1,
-    'USD': 32.50, // Varsayılan
-    'EUR': 35.20, // Varsayılan
-    'GBP': 41.10  // Varsayılan
-  })
-
   // Filters
-  const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'customer' | 'supplier'>('all')
-  const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivable' | 'payable'>('all')
+  const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'customer' | 'supplier' | 'both'>('all')
+  const [balanceFilter, setBalanceFilter] = useState<'all' | 'positive' | 'negative'>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Modal states
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<CurrentAccount | null>(null)
   const [selectedAccountTransactions, setSelectedAccountTransactions] = useState<AccountTransaction[]>([])
-
-  // Edit/Delete modal states
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [editingTransaction, setEditingTransaction] = useState<any>(null)
-  const [editingTransactionType, setEditingTransactionType] = useState<'cash' | 'account' | null>(null)
-  const [deletingTransaction, setDeletingTransaction] = useState<any>(null)
-  const [deletingTransactionType, setDeletingTransactionType] = useState<'cash' | 'account' | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Edit form state
-  const [editForm, setEditForm] = useState({
-    amount: '',
-    description: '',
-    transaction_date: '',
-    payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
-    currency: 'TRY',
-    customer_id: '',
-    supplier_id: ''
-  })
 
   useEffect(() => {
     loadData()
-    fetchExchangeRates()
   }, [])
-
-  const fetchExchangeRates = async () => {
-    try {
-      // exchangerate-api.com - Ücretsiz API (günde 1500 istek)
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/TRY')
-      const data = await response.json()
-
-      if (data && data.rates) {
-        setExchangeRates({
-          'TRY': 1,
-          'USD': 1 / data.rates.USD, // TRY -> USD oranı
-          'EUR': 1 / data.rates.EUR, // TRY -> EUR oranı
-          'GBP': 1 / data.rates.GBP  // TRY -> GBP oranı
-        })
-      }
-    } catch (error) {
-      console.warn('Döviz kurları yüklenemedi, varsayılan değerler kullanılıyor:', error)
-      // Hata olursa varsayılan kurlar kullanılacak
-    }
-  }
 
   const loadData = async () => {
     try {
@@ -127,203 +85,45 @@ export default function CurrentAccountsPage() {
 
   const loadAccounts = async (companyId: string) => {
     try {
-      // Müşterileri yükle
-      const { data: customers } = await supabase
-        .from('customer_companies')
-        .select('id, customer_name')
-        .eq('company_id', companyId)
-
-      // Tedarikçileri yükle
-      const { data: suppliers } = await supabase
-        .from('suppliers')
-        .select('id, company_name')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-
-      // Tüm cari işlemleri yükle
-      const { data: allTransactions } = await supabase
-        .from('current_account_transactions')
+      // Unified current accounts tablosundan tüm cari hesapları çek
+      const { data: accountsData, error } = await supabase
+        .from('current_accounts')
         .select('*')
         .eq('company_id', companyId)
+        .order('account_code', { ascending: true })
 
-      // Tüm kasa işlemlerini yükle
-      const { data: allCashTransactions } = await supabase
-        .from('cash_transactions')
-        .select('*')
-        .eq('company_id', companyId)
+      if (error) {
+        console.error('Error loading accounts:', error)
+        return
+      }
 
-      const accountsData: Account[] = []
-      const today = new Date()
-
-      // Müşterileri işle
-      customers?.forEach(customer => {
-        const customerTxs = allTransactions?.filter(t => t.customer_id === customer.id) || []
-        const customerCashTxs = allCashTransactions?.filter(t => t.customer_id === customer.id) || []
-
-        // Para birimi bazında bakiyeleri hesapla - YENİ MANTIK
-        const balancesByCurrency: Record<string, { receivable: number, payment: number, remaining: number }> = {}
-
-        // Alacak kayıtları
-        customerTxs
-          .filter(t => t.transaction_type === 'receivable')
-          .forEach(tx => {
-            const currency = tx.currency || 'TRY'
-            const amount = parseFloat(tx.amount)
-
-            if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
-            }
-            balancesByCurrency[currency].receivable += amount
-          })
-
-        // Tahsilat kayıtları (cash_transactions'dan)
-        customerCashTxs
-          .filter(t => t.transaction_type === 'income')
-          .forEach(tx => {
-            const currency = tx.currency || 'TRY'
-            const amount = parseFloat(tx.amount)
-
-            if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
-            }
-            balancesByCurrency[currency].payment += amount
-          })
-
-        // Kalan bakiyeleri hesapla
-        Object.keys(balancesByCurrency).forEach(currency => {
-          balancesByCurrency[currency].remaining =
-            balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
-        })
-
-        // Toplam alacak (sadece kalan bakiye)
-        const totalReceivable = Object.values(balancesByCurrency)
-          .reduce((sum, b) => sum + (b.remaining > 0 ? b.remaining : 0), 0)
-
-
-        // Tüm işlemleri birleştir (cari + kasa) ve sırala
-        const allCustomerTxs = [
-          ...customerTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date })),
-          ...customerCashTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date }))
-        ].sort((a, b) =>
-          new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
-        )
-
-        // Para birimini en son işlemden al, yoksa TRY
-        const mainCurrency = allCustomerTxs[0]?.currency || 'TRY'
-
-        accountsData.push({
-          id: customer.id,
-          type: 'customer',
-          name: customer.customer_name,
-          totalReceivable,
-          totalPayable: 0,
-          currency: mainCurrency,
-          balancesByCurrency,
-          lastTransactionDate: allCustomerTxs[0]?.transaction_date,
-          transactionCount: customerTxs.length + customerCashTxs.length // Hem cari hem kasa işlemleri
-        })
-      })
-
-      // Tedarikçileri işle
-      suppliers?.forEach(supplier => {
-        const supplierTxs = allTransactions?.filter(t => t.supplier_id === supplier.id) || []
-        const supplierCashTxs = allCashTransactions?.filter(t => t.supplier_id === supplier.id) || []
-
-        // Para birimi bazında bakiyeleri hesapla - YENİ MANTIK
-        const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
-
-        // Borç kayıtları
-        supplierTxs
-          .filter(t => t.transaction_type === 'payable')
-          .forEach(tx => {
-            const currency = tx.currency || 'TRY'
-            const amount = parseFloat(tx.amount)
-
-            if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
-            }
-            balancesByCurrency[currency].payable += amount
-          })
-
-        // Ödeme kayıtları (cash_transactions'dan)
-        supplierCashTxs
-          .filter(t => t.transaction_type === 'expense')
-          .forEach(tx => {
-            const currency = tx.currency || 'TRY'
-            const amount = parseFloat(tx.amount)
-
-            if (!balancesByCurrency[currency]) {
-              balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
-            }
-            balancesByCurrency[currency].payment += amount
-          })
-
-        // Kalan bakiyeleri hesapla
-        Object.keys(balancesByCurrency).forEach(currency => {
-          balancesByCurrency[currency].remaining =
-            balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
-        })
-
-        // Toplam borç (sadece kalan bakiye)
-        const totalPayable = Object.values(balancesByCurrency)
-          .reduce((sum, b) => sum + (b.remaining > 0 ? b.remaining : 0), 0)
-
-
-        // Tüm işlemleri birleştir (cari + kasa) ve sırala
-        const allSupplierTxs = [
-          ...supplierTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date })),
-          ...supplierCashTxs.map(tx => ({ ...tx, transaction_date: tx.transaction_date }))
-        ].sort((a, b) =>
-          new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
-        )
-
-        // Para birimini en son işlemden al, yoksa TRY
-        const mainCurrency = allSupplierTxs[0]?.currency || 'TRY'
-
-        accountsData.push({
-          id: supplier.id,
-          type: 'supplier',
-          name: supplier.company_name,
-          totalReceivable: 0,
-          totalPayable,
-          currency: mainCurrency,
-          balancesByCurrency,
-          lastTransactionDate: allSupplierTxs[0]?.transaction_date,
-          transactionCount: supplierTxs.length + supplierCashTxs.length // Hem cari hem kasa işlemleri
-        })
-      })
-
-      setAccounts(accountsData)
+      setAccounts(accountsData || [])
     } catch (error) {
       console.error('Error loading accounts:', error)
     }
   }
 
-  const handleViewAccountDetail = async (account: Account) => {
+  const handleViewAccountDetail = async (account: CurrentAccount) => {
     setSelectedAccount(account)
 
     try {
-      // İlgili hesabın tüm cari işlemlerini çek
-      const { data: accountTxns } = await supabase
+      // İlgili hesabın tüm işlemlerini çek
+      const { data: transactions, error } = await supabase
         .from('current_account_transactions')
-        .select('*')
+        .select(`
+          *,
+          invoice:invoices(invoice_number, invoice_type)
+        `)
         .eq('company_id', companyId!)
-        .eq(account.type === 'customer' ? 'customer_id' : 'supplier_id', account.id)
+        .eq('account_id', account.id)
+        .order('transaction_date', { ascending: false })
 
-      // İlgili hesabın tüm kasa ödemelerini çek
-      const { data: cashTxns } = await supabase
-        .from('cash_transactions')
-        .select('*')
-        .eq('company_id', companyId!)
-        .eq(account.type === 'customer' ? 'customer_id' : 'supplier_id', account.id)
+      if (error) {
+        console.error('Error loading transactions:', error)
+        return
+      }
 
-      // İkisini birleştir ve transaction_date'e göre sırala
-      const allTransactions = [
-        ...(accountTxns || []).map(tx => ({ ...tx, source: 'account' })),
-        ...(cashTxns || []).map(tx => ({ ...tx, source: 'cash' }))
-      ].sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
-
-      setSelectedAccountTransactions(allTransactions as any)
+      setSelectedAccountTransactions(transactions || [])
       setShowDetailModal(true)
     } catch (error) {
       console.error('Error loading account transactions:', error)
@@ -331,305 +131,66 @@ export default function CurrentAccountsPage() {
   }
 
   const filteredAccounts = accounts.filter(account => {
-    const matchesType = accountTypeFilter === 'all' || account.type === accountTypeFilter
+    const matchesType = accountTypeFilter === 'all' || account.account_type === accountTypeFilter
     const matchesBalance = balanceFilter === 'all' ||
-      (balanceFilter === 'receivable' && account.totalReceivable > 0) ||
-      (balanceFilter === 'payable' && account.totalPayable > 0)
-    const matchesSearch = account.name.toLowerCase().includes(searchQuery.toLowerCase())
+      (balanceFilter === 'positive' && account.current_balance > 0) ||
+      (balanceFilter === 'negative' && account.current_balance < 0)
+    const matchesSearch = account.account_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      account.account_code.toLowerCase().includes(searchQuery.toLowerCase())
 
     return matchesType && matchesBalance && matchesSearch
   })
 
-  // Para birimi bazında toplam alacak ve borçları hesapla
-  const receivablesByCurrency: Record<string, number> = {}
-  const payablesByCurrency: Record<string, number> = {}
+  // Toplam alacak ve borç hesapla
+  const totalReceivables = accounts.reduce((sum, acc) =>
+    sum + (acc.current_balance > 0 ? acc.current_balance : 0), 0)
 
-  accounts.forEach(acc => {
-    Object.entries(acc.balancesByCurrency).forEach(([currency, balance]) => {
-      if (acc.type === 'customer') {
-        if (balance.remaining > 0) {
-          // Müşteri bize borçlu - alacak
-          receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + balance.remaining
-        } else if (balance.remaining < 0) {
-          // Fazla ödeme yaptık, müşteriye borçluyuz
-          payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + Math.abs(balance.remaining)
-        }
-      } else if (acc.type === 'supplier') {
-        if (balance.remaining > 0) {
-          // Tedarikçiye borçluyuz
-          payablesByCurrency[currency] = (payablesByCurrency[currency] || 0) + balance.remaining
-        } else if (balance.remaining < 0) {
-          // Fazla ödeme yaptık, tedarikçi bize borçlu - alacak
-          receivablesByCurrency[currency] = (receivablesByCurrency[currency] || 0) + Math.abs(balance.remaining)
-        }
-      }
-    })
-  })
+  const totalPayables = accounts.reduce((sum, acc) =>
+    sum + (acc.current_balance < 0 ? Math.abs(acc.current_balance) : 0), 0)
 
-  // Para birimi bazında net bakiye hesapla
-  const netBalancesByCurrency: Record<string, number> = {}
+  const netBalance = accounts.reduce((sum, acc) => sum + acc.current_balance, 0)
 
-  accounts.forEach(account => {
-    Object.entries(account.balancesByCurrency).forEach(([currency, balances]) => {
-      if (!netBalancesByCurrency[currency]) {
-        netBalancesByCurrency[currency] = 0
-      }
-      // Müşteri: pozitif = alacak, negatif = borç
-      // Tedarikçi: pozitif = borç, negatif = alacak
-      if (account.type === 'customer') {
-        netBalancesByCurrency[currency] += balances.remaining
-      } else if (account.type === 'supplier') {
-        netBalancesByCurrency[currency] -= balances.remaining
-      }
-    })
-  })
-
-  // Backward compatibility için (eski kod varsa diye)
-  const totalReceivables = accounts.reduce((sum, acc) => sum + acc.totalReceivable, 0)
-  const totalPayables = accounts.reduce((sum, acc) => sum + acc.totalPayable, 0)
-  const netBalance = totalReceivables - totalPayables
-
-  const formatCurrency = (amount: number, currency: string = 'TRY') => {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount)
-  }
-
-  const calculateTotalInTRY = (balances: Record<string, number>) => {
-    let total = 0
-    Object.entries(balances).forEach(([currency, amount]) => {
-      const rate = exchangeRates[currency] || 1
-      total += amount * rate
-    })
-    return total
+  const formatCurrency = (amount: number, currency: string = 'TL') => {
+    return new Intl.NumberFormat('tr-TR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount) + ' ' + currency
   }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  const handleDownloadDocument = async (documentPath: string) => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('accounting-documents')
-        .createSignedUrl(documentPath, 60) // 60 saniye geçerli URL
-
-      if (error) {
-        console.error('Download error:', error)
-        alert('Belge indirme hatası: ' + error.message)
-        return
-      }
-
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank')
-      }
-    } catch (err) {
-      console.error('Download error:', err)
-      alert('Belge indirilemedi!')
-    }
-  }
-
-  // Kasa İşlemi Düzenleme
-  const handleEditCashTransaction = (transaction: any) => {
-    setEditingTransaction(transaction)
-    setEditingTransactionType('cash')
-    setEditForm({
-      amount: transaction.amount.toString(),
-      description: transaction.description || '',
-      transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      payment_method: transaction.payment_method || 'cash',
-      currency: transaction.currency || 'TRY',
-      customer_id: transaction.customer_id || '',
-      supplier_id: transaction.supplier_id || ''
-    })
-    setShowEditModal(true)
-  }
-
-  // Cari İşlemi Düzenleme
-  const handleEditAccountTransaction = (transaction: any) => {
-    setEditingTransaction(transaction)
-    setEditingTransactionType('account')
-    setEditForm({
-      amount: transaction.amount.toString(),
-      description: transaction.description || '',
-      transaction_date: new Date(transaction.transaction_date).toISOString().split('T')[0],
-      payment_method: 'cash',
-      currency: transaction.currency || 'TRY',
-      customer_id: transaction.customer_id || '',
-      supplier_id: transaction.supplier_id || ''
-    })
-    setShowEditModal(true)
-  }
-
-  // Düzenleme Kaydet
-  const handleSaveEdit = async () => {
-    if (!editingTransaction || !companyId || isSubmitting) return
-    if (!editForm.amount) {
-      return alert('Tutar zorunludur!')
+  const getTransactionTypeBadge = (type: string) => {
+    const badges: Record<string, { label: string, color: string }> = {
+      'sales': { label: '💰 Satış Faturası', color: 'bg-green-100 text-green-800' },
+      'purchase': { label: '🛒 Alış Faturası', color: 'bg-red-100 text-red-800' },
+      'incoming_return': { label: '↪️ Gelen İade', color: 'bg-orange-100 text-orange-800' },
+      'outgoing_return': { label: '↩️ Giden İade', color: 'bg-blue-100 text-blue-800' },
+      'withholding': { label: '📋 Tevkifatlı', color: 'bg-purple-100 text-purple-800' },
+      'exempt': { label: '🆓 İstisna', color: 'bg-yellow-100 text-yellow-800' },
+      'purchase_fx': { label: '💱 Alış Kur Farkı', color: 'bg-pink-100 text-pink-800' },
+      'sales_fx': { label: '💱 Satış Kur Farkı', color: 'bg-teal-100 text-teal-800' },
+      'payment': { label: '💸 Ödeme', color: 'bg-red-100 text-red-800' },
+      'receipt': { label: '💵 Tahsilat', color: 'bg-green-100 text-green-800' },
+      'manual': { label: '✏️ Manuel İşlem', color: 'bg-gray-100 text-gray-800' },
+      'receivable': { label: '📈 Alacak', color: 'bg-green-100 text-green-800' },
+      'payable': { label: '📉 Borç', color: 'bg-red-100 text-red-800' },
     }
 
-    setIsSubmitting(true)
+    const badge = badges[type] || { label: type, color: 'bg-gray-100 text-gray-800' }
+    return <span className={`px-2 py-1 text-xs font-medium rounded ${badge.color}`}>{badge.label}</span>
+  }
 
-    try {
-      const newAmount = parseFloat(editForm.amount)
-
-      if (editingTransactionType === 'cash') {
-        // KASA İŞLEMİ DÜZENLEME
-        const { error } = await supabase
-          .from('cash_transactions')
-          .update({
-            amount: newAmount,
-            description: editForm.description,
-            transaction_date: new Date(editForm.transaction_date).toISOString(),
-            payment_method: editForm.payment_method,
-            currency: editForm.currency,
-            customer_id: editForm.customer_id || null,
-            supplier_id: editForm.supplier_id || null
-          })
-          .eq('id', editingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (error) throw error
-
-        alert('✅ Kasa işlemi güncellendi!')
-        setShowEditModal(false)
-        setEditingTransaction(null)
-        setEditingTransactionType(null)
-
-        // Reload data
-        loadData()
-        if (selectedAccount) {
-          handleViewAccountDetail(selectedAccount)
-        }
-
-      } else if (editingTransactionType === 'account') {
-        // CARİ İŞLEMİ DÜZENLEME
-        // Güncellemeyi yap
-        const { error } = await supabase
-          .from('current_account_transactions')
-          .update({
-            amount: newAmount,
-            description: editForm.description,
-            transaction_date: new Date(editForm.transaction_date).toISOString(),
-            currency: editForm.currency,
-            customer_id: editForm.customer_id || null,
-            supplier_id: editForm.supplier_id || null
-          })
-          .eq('id', editingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (error) throw error
-
-        alert('✅ Cari işlem güncellendi!')
-        setShowEditModal(false)
-        setEditingTransaction(null)
-        setEditingTransactionType(null)
-
-        // Reload data
-        loadData()
-        if (selectedAccount) {
-          handleViewAccountDetail(selectedAccount)
-        }
-      }
-    } catch (error: any) {
-      console.error('Edit error:', error)
-      alert('❌ İşlem güncellenirken hata oluştu: ' + error.message)
-    } finally {
-      setIsSubmitting(false)
+  const getAccountTypeBadge = (type: string) => {
+    const badges: Record<string, { label: string, color: string }> = {
+      'customer': { label: '👤 Müşteri', color: 'bg-purple-100 text-purple-800' },
+      'supplier': { label: '🏭 Tedarikçi', color: 'bg-blue-100 text-blue-800' },
+      'both': { label: '🔄 Her İkisi', color: 'bg-indigo-100 text-indigo-800' },
     }
-  }
 
-  // Silme modalını aç
-  const handleDeleteCashTransaction = (transaction: any) => {
-    setDeletingTransaction(transaction)
-    setDeletingTransactionType('cash')
-    setShowDeleteModal(true)
-  }
-
-  const handleDeleteAccountTransaction = (transaction: any) => {
-    setDeletingTransaction(transaction)
-    setDeletingTransactionType('account')
-    setShowDeleteModal(true)
-  }
-
-  // Silme işlemi
-  const handleConfirmDelete = async () => {
-    if (!deletingTransaction || !companyId || isSubmitting) return
-
-    setIsSubmitting(true)
-
-    try {
-      if (deletingTransactionType === 'cash') {
-        // KASA İŞLEMİ SİLME
-        // Eğer bu işlem bir cari işlemle bağlantılıysa, cari işlemi güncelle
-        if (deletingTransaction.related_account_transaction_id) {
-          const { data: accountTxn } = await supabase
-            .from('current_account_transactions')
-            .select('*')
-            .eq('id', deletingTransaction.related_account_transaction_id)
-            .single()
-
-          if (accountTxn) {
-            const newPaidAmount = parseFloat(accountTxn.paid_amount || 0) - parseFloat(deletingTransaction.amount)
-            const totalAmount = parseFloat(accountTxn.amount)
-            const newStatus = newPaidAmount === 0 ? 'unpaid' : (newPaidAmount >= totalAmount ? 'paid' : 'partial')
-
-            await supabase
-              .from('current_account_transactions')
-              .update({
-                paid_amount: Math.max(0, newPaidAmount),
-                status: newStatus
-              })
-              .eq('id', deletingTransaction.related_account_transaction_id)
-          }
-        }
-
-        // Kasa işlemini sil
-        const { error } = await supabase
-          .from('cash_transactions')
-          .delete()
-          .eq('id', deletingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (error) throw error
-
-        alert('✅ Kasa işlemi silindi!')
-        setShowDeleteModal(false)
-        setDeletingTransaction(null)
-        setDeletingTransactionType(null)
-
-        // Reload data
-        loadData()
-        if (selectedAccount) {
-          handleViewAccountDetail(selectedAccount)
-        }
-
-      } else if (deletingTransactionType === 'account') {
-        // CARİ İŞLEMİ SİLME
-        // Cari işlemi sil
-        const { error } = await supabase
-          .from('current_account_transactions')
-          .delete()
-          .eq('id', deletingTransaction.id)
-          .eq('company_id', companyId)
-
-        if (error) throw error
-
-        alert('✅ Cari işlem silindi!')
-        setShowDeleteModal(false)
-        setDeletingTransaction(null)
-        setDeletingTransactionType(null)
-
-        // Reload data
-        loadData()
-        if (selectedAccount) {
-          handleViewAccountDetail(selectedAccount)
-        }
-      }
-    } catch (error: any) {
-      console.error('Delete error:', error)
-      alert('❌ İşlem silinirken hata oluştu: ' + error.message)
-    } finally {
-      setIsSubmitting(false)
-    }
+    const badge = badges[type] || { label: type, color: 'bg-gray-100 text-gray-800' }
+    return <span className={`px-2 py-1 text-xs font-medium rounded ${badge.color}`}>{badge.label}</span>
   }
 
   if (loading) {
@@ -646,7 +207,7 @@ export default function CurrentAccountsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-800">Cari Hesaplar</h2>
-          <p className="text-gray-600">Müşteri ve tedarikçi alacak/borç takibi</p>
+          <p className="text-gray-600">Birleşik cari hesap yönetimi - Müşteri ve tedarikçi takibi</p>
         </div>
       </div>
 
@@ -657,25 +218,7 @@ export default function CurrentAccountsPage() {
             <span className="text-green-100 text-sm">Toplam Alacak</span>
             <TrendingUp className="w-5 h-5 text-green-100" />
           </div>
-          {Object.keys(receivablesByCurrency).length === 0 ? (
-            <div className="text-3xl font-bold">0.00 TRY</div>
-          ) : (
-            <>
-              <div className="space-y-1">
-                {Object.entries(receivablesByCurrency).map(([currency, amount]) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {formatCurrency(amount, currency)}
-                  </div>
-                ))}
-              </div>
-              {Object.keys(receivablesByCurrency).length > 0 && Object.keys(receivablesByCurrency).some(c => c !== 'TRY') && (
-                <div className="mt-2 pt-2 border-t border-green-400/30">
-                  <p className="text-green-100 text-xs opacity-75">Toplam TL Karşılığı</p>
-                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(receivablesByCurrency))}</p>
-                </div>
-              )}
-            </>
-          )}
+          <div className="text-3xl font-bold">{formatCurrency(totalReceivables)}</div>
           <p className="text-green-100 text-xs mt-2">Müşterilerden tahsil edilecek</p>
         </div>
 
@@ -684,56 +227,33 @@ export default function CurrentAccountsPage() {
             <span className="text-red-100 text-sm">Toplam Borç</span>
             <TrendingDown className="w-5 h-5 text-red-100" />
           </div>
-          {Object.keys(payablesByCurrency).length === 0 ? (
-            <div className="text-3xl font-bold">0.00 TRY</div>
-          ) : (
-            <>
-              <div className="space-y-1">
-                {Object.entries(payablesByCurrency).map(([currency, amount]) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {formatCurrency(amount, currency)}
-                  </div>
-                ))}
-              </div>
-              {Object.keys(payablesByCurrency).length > 0 && Object.keys(payablesByCurrency).some(c => c !== 'TRY') && (
-                <div className="mt-2 pt-2 border-t border-red-400/30">
-                  <p className="text-red-100 text-xs opacity-75">Toplam TL Karşılığı</p>
-                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(payablesByCurrency))}</p>
-                </div>
-              )}
-            </>
-          )}
+          <div className="text-3xl font-bold">{formatCurrency(totalPayables)}</div>
           <p className="text-red-100 text-xs mt-2">Tedarikçilere ödenecek</p>
         </div>
 
-        <div className={`bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white`}>
+        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl shadow-lg p-6 text-white`}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-white text-sm opacity-90">Net Bakiye</span>
             <DollarSign className="w-5 h-5 opacity-90" />
           </div>
-          {Object.keys(netBalancesByCurrency).length === 0 ? (
-            <>
-              <div className="text-3xl font-bold">0.00 TRY</div>
-              <p className="text-white text-xs mt-2 opacity-90">Dengede</p>
-            </>
-          ) : (
-            <>
-              <div className="space-y-1">
-                {Object.entries(netBalancesByCurrency).map(([currency, amount]) => (
-                  <div key={currency} className="text-2xl font-bold">
-                    {formatCurrency(amount, currency)}
-                  </div>
-                ))}
-              </div>
-              {Object.keys(netBalancesByCurrency).length > 0 && Object.keys(netBalancesByCurrency).some(c => c !== 'TRY') && (
-                <div className="mt-2 pt-2 border-t border-blue-400/30">
-                  <p className="text-white text-xs opacity-75">Toplam TL Karşılığı</p>
-                  <p className="text-lg font-semibold">{formatCurrency(calculateTotalInTRY(netBalancesByCurrency))}</p>
-                </div>
-              )}
-              <p className="text-white text-xs mt-2 opacity-90">Alacak - Borç</p>
-            </>
-          )}
+          <div className="text-3xl font-bold">{formatCurrency(netBalance)}</div>
+          <p className="text-white text-xs mt-2 opacity-90">
+            {netBalance >= 0 ? 'Alacak (Pozitif)' : 'Borç (Negatif)'}
+          </p>
+        </div>
+      </div>
+
+      {/* Info Card */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Users className="w-5 h-5 text-blue-600 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-blue-900 mb-1">Birleşik Cari Hesap Sistemi</h3>
+            <p className="text-sm text-blue-800">
+              Bu sistem müşteri ve tedarikçileri tek bir listede birleştirir. Faturalar otomatik olarak cari hesaplara işlenir.
+              8 fatura tipi desteklenir: Satış (+), Alış (-), Gelen/Giden İade, Tevkifatlı, İstisna, Kur Farkları.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -742,7 +262,7 @@ export default function CurrentAccountsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <input
             type="text"
-            placeholder="Cari hesap ara..."
+            placeholder="Cari hesap ara (isim veya kod)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -753,9 +273,10 @@ export default function CurrentAccountsPage() {
             onChange={(e) => setAccountTypeFilter(e.target.value as any)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="all">Tüm Hesaplar</option>
-            <option value="customer">Müşteriler</option>
-            <option value="supplier">Tedarikçiler</option>
+            <option value="all">Tüm Tipler</option>
+            <option value="customer">Sadece Müşteriler</option>
+            <option value="supplier">Sadece Tedarikçiler</option>
+            <option value="both">Her İkisi</option>
           </select>
 
           <select
@@ -764,8 +285,8 @@ export default function CurrentAccountsPage() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">Tüm Bakiyeler</option>
-            <option value="receivable">Alacaklı Olanlar</option>
-            <option value="payable">Borçlu Olanlar</option>
+            <option value="positive">Alacaklı (Pozitif)</option>
+            <option value="negative">Borçlu (Negatif)</option>
           </select>
         </div>
       </div>
@@ -776,83 +297,58 @@ export default function CurrentAccountsPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kod</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cari Hesap</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tip</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alacak</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Borç</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlem Sayısı</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Son İşlem</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bakiye</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Para Birimi</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredAccounts.map((account) => (
-                <tr key={`${account.type}-${account.id}`} className="hover:bg-gray-50">
+                <tr key={account.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-mono text-gray-900">{account.account_code}</div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Building2 className="w-5 h-5 text-gray-400 mr-2" />
-                      <div className="text-sm font-medium text-gray-900">{account.name}</div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{account.account_name}</div>
+                        {account.tax_number && (
+                          <div className="text-xs text-gray-500">VKN: {account.tax_number}</div>
+                        )}
+                      </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getAccountTypeBadge(account.account_type)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className={`text-sm font-bold ${
+                      account.current_balance > 0 ? 'text-green-600' :
+                      account.current_balance < 0 ? 'text-red-600' :
+                      'text-gray-600'
+                    }`}>
+                      {formatCurrency(account.current_balance, account.currency)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {account.current_balance > 0 ? 'Alacak' :
+                       account.current_balance < 0 ? 'Borç' :
+                       'Dengede'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {account.currency || 'TL'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-medium rounded ${
-                      account.type === 'customer' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                      account.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {account.type === 'customer' ? 'Müşteri' : 'Tedarikçi'}
+                      {account.is_active ? 'Aktif' : 'Pasif'}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-green-600">
-                      {Object.keys(account.balancesByCurrency).length > 0 ? (
-                        <div className="space-y-1">
-                          {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => {
-                              // Müşteri ile pozitif remaining VEYA tedarikçi ile negatif remaining (fazla ödeme)
-                              return (account.type === 'customer' && balance.remaining > 0) ||
-                                     (account.type === 'supplier' && balance.remaining < 0)
-                            })
-                            .map(([currency, balance]) => (
-                              <div key={currency}>
-                                {new Intl.NumberFormat('tr-TR', {
-                                  style: 'currency',
-                                  currency: currency
-                                }).format(Math.abs(balance.remaining))}
-                              </div>
-                            ))}
-                        </div>
-                      ) : '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-red-600">
-                      {Object.keys(account.balancesByCurrency).length > 0 ? (
-                        <div className="space-y-1">
-                          {Object.entries(account.balancesByCurrency)
-                            .filter(([_, balance]) => {
-                              // Tedarikçi ile pozitif remaining VEYA müşteri ile negatif remaining (fazla ödeme)
-                              return (account.type === 'supplier' && balance.remaining > 0) ||
-                                     (account.type === 'customer' && balance.remaining < 0)
-                            })
-                            .map(([currency, balance]) => (
-                              <div key={currency}>
-                                {new Intl.NumberFormat('tr-TR', {
-                                  style: 'currency',
-                                  currency: currency
-                                }).format(Math.abs(balance.remaining))}
-                              </div>
-                            ))}
-                        </div>
-                      ) : '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {account.transactionCount}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {account.lastTransactionDate
-                      ? formatDate(account.lastTransactionDate)
-                      : '-'
-                    }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
@@ -871,6 +367,7 @@ export default function CurrentAccountsPage() {
 
         {filteredAccounts.length === 0 && (
           <div className="text-center py-12">
+            <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-500">Cari hesap bulunamadı</p>
           </div>
         )}
@@ -882,46 +379,20 @@ export default function CurrentAccountsPage() {
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-2xl font-bold text-gray-800">{selectedAccount.name}</h3>
-                <p className="text-gray-600">
-                  {selectedAccount.type === 'customer' ? 'Müşteri' : 'Tedarikçi'} -
-                  {(() => {
-                    // Bakiyeleri para birimi bazında düzgün hesapla
-                    const receivableByCurrency: Record<string, number> = {}
-                    const payableByCurrency: Record<string, number> = {}
-
-                    Object.entries(selectedAccount.balancesByCurrency).forEach(([currency, balance]) => {
-                      if (selectedAccount.type === 'customer') {
-                        if (balance.remaining > 0) {
-                          receivableByCurrency[currency] = balance.remaining
-                        } else if (balance.remaining < 0) {
-                          payableByCurrency[currency] = Math.abs(balance.remaining)
-                        }
-                      } else if (selectedAccount.type === 'supplier') {
-                        if (balance.remaining > 0) {
-                          payableByCurrency[currency] = balance.remaining
-                        } else if (balance.remaining < 0) {
-                          receivableByCurrency[currency] = Math.abs(balance.remaining)
-                        }
-                      }
-                    })
-
-                    return (
-                      <>
-                        <span className="ml-2 font-bold text-green-600">
-                          Alacak: {Object.keys(receivableByCurrency).length > 0
-                            ? Object.entries(receivableByCurrency).map(([cur, amt]) => formatCurrency(amt, cur)).join(', ')
-                            : '₺0,00'}
-                        </span>
-                        <span className="ml-2 font-bold text-red-600">
-                          Borç: {Object.keys(payableByCurrency).length > 0
-                            ? Object.entries(payableByCurrency).map(([cur, amt]) => formatCurrency(amt, cur)).join(', ')
-                            : '₺0,00'}
-                        </span>
-                      </>
-                    )
-                  })()}
-                </p>
+                <h3 className="text-2xl font-bold text-gray-800">{selectedAccount.account_name}</h3>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="text-gray-600">Kod: {selectedAccount.account_code}</span>
+                  <span className="text-gray-400">|</span>
+                  {getAccountTypeBadge(selectedAccount.account_type)}
+                  <span className="text-gray-400">|</span>
+                  <span className={`font-bold ${
+                    selectedAccount.current_balance > 0 ? 'text-green-600' :
+                    selectedAccount.current_balance < 0 ? 'text-red-600' :
+                    'text-gray-600'
+                  }`}>
+                    Bakiye: {formatCurrency(selectedAccount.current_balance, selectedAccount.currency)}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => {
@@ -938,122 +409,54 @@ export default function CurrentAccountsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Kaynak</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tarih</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tip</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">İşlem Tipi</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Yön</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Tutar</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Fatura</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Açıklama</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Referans</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Belge</th>
-                    <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {selectedAccountTransactions.map((tx: any) => {
-                    const isCashTransaction = tx.source === 'cash'
-                    const amount = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount)
-
-                    return (
-                      <tr key={tx.id} className={`hover:bg-gray-50 ${isCashTransaction ? 'bg-green-50' : ''}`}>
-                        {/* Kaynak */}
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            isCashTransaction ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {isCashTransaction ? 'Kasa' : 'Cari'}
-                          </span>
-                        </td>
-
-                        {/* Tarih */}
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatDate(tx.transaction_date)}
-                        </td>
-
-                        {/* Tip */}
-                        <td className="px-4 py-3">
-                          {isCashTransaction ? (
-                            <span className={`px-2 py-1 text-xs font-medium rounded ${
-                              tx.transaction_type === 'income'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {tx.transaction_type === 'income' ? 'Tahsilat' : 'Ödeme'}
-                            </span>
-                          ) : (
-                            <span className={`px-2 py-1 text-xs font-medium rounded ${
-                              tx.transaction_type === 'receivable'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {tx.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Tutar */}
-                        <td className={`px-4 py-3 text-sm font-bold ${
-                          isCashTransaction
-                            ? (tx.transaction_type === 'income' ? 'text-green-600' : 'text-green-600')
-                            : (tx.transaction_type === 'receivable' ? 'text-blue-600' : 'text-orange-600')
+                  {selectedAccountTransactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {formatDate(tx.transaction_date)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {getTransactionTypeBadge(tx.transaction_type)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${
+                          tx.direction === 'credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
-                          {formatCurrency(amount, tx.currency)}
-                        </td>
-
-                        {/* Açıklama */}
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {tx.description || '-'}
-                          {isCashTransaction && tx.payment_method && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              ({tx.payment_method === 'cash' ? 'Nakit' :
-                                tx.payment_method === 'transfer' ? 'Transfer' :
-                                tx.payment_method === 'check' ? 'Çek' : 'Diğer'})
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Referans */}
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {tx.reference_number || '-'}
-                        </td>
-
-                        {/* Belge */}
-                        <td className="px-4 py-3 text-center">
-                          {tx.document_url ? (
-                            <button
-                              onClick={() => handleDownloadDocument(tx.document_url)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
-                              title="Belgeyi İndir"
-                            >
-                              <FileDown className="w-3 h-3" />
-                              PDF
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-400">-</span>
-                          )}
-                        </td>
-
-                        {/* İşlemler */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => isCashTransaction ? handleEditCashTransaction(tx) : handleEditAccountTransaction(tx)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="Düzenle"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => isCashTransaction ? handleDeleteCashTransaction(tx) : handleDeleteAccountTransaction(tx)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Sil"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          {tx.direction === 'credit' ? '➕ Alacak' : '➖ Borç'}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 text-sm font-bold ${
+                        tx.direction === 'credit' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {tx.direction === 'credit' ? '+' : '-'}
+                        {formatCurrency(tx.amount, tx.currency)}
+                        {tx.exchange_rate !== 1 && (
+                          <div className="text-xs text-gray-500">
+                            Kur: {tx.exchange_rate} = {formatCurrency(tx.amount_tl || (tx.amount * tx.exchange_rate))}
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {tx.invoice ? (
+                          <div>
+                            <div className="font-medium">{tx.invoice.invoice_number}</div>
+                            <div className="text-xs text-gray-500">{tx.invoice.invoice_type}</div>
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {tx.description || '-'}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
 
@@ -1062,196 +465,6 @@ export default function CurrentAccountsPage() {
                   <p className="text-gray-500">Henüz işlem kaydı yok</p>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {showEditModal && editingTransaction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">
-                {editingTransactionType === 'cash' ? 'Kasa İşlemi Düzenle' : 'Cari İşlem Düzenle'}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingTransaction(null)
-                }}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Tutar */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tutar *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editForm.amount}
-                  onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {/* Para Birimi */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Para Birimi
-                </label>
-                <select
-                  value={editForm.currency}
-                  onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isSubmitting}
-                >
-                  <option value="TRY">TRY</option>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                </select>
-              </div>
-
-              {/* İşlem Tarihi */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  İşlem Tarihi *
-                </label>
-                <input
-                  type="date"
-                  value={editForm.transaction_date}
-                  onChange={(e) => setEditForm({ ...editForm, transaction_date: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {/* Ödeme Yöntemi (sadece kasa işlemleri için) */}
-              {editingTransactionType === 'cash' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ödeme Yöntemi
-                  </label>
-                  <select
-                    value={editForm.payment_method}
-                    onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value as any })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="cash">Nakit</option>
-                    <option value="transfer">Havale/EFT</option>
-                    <option value="check">Çek</option>
-                    <option value="other">Diğer</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Açıklama */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Açıklama
-                </label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-3 justify-end pt-4 border-t">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false)
-                    setEditingTransaction(null)
-                  }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  disabled={isSubmitting}
-                >
-                  İptal
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:bg-gray-400"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {showDeleteModal && deletingTransaction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">İşlem Sil</h3>
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false)
-                  setDeletingTransaction(null)
-                }}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mb-6">
-              <p className="text-gray-700 mb-4">
-                Bu {deletingTransactionType === 'cash' ? 'kasa' : 'cari'} işlemini silmek istediğinizden emin misiniz?
-              </p>
-
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-800 font-medium mb-2">
-                  🗑️ Silinecek İşlem:
-                </p>
-                <p className="text-sm text-red-700">
-                  <strong>Tutar:</strong> {formatCurrency(parseFloat(deletingTransaction.amount), deletingTransaction.currency)}
-                </p>
-                <p className="text-sm text-red-700">
-                  <strong>Tarih:</strong> {formatDate(deletingTransaction.transaction_date)}
-                </p>
-                {deletingTransaction.description && (
-                  <p className="text-sm text-red-700">
-                    <strong>Açıklama:</strong> {deletingTransaction.description}
-                  </p>
-                )}
-              </div>
-
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false)
-                  setDeletingTransaction(null)
-                }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                disabled={isSubmitting}
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:bg-gray-400"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Siliniyor...' : 'Sil'}
-              </button>
             </div>
           </div>
         </div>

@@ -15,9 +15,17 @@ DO $$
 BEGIN
     -- Eğer tablo varsa, eski constraint'leri temizle
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'current_accounts') THEN
-        -- Eski NOT NULL constraint'leri kaldır
+        -- Eski NOT NULL constraint'leri kaldır (type kolonu)
         BEGIN
             ALTER TABLE current_accounts ALTER COLUMN type DROP NOT NULL;
+        EXCEPTION
+            WHEN undefined_column THEN NULL;
+            WHEN others THEN NULL;
+        END;
+
+        -- Eski NOT NULL constraint'leri kaldır (code kolonu)
+        BEGIN
+            ALTER TABLE current_accounts ALTER COLUMN code DROP NOT NULL;
         EXCEPTION
             WHEN undefined_column THEN NULL;
             WHEN others THEN NULL;
@@ -61,15 +69,26 @@ ALTER TABLE current_accounts ADD COLUMN IF NOT EXISTS customer_id UUID;
 ALTER TABLE current_accounts ADD COLUMN IF NOT EXISTS supplier_id UUID;
 
 -- ========================================
--- ADIM 3: Eski 'type' kolonunu account_type'a kopyala
+-- ADIM 3: Eski kolonları yeni kolonlara kopyala
 -- ========================================
 
+-- Eski 'type' kolonunu account_type'a kopyala
 DO $$
 BEGIN
-    -- Eğer eski 'type' kolonu varsa, account_type'a kopyala
     UPDATE current_accounts
     SET account_type = type
     WHERE type IS NOT NULL AND (account_type IS NULL OR account_type = '');
+EXCEPTION
+    WHEN undefined_column THEN NULL;
+    WHEN others THEN NULL;
+END $$;
+
+-- Eski 'code' kolonunu account_code'a kopyala
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET account_code = code
+    WHERE code IS NOT NULL AND (account_code IS NULL OR account_code = '');
 EXCEPTION
     WHEN undefined_column THEN NULL;
     WHEN others THEN NULL;
@@ -149,12 +168,23 @@ SET account_type = CASE
 END
 WHERE account_type IS NULL OR account_type = '';
 
--- Eski 'type' kolonunu account_type ile senkronize et
+-- Eski 'type' kolonunu account_type ile senkronize et (geriye uyumluluk)
 DO $$
 BEGIN
     UPDATE current_accounts
     SET type = account_type
     WHERE account_type IS NOT NULL AND account_type != '';
+EXCEPTION
+    WHEN undefined_column THEN NULL;
+    WHEN others THEN NULL;
+END $$;
+
+-- Eski 'code' kolonunu account_code ile senkronize et (geriye uyumluluk)
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET code = account_code
+    WHERE account_code IS NOT NULL AND account_code != '';
 EXCEPTION
     WHEN undefined_column THEN NULL;
     WHEN others THEN NULL;

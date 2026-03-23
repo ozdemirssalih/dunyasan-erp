@@ -426,14 +426,14 @@ DROP POLICY IF EXISTS ca_transactions_company_isolation ON current_account_trans
 CREATE POLICY current_accounts_company_isolation ON current_accounts
     FOR ALL USING (
         company_id IN (
-            SELECT company_id FROM user_companies WHERE user_id = auth.uid()
+            SELECT company_id FROM profiles WHERE id = auth.uid()
         )
     );
 
 CREATE POLICY ca_transactions_company_isolation ON current_account_transactions
     FOR ALL USING (
         company_id IN (
-            SELECT company_id FROM user_companies WHERE user_id = auth.uid()
+            SELECT company_id FROM profiles WHERE id = auth.uid()
         )
     );
 

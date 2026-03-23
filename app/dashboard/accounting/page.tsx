@@ -254,14 +254,17 @@ export default function AccountingPageV2() {
           balancesByCurrency[currency].remaining =
             balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
 
-          // Toplam alacaklara ekle
+          // Pozitif bakiye = müşteri bize borçlu (alacak)
+          // Negatif bakiye = biz müşteriye borçlu (borç - fazla ödeme aldık)
           if (balancesByCurrency[currency].remaining > 0) {
             receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
+          } else if (balancesByCurrency[currency].remaining < 0) {
+            payableByCurrency[currency] = (payableByCurrency[currency] || 0) + Math.abs(balancesByCurrency[currency].remaining)
           }
         })
 
-        // Eğer bu müşterinin kalan borcu varsa listeye ekle
-        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        // Eğer bu müşterinin herhangi bir bakiyesi varsa (pozitif veya negatif) listeye ekle
+        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
         if (hasRemaining) {
           customerBalances.push({
             customer_id: customer.id,
@@ -334,9 +337,12 @@ export default function AccountingPageV2() {
           balancesByCurrency[currency].remaining =
             balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
 
-          // Toplam borçlara ekle
+          // Pozitif bakiye = biz tedarikçiye borçluyuz (borç)
+          // Negatif bakiye = tedarikçi bize borçlu (alacak - fazla ödeme yaptık)
           if (balancesByCurrency[currency].remaining > 0) {
             payableByCurrency[currency] = (payableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
+          } else if (balancesByCurrency[currency].remaining < 0) {
+            receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + Math.abs(balancesByCurrency[currency].remaining)
           }
         })
 
@@ -344,12 +350,12 @@ export default function AccountingPageV2() {
         if (supplierPayables.length > 0 || supplierPayments.length > 0) {
           console.log(`💰 ${supplier.company_name} - HESAPLAMA:`, {
             balancesByCurrency,
-            toplam_kalan_borç: Object.values(balancesByCurrency).reduce((sum, b) => sum + b.remaining, 0)
+            toplam_kalan: Object.values(balancesByCurrency).reduce((sum, b) => sum + b.remaining, 0)
           })
         }
 
-        // Eğer bu tedarikçinin kalan borcu varsa listeye ekle
-        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        // Eğer bu tedarikçinin herhangi bir bakiyesi varsa (pozitif veya negatif) listeye ekle
+        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
         if (hasRemaining) {
           supplierBalances.push({
             supplier_id: supplier.id,
@@ -1302,13 +1308,23 @@ export default function AccountingPageV2() {
                             {rec.transaction_date ? formatDate(rec.transaction_date) : '-'}
                           </div>
                           <div className="space-y-1 text-right">
-                            {Object.entries(rec.balancesByCurrency).map(([currency, balance]: [string, any]) => (
-                              balance.remaining > 0 && (
-                                <div key={currency} className="text-lg font-semibold text-green-600">
-                                  {formatCurrency(balance.remaining, currency)}
+                            {Object.entries(rec.balancesByCurrency).map(([currency, balance]: [string, any]) => {
+                              if (balance.remaining === 0) return null
+
+                              // Pozitif = müşteri bize borçlu (alacak - yeşil)
+                              // Negatif = biz müşteriye borçlu (borç - kırmızı, fazla ödeme aldık)
+                              const isPositive = balance.remaining > 0
+                              return (
+                                <div key={currency} className="text-right">
+                                  <div className={`text-lg font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatCurrency(Math.abs(balance.remaining), currency)}
+                                  </div>
+                                  {!isPositive && (
+                                    <div className="text-xs text-red-500">Fazla Ödeme Aldık</div>
+                                  )}
                                 </div>
                               )
-                            ))}
+                            })}
                           </div>
                         </div>
                       </div>
@@ -1342,13 +1358,23 @@ export default function AccountingPageV2() {
                             {pay.transaction_date ? formatDate(pay.transaction_date) : '-'}
                           </div>
                           <div className="space-y-1 text-right">
-                            {Object.entries(pay.balancesByCurrency).map(([currency, balance]: [string, any]) => (
-                              balance.remaining > 0 && (
-                                <div key={currency} className="text-lg font-semibold text-red-600">
-                                  {formatCurrency(balance.remaining, currency)}
+                            {Object.entries(pay.balancesByCurrency).map(([currency, balance]: [string, any]) => {
+                              if (balance.remaining === 0) return null
+
+                              // Pozitif = biz tedarikçiye borçluyuz (borç - kırmızı)
+                              // Negatif = tedarikçi bize borçlu (alacak - yeşil, fazla ödeme yaptık)
+                              const isPositive = balance.remaining > 0
+                              return (
+                                <div key={currency} className="text-right">
+                                  <div className={`text-lg font-semibold ${isPositive ? 'text-red-600' : 'text-green-600'}`}>
+                                    {formatCurrency(Math.abs(balance.remaining), currency)}
+                                  </div>
+                                  {!isPositive && (
+                                    <div className="text-xs text-green-500">Fazla Ödeme Yaptık</div>
+                                  )}
                                 </div>
                               )
-                            ))}
+                            })}
                           </div>
                         </div>
                       </div>

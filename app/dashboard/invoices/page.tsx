@@ -154,7 +154,41 @@ export default function InvoicesPage() {
       if (editingId) {
         await supabase.from('invoices').update(data).eq('id', editingId)
       } else {
-        await supabase.from('invoices').insert(data)
+        // Faturayı kaydet
+        const { data: insertedInvoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .insert(data)
+          .select()
+          .single()
+
+        if (invoiceError) {
+          console.error('Invoice insert error:', invoiceError)
+          throw invoiceError
+        }
+
+        // Cariye otomatik yansıt
+        const currentAccountData = {
+          company_id: companyId,
+          transaction_type: invoiceForm.invoice_type === 'sales' ? 'receivable' : 'payable',
+          customer_id: invoiceForm.customer_id || null,
+          supplier_id: invoiceForm.supplier_id || null,
+          amount: parseFloat(invoiceForm.total_amount),
+          currency: 'TRY',
+          transaction_date: invoiceForm.invoice_date,
+          due_date: invoiceForm.due_date || null,
+          description: `Fatura: ${invoiceForm.invoice_number}`,
+          reference_number: invoiceForm.invoice_number
+        }
+
+        const { error: currentAccountError } = await supabase
+          .from('current_account_transactions')
+          .insert(currentAccountData)
+
+        if (currentAccountError) {
+          console.error('Current account insert error:', currentAccountError)
+          // Fatura kaydedildi ama cari kaydı başarısız, kullanıcıyı bilgilendir
+          alert('Fatura kaydedildi ancak cariye yansıtma başarısız oldu. Lütfen manuel olarak cari kayıt ekleyin.')
+        }
       }
 
       setShowInvoiceModal(false)
@@ -199,7 +233,26 @@ export default function InvoicesPage() {
 
   const handleDeleteInvoice = async (id: string) => {
     if (!confirm('Silmek istediğinizden emin misiniz?')) return
+
+    // Önce faturayı getir
+    const { data: invoice } = await supabase
+      .from('invoices')
+      .select('invoice_number')
+      .eq('id', id)
+      .single()
+
+    // Faturayı sil
     await supabase.from('invoices').delete().eq('id', id)
+
+    // İlgili cari kaydını da sil (reference_number'a göre)
+    if (invoice?.invoice_number) {
+      await supabase
+        .from('current_account_transactions')
+        .delete()
+        .eq('reference_number', invoice.invoice_number)
+        .eq('company_id', companyId)
+    }
+
     loadData()
   }
 

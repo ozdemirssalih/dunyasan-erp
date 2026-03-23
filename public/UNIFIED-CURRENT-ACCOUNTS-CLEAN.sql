@@ -31,6 +31,14 @@ BEGIN
             WHEN others THEN NULL;
         END;
 
+        -- Eski NOT NULL constraint'leri kaldır (name kolonu)
+        BEGIN
+            ALTER TABLE current_accounts ALTER COLUMN name DROP NOT NULL;
+        EXCEPTION
+            WHEN undefined_column THEN NULL;
+            WHEN others THEN NULL;
+        END;
+
         -- Eski check constraint'leri kaldır
         ALTER TABLE current_accounts DROP CONSTRAINT IF EXISTS current_accounts_type_check;
         ALTER TABLE current_accounts DROP CONSTRAINT IF EXISTS current_accounts_account_type_check;
@@ -89,6 +97,17 @@ BEGIN
     UPDATE current_accounts
     SET account_code = code
     WHERE code IS NOT NULL AND (account_code IS NULL OR account_code = '');
+EXCEPTION
+    WHEN undefined_column THEN NULL;
+    WHEN others THEN NULL;
+END $$;
+
+-- Eski 'name' kolonunu account_name'e kopyala
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET account_name = name
+    WHERE name IS NOT NULL AND (account_name IS NULL OR account_name = '');
 EXCEPTION
     WHEN undefined_column THEN NULL;
     WHEN others THEN NULL;
@@ -185,6 +204,17 @@ BEGIN
     UPDATE current_accounts
     SET code = account_code
     WHERE account_code IS NOT NULL AND account_code != '';
+EXCEPTION
+    WHEN undefined_column THEN NULL;
+    WHEN others THEN NULL;
+END $$;
+
+-- Eski 'name' kolonunu account_name ile senkronize et (geriye uyumluluk)
+DO $$
+BEGIN
+    UPDATE current_accounts
+    SET name = account_name
+    WHERE account_name IS NOT NULL AND account_name != '';
 EXCEPTION
     WHEN undefined_column THEN NULL;
     WHEN others THEN NULL;

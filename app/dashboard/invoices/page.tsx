@@ -6,30 +6,18 @@ import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import { FileText, Package, Plus, Edit2, Trash2, X, Save, Search, Clock, Upload, FileDown, Check } from 'lucide-react'
 
-type Tab = 'requests' | 'invoices' | 'waybills'
-
 export default function InvoicesPage() {
   const { canCreate, canEdit, canDelete } = usePermissions()
-  const [activeTab, setActiveTab] = useState<Tab>('requests')
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
 
   // Data states
   const [invoices, setInvoices] = useState<any[]>([])
-  const [waybills, setWaybills] = useState<any[]>([])
-  const [items, setItems] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
 
-  // PDF upload states
-  const [selectedWaybill, setSelectedWaybill] = useState<any | null>(null)
-  const [documentFile, setDocumentFile] = useState<File | null>(null)
-  const [uploadingId, setUploadingId] = useState<string | null>(null)
-
   // Modal states
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
-  const [showWaybillModal, setShowWaybillModal] = useState(false)
 
   // Form states
   const [invoiceForm, setInvoiceForm] = useState({
@@ -93,22 +81,12 @@ export default function InvoicesPage() {
   const loadData = async () => {
     if (!companyId) return
 
-    const [invoicesData, waybillsData, itemsData, customersData, suppliersData] = await Promise.all([
+    const [invoicesData, customersData, suppliersData] = await Promise.all([
       supabase
         .from('invoices')
         .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
         .eq('company_id', companyId)
         .order('invoice_date', { ascending: false }),
-      supabase
-        .from('waybills')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('warehouse_items')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('is_active', true),
       supabase
         .from('customer_companies')
         .select('*')
@@ -123,8 +101,6 @@ export default function InvoicesPage() {
     ])
 
     setInvoices(invoicesData.data || [])
-    setWaybills(waybillsData.data || [])
-    setItems(itemsData.data || [])
     setCustomers(customersData.data || [])
     setSuppliers(suppliersData.data || [])
   }
@@ -480,21 +456,6 @@ export default function InvoicesPage() {
     inv.supplier?.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const filteredWaybills = waybills.filter(wb =>
-    wb.waybill_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wb.customer?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wb.supplier?.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const pendingRequests = waybills.filter(w => w.status === 'pending')
-  const completedWaybills = waybills.filter(w => w.status === 'completed')
-
-  const tabs = [
-    { id: 'requests', label: `Talepler (${pendingRequests.length})`, icon: Clock },
-    { id: 'invoices', label: 'Faturalar', icon: FileText },
-    { id: 'waybills', label: `İrsaliyeler (${completedWaybills.length})`, icon: Package }
-  ]
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -511,29 +472,8 @@ export default function InvoicesPage() {
       <div className="min-h-screen bg-gray-50 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Faturalar & İrsaliyeler</h1>
-          <p className="text-gray-600">Fatura ve irsaliye yönetimi</p>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="mb-6">
-          <div className="flex gap-2 bg-white rounded-lg p-2 shadow-sm border border-gray-200">
-            {tabs.map((tab) => {
-              const Icon = tab.icon
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                    activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  {tab.label}
-                </button>
-              )
-            })}
-          </div>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Faturalar</h1>
+          <p className="text-gray-600">Fatura yönetimi</p>
         </div>
 
         {/* Search and Actions */}
@@ -548,48 +488,121 @@ export default function InvoicesPage() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          {canCreate('invoices') && activeTab !== 'requests' && (
+          {canCreate('invoices') && (
             <button
               onClick={() => {
                 setEditingId(null)
-                if (activeTab === 'invoices') {
-                  setInvoiceForm({
-                    invoice_number: '',
-                    invoice_type: 'sales',
-                    customer_id: '',
-                    supplier_id: '',
-                    invoice_date: new Date().toISOString().split('T')[0],
-                    due_date: '',
-                    total_amount: '',
-                    tax_amount: '',
-                    discount_amount: '',
-                    status: 'draft',
-                    notes: ''
-                  })
-                  setShowInvoiceModal(true)
-                } else {
-                  setWaybillForm({
-                    waybill_number: '',
-                    waybill_type: 'outgoing',
-                    customer_id: '',
-                    supplier_id: '',
-                    waybill_date: new Date().toISOString().split('T')[0],
-                    status: 'draft',
-                    notes: ''
-                  })
-                  setShowWaybillModal(true)
-                }
+                setInvoiceForm({
+                  invoice_number: '',
+                  invoice_type: 'sales',
+                  customer_id: '',
+                  supplier_id: '',
+                  invoice_date: new Date().toISOString().split('T')[0],
+                  due_date: '',
+                  total_amount: '',
+                  tax_amount: '',
+                  discount_amount: '',
+                  status: 'draft',
+                  notes: ''
+                })
+                setShowInvoiceModal(true)
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-colors"
             >
               <Plus className="w-5 h-5" />
-              Yeni {activeTab === 'invoices' ? 'Fatura' : 'İrsaliye'}
+              Yeni Fatura
             </button>
           )}
         </div>
 
-        {/* Tab Content */}
-        {activeTab === 'requests' && (
+        {/* Faturalar Listesi */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fatura No</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Müşteri/Tedarikçi</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
+                  <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
+                  {(canEdit('invoices') || canDelete('invoices')) && (
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredInvoices.map((invoice) => (
+                  <tr key={invoice.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{invoice.invoice_number}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        invoice.invoice_type === 'sales' ? 'bg-green-100 text-green-800' :
+                        invoice.invoice_type === 'outgoing_return' ? 'bg-green-100 text-green-700' :
+                        invoice.invoice_type === 'sales_fx' ? 'bg-green-100 text-green-700' :
+                        invoice.invoice_type === 'purchase' ? 'bg-orange-100 text-orange-800' :
+                        invoice.invoice_type === 'incoming_return' ? 'bg-red-100 text-red-700' :
+                        invoice.invoice_type === 'withholding' ? 'bg-purple-100 text-purple-700' :
+                        invoice.invoice_type === 'exempt' ? 'bg-blue-100 text-blue-700' :
+                        invoice.invoice_type === 'purchase_fx' ? 'bg-orange-100 text-orange-700' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {invoice.invoice_type === 'sales' ? '💰 Satış' :
+                         invoice.invoice_type === 'purchase' ? '🛒 Alış' :
+                         invoice.invoice_type === 'incoming_return' ? '↪️ Gelen İade' :
+                         invoice.invoice_type === 'outgoing_return' ? '↩️ Giden İade' :
+                         invoice.invoice_type === 'withholding' ? '📋 Tevkifatlı' :
+                         invoice.invoice_type === 'exempt' ? '🆓 İstisna' :
+                         invoice.invoice_type === 'purchase_fx' ? '💱 Alış KF' :
+                         invoice.invoice_type === 'sales_fx' ? '💱 Satış KF' :
+                         invoice.invoice_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {invoice.invoice_type === 'sales'
+                        ? invoice.customer?.customer_name || '-'
+                        : invoice.supplier?.company_name || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
+                    <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
+                      {formatCurrency(parseFloat(invoice.total_amount))}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                        {getStatusLabel(invoice.status)}
+                      </span>
+                    </td>
+                    {(canEdit('invoices') || canDelete('invoices')) && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {canEdit('invoices') && (
+                            <button
+                              onClick={() => handleEditInvoice(invoice)}
+                              className="text-gray-400 hover:text-blue-600 p-2"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDelete('invoices') && (
+                            <button
+                              onClick={() => handleDeleteInvoice(invoice.id)}
+                              className="text-gray-400 hover:text-red-600 p-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* OLD CONTENT REMOVED - activeTab === 'requests' && (
           <div className="space-y-4">
             {pendingRequests.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm border p-12 text-center text-gray-500">

@@ -131,8 +131,21 @@ export default function InvoicesPage() {
 
   // Invoice CRUD
   const handleSaveInvoice = async () => {
+    // Temel validasyon
     if (!invoiceForm.invoice_number || !invoiceForm.total_amount || !companyId) {
       return alert('Fatura numarası ve tutar zorunludur!')
+    }
+
+    // Müşteri işlemleri için customer_id zorunlu
+    const customerTransactions = ['sales', 'outgoing_return', 'sales_fx']
+    if (customerTransactions.includes(invoiceForm.invoice_type) && !invoiceForm.customer_id) {
+      return alert('Müşteri seçimi zorunludur!')
+    }
+
+    // Tedarikçi işlemleri için supplier_id zorunlu
+    const supplierTransactions = ['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx']
+    if (supplierTransactions.includes(invoiceForm.invoice_type) && !invoiceForm.supplier_id) {
+      return alert('Tedarikçi seçimi zorunludur!')
     }
 
     try {
@@ -162,14 +175,19 @@ export default function InvoicesPage() {
           .single()
 
         if (invoiceError) {
-          console.error('Invoice insert error:', invoiceError)
-          throw invoiceError
+          console.error('❌ Invoice insert error:', invoiceError)
+          alert('Fatura kaydedilemedi: ' + invoiceError.message)
+          return
         }
+
+        // Transaction type'ı doğru belirle
+        const customerTransactions = ['sales', 'outgoing_return', 'sales_fx']
+        const transactionType = customerTransactions.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
 
         // Cariye otomatik yansıt
         const currentAccountData = {
           company_id: companyId,
-          transaction_type: invoiceForm.invoice_type === 'sales' ? 'receivable' : 'payable',
+          transaction_type: transactionType,
           customer_id: invoiceForm.customer_id || null,
           supplier_id: invoiceForm.supplier_id || null,
           amount: parseFloat(invoiceForm.total_amount),
@@ -185,10 +203,13 @@ export default function InvoicesPage() {
           .insert(currentAccountData)
 
         if (currentAccountError) {
-          console.error('Current account insert error:', currentAccountError)
-          // Fatura kaydedildi ama cari kaydı başarısız, kullanıcıyı bilgilendir
-          alert('Fatura kaydedildi ancak cariye yansıtma başarısız oldu. Lütfen manuel olarak cari kayıt ekleyin.')
+          console.error('❌ Current account insert error:', currentAccountError)
+          alert('Fatura kaydedildi ancak cariye yansıtma başarısız oldu:\n' + currentAccountError.message + '\n\nLütfen SQL scriptlerini çalıştırdığınızdan emin olun!')
+          loadData()
+          return
         }
+
+        alert('✅ Fatura başarıyla kaydedildi ve cariye yansıtıldı!')
       }
 
       setShowInvoiceModal(false)

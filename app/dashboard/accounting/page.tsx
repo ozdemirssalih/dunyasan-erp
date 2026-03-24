@@ -218,6 +218,7 @@ export default function AccountingPageV2() {
       // MÜŞTERİ BAZLI BAKIYE HESAPLAMA
       const customerBalances: any[] = []
       const receivableByCurrency: Record<string, number> = {}
+      const payableByCurrency: Record<string, number> = {}  // ← ÖNCElikle tanımla!
 
       customersData?.forEach(customer => {
         // Bu müşterinin alacak kayıtları
@@ -290,7 +291,7 @@ export default function AccountingPageV2() {
 
       // TEDARİKÇİ BAZLI BAKIYE HESAPLAMA
       const supplierBalances: any[] = []
-      const payableByCurrency: Record<string, number> = {}
+      // payableByCurrency zaten yukarıda tanımlandı
 
       suppliersData?.forEach(supplier => {
         // Bu tedarikçinin borç kayıtları

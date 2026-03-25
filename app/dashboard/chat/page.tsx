@@ -522,26 +522,28 @@ export default function ChatPage() {
 
         const lastMsg = lastMsgArr?.[0] || undefined
 
-        // Get unread count
-        const { data: lastRead } = await supabase
-          .from('chat_message_reads')
-          .select('read_at')
-          .eq('user_id', currentUserId)
-          .eq('message_id', room.id)
-          .maybeSingle()
-
-        // Count unread: messages after last read that aren't from current user
+        // Get unread count: messages not sent by me that I haven't read yet
         let unreadCount = 0
         if (lastMsg) {
-          const { count } = await supabase
+          // Get all message IDs in this room not by me
+          const { data: otherMsgs } = await supabase
             .from('chat_messages')
-            .select('id', { count: 'exact', head: true })
+            .select('id')
             .eq('room_id', room.id)
             .neq('sender_id', currentUserId)
             .eq('is_deleted', false)
-            .gt('created_at', lastRead?.read_at || '1970-01-01')
 
-          unreadCount = count || 0
+          if (otherMsgs && otherMsgs.length > 0) {
+            // Get which ones I've read
+            const { data: myReads } = await supabase
+              .from('chat_message_reads')
+              .select('message_id')
+              .eq('user_id', currentUserId)
+              .in('message_id', otherMsgs.map(m => m.id))
+
+            const readSet = new Set(myReads?.map(r => r.message_id) || [])
+            unreadCount = otherMsgs.filter(m => !readSet.has(m.id)).length
+          }
         }
 
         // For DM rooms, find the other user

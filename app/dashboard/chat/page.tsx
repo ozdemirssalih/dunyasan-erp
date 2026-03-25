@@ -114,29 +114,59 @@ function formatTime(dateStr: string): string {
   return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function isSameDay(d1: Date, d2: Date): boolean {
+  return d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+}
+
+function isYesterday(d: Date, now: Date): boolean {
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  return isSameDay(d, yesterday)
+}
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const dayMs = 86400000
 
-  if (diff < dayMs && d.getDate() === now.getDate()) return 'Bugun'
-  if (diff < 2 * dayMs) return 'Dun'
-  if (diff < 7 * dayMs) {
-    const days = ['Pazar', 'Pazartesi', 'Sali', 'Carsamba', 'Persembe', 'Cuma', 'Cumartesi']
+  if (isSameDay(d, now)) return 'Bugün'
+  if (isYesterday(d, now)) return 'Dün'
+
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000)
+  if (diffDays < 7) {
+    const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi']
     return days[d.getDay()]
   }
   return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+// Sidebar'daki son mesaj zamanı (WhatsApp tarzı)
+function formatSidebarTime(dateStr: string): string {
+  const d = new Date(dateStr)
+  const now = new Date()
+
+  if (isSameDay(d, now)) return formatTime(dateStr)
+  if (isYesterday(d, now)) return 'Dün'
+
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000)
+  if (diffDays < 7) {
+    const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt']
+    return days[d.getDay()]
+  }
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function formatLastSeen(dateStr: string): string {
   const d = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return 'az once'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} dk once`
-  if (diff < 86400000) return `bugun ${formatTime(dateStr)}`
-  return `${formatDate(dateStr)} ${formatTime(dateStr)}`
+
+  if (diff < 60000) return 'az önce çevrimiçiydi'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} dk önce çevrimiçiydi`
+  if (isSameDay(d, now)) return `bugün saat ${formatTime(dateStr)}`
+  if (isYesterday(d, now)) return `dün saat ${formatTime(dateStr)}`
+  return `${formatDate(dateStr)} saat ${formatTime(dateStr)}`
 }
 
 function formatFileSize(bytes: number): string {
@@ -2195,7 +2225,7 @@ export default function ChatPage() {
                         room.unread_count > 0 ? 'text-green-600 font-semibold' : 'text-gray-400'
                       }`}>
                         {room.last_message
-                          ? formatTime(room.last_message.created_at)
+                          ? formatSidebarTime(room.last_message.created_at)
                           : ''}
                       </span>
                     </div>

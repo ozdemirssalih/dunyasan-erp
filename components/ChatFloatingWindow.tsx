@@ -80,13 +80,8 @@ export default function ChatFloatingWindow() {
             animation: 'fadeInUp 0.3s ease-out',
           }}
         >
-          <div className={`relative flex items-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-5 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 ${totalUnread > 0 ? 'notify-glow' : ''}`}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[22px] h-[22px]">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              <line x1="9" y1="10" x2="9.01" y2="10" />
-              <line x1="12" y1="10" x2="12.01" y2="10" />
-              <line x1="15" y1="10" x2="15.01" y2="10" />
-            </svg>
+          <div className={`relative flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 ${totalUnread > 0 ? 'notify-glow' : ''}`}>
+            <MessageCircle size={22} />
             <span className="font-semibold text-sm">Mesajlar</span>
             {totalUnread > 0 && (
               <>
@@ -116,14 +111,9 @@ export default function ChatFloatingWindow() {
         >
           <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
             {/* Window Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 flex items-center justify-between flex-shrink-0">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-3 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2 text-white">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  <line x1="9" y1="10" x2="9.01" y2="10" />
-                  <line x1="12" y1="10" x2="12.01" y2="10" />
-                  <line x1="15" y1="10" x2="15.01" y2="10" />
-                </svg>
+                <MessageCircle size={20} />
                 <span className="font-semibold">Mesajlasma</span>
               </div>
               <div className="flex items-center gap-1">

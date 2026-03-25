@@ -22,9 +22,11 @@ interface Profile {
   id: string
   full_name: string
   avatar_url: string | null
-  role: string | null
+  role_id: string | null
+  role_name: string | null
   company_id: string | null
   phone: string | null
+  email: string | null
 }
 
 interface ChatRoom {
@@ -184,26 +186,28 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-function getRoleLabel(role: string | null | undefined): string {
-  const roleMap: Record<string, string> = {
-    'super_admin': 'Süper Yönetici',
-    'admin': 'Yönetici',
-    'operator': 'Operatör',
-    'accountant': 'Muhasebeci',
-    'planner': 'Planlama Uzmanı',
-    'guest': 'Misafir',
-    'manager': 'Müdür',
-    'engineer': 'Mühendis',
-    'technician': 'Teknisyen',
-    'quality': 'Kalite Kontrol',
-    'warehouse': 'Depo Sorumlusu',
-    'purchasing': 'Satın Alma',
-    'sales': 'Satış',
-    'hr': 'İnsan Kaynakları',
-  }
-  if (!role) return 'Çalışan'
-  return roleMap[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1)
+function getRoleLabel(roleName: string | null | undefined): string {
+  if (!roleName) return 'Çalışan'
+  return roleName
 }
+
+// Transform profile with nested role join to flat profile
+function mapProfile(p: any): Profile | undefined {
+  if (!p) return undefined
+  return {
+    id: p.id,
+    full_name: p.full_name,
+    avatar_url: p.avatar_url,
+    role_id: p.role_id,
+    role_name: p.role?.name || null,
+    company_id: p.company_id,
+    phone: p.phone,
+    email: p.email,
+  }
+}
+
+// Supabase select string for profiles with role
+const PROFILE_SELECT = '*, role:roles(name)'
 
 function getUserColor(userId: string): string {
   const colors = [
@@ -377,12 +381,13 @@ export default function ChatPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, role:roles(name)')
         .eq('id', user.id)
         .single()
 
       if (profile) {
-        setCurrentProfile(profile)
+        const roleName = (profile.role as any)?.name || null
+        setCurrentProfile({ ...profile, role_name: roleName })
         setCompanyId(profile.company_id || '')
       }
 
@@ -472,7 +477,7 @@ export default function ChatPage() {
       // Get participants for all rooms
       const { data: allParticipants } = await supabase
         .from('chat_participants')
-        .select('*, profile:profiles(*)')
+        .select('*, profile:profiles(*, role:roles(name))')
         .in('room_id', roomIds)
 
       // Get last messages for each room
@@ -484,7 +489,7 @@ export default function ChatPage() {
         // Get last message
         const { data: lastMsgArr } = await supabase
           .from('chat_messages')
-          .select('*, sender:profiles!chat_messages_sender_id_fkey(*)')
+          .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
           .eq('room_id', room.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -517,13 +522,19 @@ export default function ChatPage() {
         let otherUser: Profile | undefined
         if (room.type === 'direct') {
           const other = roomParticipants.find(p => p.user_id !== currentUserId)
-          otherUser = other?.profile as Profile | undefined
+          otherUser = other?.profile ? mapProfile(other.profile) : undefined
         }
+
+        // Transform sender role in last message
+        const transformedLastMsg = lastMsg ? {
+          ...lastMsg,
+          sender: lastMsg.sender ? { ...lastMsg.sender, role_name: (lastMsg.sender as any)?.role?.name || null } : undefined,
+        } : undefined
 
         roomMetas.push({
           ...room,
           participants: roomParticipants as any,
-          last_message: lastMsg as any,
+          last_message: transformedLastMsg as any,
           unread_count: unreadCount,
           typing_users: [],
           online_count: 0,
@@ -563,8 +574,8 @@ export default function ChatPage() {
         .from('chat_messages')
         .select(`
           *,
-          sender:profiles!chat_messages_sender_id_fkey(*),
-          reactions:chat_message_reactions(*, profile:profiles(*)),
+          sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name)),
+          reactions:chat_message_reactions(*, profile:profiles(*, role:roles(name))),
           reads:chat_message_reads(*)
         `)
         .eq('room_id', roomId)
@@ -580,7 +591,7 @@ export default function ChatPage() {
       if (replyIds.length > 0) {
         const { data: replies } = await supabase
           .from('chat_messages')
-          .select('*, sender:profiles!chat_messages_sender_id_fkey(*)')
+          .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
           .in('id', replyIds)
 
         replies?.forEach(r => replyMap.set(r.id, r as any))
@@ -588,7 +599,11 @@ export default function ChatPage() {
 
       const messagesWithReplies = (data || []).map(m => ({
         ...m,
-        reply_to: m.reply_to_id ? replyMap.get(m.reply_to_id) : undefined,
+        sender: m.sender ? { ...m.sender, role_name: (m.sender as any)?.role?.name || null } : undefined,
+        reply_to: m.reply_to_id ? (() => {
+          const r = replyMap.get(m.reply_to_id)
+          return r ? { ...r, sender: r.sender ? { ...r.sender, role_name: (r.sender as any)?.role?.name || null } : undefined } : undefined
+        })() : undefined,
       })) as ChatMessage[]
 
       setMessages(messagesWithReplies)
@@ -679,12 +694,14 @@ export default function ChatPage() {
           const roomIds = rooms.map(r => r.id)
           if (!roomIds.includes(newMsg.room_id)) return
 
-          // Get sender profile
-          const { data: senderProfile } = await supabase
+          // Get sender profile with role
+          const { data: senderRaw } = await supabase
             .from('profiles')
-            .select('*')
+            .select('*, role:roles(name)')
             .eq('id', newMsg.sender_id)
             .single()
+
+          const senderProfile = senderRaw ? { ...senderRaw, role_name: (senderRaw as any)?.role?.name || null } : null
 
           const fullMsg: ChatMessage = {
             ...newMsg,
@@ -697,7 +714,7 @@ export default function ChatPage() {
           if (newMsg.reply_to_id) {
             const { data: replyMsg } = await supabase
               .from('chat_messages')
-              .select('*, sender:profiles!chat_messages_sender_id_fkey(*)')
+              .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
               .eq('id', newMsg.reply_to_id)
               .single()
             if (replyMsg) fullMsg.reply_to = replyMsg as any
@@ -783,7 +800,7 @@ export default function ChatPage() {
 
           const { data: reactions } = await supabase
             .from('chat_message_reactions')
-            .select('*, profile:profiles(*)')
+            .select('*, profile:profiles(*, role:roles(name))')
             .eq('message_id', msgId)
 
           setMessages(prev => prev.map(m =>
@@ -1215,12 +1232,16 @@ export default function ChatPage() {
     if (!companyId) return
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('*, role:roles(name)')
       .eq('company_id', companyId)
       .neq('id', currentUserId)
       .order('full_name')
 
-    setAllUsers(data || [])
+    const mapped = (data || []).map(u => ({
+      ...u,
+      role_name: (u as any).role?.name || null,
+    }))
+    setAllUsers(mapped)
   }, [companyId, currentUserId])
 
   const createGroupRoom = useCallback(async () => {
@@ -1848,7 +1869,7 @@ export default function ChatPage() {
                   {message.sender?.full_name || 'Bilinmeyen'}
                 </span>
                 <span className="role-badge">
-                  {getRoleLabel(message.sender?.role)}
+                  {getRoleLabel(message.sender?.role_name)}
                 </span>
               </div>
             )}
@@ -2123,7 +2144,7 @@ export default function ChatPage() {
                 {currentProfile?.full_name || 'Kullanici'}
               </span>
               <span className="text-xs text-gray-500">
-                {getRoleLabel(currentProfile?.role)}
+                {getRoleLabel(currentProfile?.role_name)}
               </span>
             </div>
           </div>
@@ -2212,7 +2233,7 @@ export default function ChatPage() {
                         </span>
                         {room.type === 'direct' && room.other_user && (
                           <span className="text-[11px] text-gray-400 truncate block -mt-0.5">
-                            {getRoleLabel(room.other_user.role)}
+                            {getRoleLabel(room.other_user.role_name)}
                           </span>
                         )}
                         {room.type === 'group' && (
@@ -2330,7 +2351,7 @@ export default function ChatPage() {
                   </div>
                   {selectedRoom?.type === 'direct' && selectedRoom?.other_user && (
                     <div className="text-[11px] text-green-600 font-medium">
-                      {getRoleLabel(selectedRoom.other_user.role)}
+                      {getRoleLabel(selectedRoom.other_user.role_name)}
                     </div>
                   )}
                   <div className="text-xs text-gray-500">
@@ -2902,7 +2923,7 @@ export default function ChatPage() {
                           <Avatar src={user.avatar_url} name={user.full_name} size={32} />
                           <div className="flex-1">
                             <div className="text-sm font-medium text-gray-800">{user.full_name}</div>
-                            <div className="text-xs text-gray-500">{user.role}</div>
+                            <div className="text-xs text-gray-500">{user.role_name || 'Çalışan'}</div>
                           </div>
                           {isSelected && (
                             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -2983,7 +3004,7 @@ export default function ChatPage() {
                     />
                     <div>
                       <div className="text-sm font-medium text-gray-800">{user.full_name}</div>
-                      <div className="text-xs text-gray-500">{user.role}</div>
+                      <div className="text-xs text-gray-500">{user.role_name || 'Çalışan'}</div>
                     </div>
                   </div>
                 ))}

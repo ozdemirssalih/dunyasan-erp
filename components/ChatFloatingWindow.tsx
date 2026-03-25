@@ -151,7 +151,7 @@ export default function ChatFloatingWindow() {
             {/* Chat Content - iframe to chat page */}
             <div className="flex-1 overflow-hidden">
               <iframe
-                src="/dashboard/chat"
+                src="/dashboard/chat?embed=true"
                 className="w-full h-full border-0"
                 style={{ minHeight: 0 }}
               />

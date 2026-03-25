@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { usePermissions } from '@/lib/hooks/usePermissions'
@@ -12,6 +12,8 @@ const ChatWindow = dynamic(() => import('@/components/ChatFloatingWindow'), { ss
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const isEmbed = searchParams.get('embed') === 'true'
   const { canView, isSuperAdmin, loading: permLoading } = usePermissions()
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -126,6 +128,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // If no user after auth check, they'll be redirected to login
   // But render the layout anyway to avoid blocking child pages
   console.log('🎨 Rendering layout - User:', user?.email || 'none')
+
+  // Embed mode: sadece children goster (iframe icin)
+  if (isEmbed) {
+    return <div className="h-screen overflow-hidden">{children}</div>
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">

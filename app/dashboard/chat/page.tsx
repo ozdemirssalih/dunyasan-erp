@@ -14,6 +14,7 @@ import {
 import dynamic from 'next/dynamic'
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false })
 import { useDropzone } from 'react-dropzone'
+import { useSearchParams } from 'next/navigation'
 
 // ============================================================================
 // INTERFACES
@@ -319,6 +320,9 @@ function showBrowserNotification(title: string, body: string) {
 // ============================================================================
 
 export default function ChatPage() {
+  const searchParams = useSearchParams()
+  const isEmbed = searchParams.get('embed') === 'true'
+
   // Auth state
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null)
@@ -2207,7 +2211,7 @@ export default function ChatPage() {
 
   if (!currentUserId) {
     return (
-      <div className="h-[calc(100vh-120px)] flex items-center justify-center bg-gray-100">
+      <div className={`${isEmbed ? 'h-screen' : 'h-[calc(100vh-120px)]'} flex items-center justify-center bg-gray-100`}>
         <div className="text-center">
           <Loader2 className="animate-spin mx-auto mb-4 text-green-600" size={48} />
           <p className="text-gray-500">Yukleniyor...</p>
@@ -2217,7 +2221,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-120px)] flex bg-gray-200 rounded-xl overflow-hidden shadow-xl border border-gray-300">
+    <div className={`${isEmbed ? 'h-screen rounded-none border-0 shadow-none' : 'h-[calc(100vh-120px)] rounded-xl shadow-xl border border-gray-300'} flex bg-gray-200 overflow-hidden`}>
       {/* ================================================================== */}
       {/* SIDEBAR */}
       {/* ================================================================== */}

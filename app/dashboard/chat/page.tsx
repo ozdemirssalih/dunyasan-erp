@@ -54,17 +54,17 @@ interface ChatMessage {
   room_id: string
   sender_id: string
   message_type: 'text' | 'image' | 'file' | 'audio' | 'system'
-  content: string
+  message: string
   file_url: string | null
   file_name: string | null
   file_size: number | null
-  reply_to_id: string | null
+  reply_to: string | null
   is_edited: boolean
   is_deleted: boolean
   created_at: string
   updated_at: string
   sender?: Profile
-  reply_to?: ChatMessage
+  reply_to_msg?: ChatMessage
   reactions?: MessageReaction[]
   reads?: MessageRead[]
 }
@@ -585,7 +585,7 @@ export default function ChatPage() {
       if (error) throw error
 
       // Load reply-to messages
-      const replyIds = (data || []).filter(m => m.reply_to_id).map(m => m.reply_to_id)
+      const replyIds = (data || []).filter(m => m.reply_to).map(m => m.reply_to)
       let replyMap = new Map<string, ChatMessage>()
 
       if (replyIds.length > 0) {
@@ -600,8 +600,8 @@ export default function ChatPage() {
       const messagesWithReplies = (data || []).map(m => ({
         ...m,
         sender: m.sender ? { ...m.sender, role_name: (m.sender as any)?.role?.name || null } : undefined,
-        reply_to: m.reply_to_id ? (() => {
-          const r = replyMap.get(m.reply_to_id)
+        reply_to_msg: m.reply_to ? (() => {
+          const r = replyMap.get(m.reply_to)
           return r ? { ...r, sender: r.sender ? { ...r.sender, role_name: (r.sender as any)?.role?.name || null } : undefined } : undefined
         })() : undefined,
       })) as ChatMessage[]
@@ -711,11 +711,11 @@ export default function ChatPage() {
           }
 
           // If reply, fetch the reply
-          if (newMsg.reply_to_id) {
+          if (newMsg.reply_to) {
             const { data: replyMsg } = await supabase
               .from('chat_messages')
               .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
-              .eq('id', newMsg.reply_to_id)
+              .eq('id', newMsg.reply_to)
               .single()
             if (replyMsg) fullMsg.reply_to = replyMsg as any
           }
@@ -743,7 +743,7 @@ export default function ChatPage() {
               playNotificationSound()
               showBrowserNotification(
                 senderProfile?.full_name || 'Yeni mesaj',
-                newMsg.content?.substring(0, 100) || 'Dosya gonderdi'
+                newMsg.message?.substring(0, 100) || 'Dosya gonderdi'
               )
             }
           }
@@ -776,7 +776,7 @@ export default function ChatPage() {
           const updated = payload.new as any
           setMessages(prev => prev.map(m =>
             m.id === updated.id
-              ? { ...m, content: updated.content, is_edited: updated.is_edited, is_deleted: updated.is_deleted }
+              ? { ...m, content: updated.message, is_edited: updated.is_edited, is_deleted: updated.is_deleted }
               : m
           ))
         }
@@ -954,11 +954,11 @@ export default function ChatPage() {
       if (!text) return
       await supabase
         .from('chat_messages')
-        .update({ content: text, is_edited: true, updated_at: new Date().toISOString() })
+        .update({ message: text, is_edited: true, updated_at: new Date().toISOString() })
         .eq('id', editingMessage.id)
 
       setMessages(prev => prev.map(m =>
-        m.id === editingMessage.id ? { ...m, content: text, is_edited: true } : m
+        m.id === editingMessage.id ? { ...m, message: text, is_edited: true } : m
       ))
       setEditingMessage(null)
       setMessageText('')
@@ -974,7 +974,7 @@ export default function ChatPage() {
         sender_id: currentUserId,
         message_type: 'text',
         content: text,
-        reply_to_id: replyingTo?.id || null,
+        reply_to: replyingTo?.id || null,
       })
 
       if (error) throw error
@@ -1037,11 +1037,11 @@ export default function ChatPage() {
         room_id: selectedRoomId,
         sender_id: currentUserId,
         message_type: isImage ? 'image' : isAudio ? 'audio' : 'file',
-        content: isImage ? '' : file.name,
+        message: isImage ? '' : file.name,
         file_url: urlData.publicUrl,
         file_name: file.name,
         file_size: file.size,
-        reply_to_id: replyingTo?.id || null,
+        reply_to: replyingTo?.id || null,
       })
 
       setReplyingTo(null)
@@ -1134,11 +1134,11 @@ export default function ChatPage() {
   const deleteMessage = useCallback(async (messageId: string) => {
     await supabase
       .from('chat_messages')
-      .update({ is_deleted: true, content: '', updated_at: new Date().toISOString() })
+      .update({ is_deleted: true, message: '', updated_at: new Date().toISOString() })
       .eq('id', messageId)
 
     setMessages(prev => prev.map(m =>
-      m.id === messageId ? { ...m, is_deleted: true, content: '' } : m
+      m.id === messageId ? { ...m, is_deleted: true, message: '' } : m
     ))
   }, [])
 
@@ -1251,6 +1251,7 @@ export default function ChatPage() {
       const { data: room, error } = await supabase
         .from('chat_rooms')
         .insert({
+          company_id: companyId,
           name: newGroupName.trim(),
           type: 'group',
           description: newGroupDesc.trim() || null,
@@ -1274,7 +1275,7 @@ export default function ChatPage() {
         room_id: room.id,
         sender_id: currentUserId,
         message_type: 'system',
-        content: `${currentProfile?.full_name} grubu olusturdu`,
+        message: `${currentProfile?.full_name} grubu olusturdu`,
       })
 
       setShowNewGroupModal(false)
@@ -1286,7 +1287,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('Error creating group:', err)
     }
-  }, [newGroupName, newGroupDesc, newGroupMembers, currentUserId, currentProfile, loadRooms])
+  }, [newGroupName, newGroupDesc, newGroupMembers, currentUserId, currentProfile, companyId, loadRooms])
 
   const createDirectMessage = useCallback(async (userId: string) => {
     if (!currentUserId) return
@@ -1321,6 +1322,7 @@ export default function ChatPage() {
       const { data: room, error } = await supabase
         .from('chat_rooms')
         .insert({
+          company_id: companyId,
           name: `${currentProfile?.full_name}, ${otherUser?.full_name}`,
           type: 'direct',
           created_by: currentUserId,
@@ -1342,7 +1344,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('Error creating DM:', err)
     }
-  }, [currentUserId, currentProfile, allUsers, loadRooms])
+  }, [currentUserId, currentProfile, companyId, allUsers, loadRooms])
 
   // ============================================================================
   // AUDIO PLAYBACK
@@ -1393,7 +1395,7 @@ export default function ChatPage() {
     if (!messageSearch.trim()) return []
     const q = messageSearch.toLowerCase()
     return messages.filter(m =>
-      !m.is_deleted && m.content.toLowerCase().includes(q)
+      !m.is_deleted && m.message.toLowerCase().includes(q)
     )
   }, [messageSearch, messages])
 
@@ -1487,8 +1489,8 @@ export default function ChatPage() {
       case 'image': return 'Fotograf'
       case 'file': return msg.file_name || 'Dosya'
       case 'audio': return 'Sesli mesaj'
-      case 'system': return msg.content
-      default: return msg.content
+      case 'system': return msg.message
+      default: return msg.message
     }
   }
 
@@ -1503,9 +1505,9 @@ export default function ChatPage() {
       case 'audio':
         return <span className="flex items-center gap-1"><Mic size={13} className="flex-shrink-0" /> Sesli mesaj</span>
       case 'system':
-        return <span>{msg.content}</span>
+        return <span>{msg.message}</span>
       default:
-        return <span>{msg.content}</span>
+        return <span>{msg.message}</span>
     }
   }
 
@@ -1822,7 +1824,7 @@ export default function ChatPage() {
           )}
           <div className="flex justify-center my-2">
             <span className="bg-gradient-to-r from-yellow-50 to-amber-50 text-yellow-800 text-xs px-4 py-1.5 rounded-lg shadow-sm border border-yellow-200 msg-system">
-              {message.content}
+              {message.message}
             </span>
           </div>
         </>
@@ -1884,13 +1886,13 @@ export default function ChatPage() {
               }`}
             >
               {/* Reply preview */}
-              {message.reply_to && !message.is_deleted && (
+              {message.reply_to_msg && !message.is_deleted && (
                 <div className="bg-black/5 border-l-4 border-green-500 rounded px-2 py-1 mb-1 text-xs">
-                  <div className="font-semibold" style={{ color: getUserColor(message.reply_to.sender_id) }}>
-                    {message.reply_to.sender?.full_name || 'Bilinmeyen'}
+                  <div className="font-semibold" style={{ color: getUserColor(message.reply_to_msg.sender_id) }}>
+                    {message.reply_to_msg.sender?.full_name || 'Bilinmeyen'}
                   </div>
                   <div className="text-gray-600 truncate">
-                    {message.reply_to.is_deleted ? 'Bu mesaj silindi' : message.reply_to.content || getMessagePreviewText(message.reply_to)}
+                    {message.reply_to_msg.is_deleted ? 'Bu mesaj silindi' : message.reply_to_msg.message || getMessagePreviewText(message.reply_to_msg)}
                   </div>
                 </div>
               )}
@@ -1973,9 +1975,9 @@ export default function ChatPage() {
                   {message.message_type === 'text' && (
                     <span className="text-sm whitespace-pre-wrap break-words">
                       {messageSearch.trim() ? (
-                        highlightText(message.content, messageSearch)
+                        highlightText(message.message, messageSearch)
                       ) : (
-                        message.content
+                        message.message
                       )}
                     </span>
                   )}
@@ -2510,7 +2512,7 @@ export default function ChatPage() {
                   </div>
                   <div className="text-xs text-gray-500 truncate">
                     {editingMessage
-                      ? editingMessage.content
+                      ? editingMessage.message
                       : replyingTo?.is_deleted
                         ? 'Bu mesaj silindi'
                         : getMessagePreviewText(replyingTo!)
@@ -2729,7 +2731,7 @@ export default function ChatPage() {
 
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(contextMenu.message!.content)
+                  navigator.clipboard.writeText(contextMenu.message!.message)
                   setContextMenu({ ...contextMenu, visible: false })
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
@@ -2761,7 +2763,7 @@ export default function ChatPage() {
                     <button
                       onClick={() => {
                         setEditingMessage(contextMenu.message!)
-                        setMessageText(contextMenu.message!.content)
+                        setMessageText(contextMenu.message!.message)
                         setContextMenu({ ...contextMenu, visible: false })
                         messageInputRef.current?.focus()
                       }}

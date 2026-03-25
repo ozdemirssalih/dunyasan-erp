@@ -46,6 +46,11 @@ export default function InvoicesPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [userId, setUserId] = useState<string>('')
+  const [showWaybillModal, setShowWaybillModal] = useState(false)
+  const [documentFile, setDocumentFile] = useState<File | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [selectedWaybill, setSelectedWaybill] = useState<any>(null)
 
   useEffect(() => {
     initializeData()

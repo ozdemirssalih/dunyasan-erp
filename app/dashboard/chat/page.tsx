@@ -1455,6 +1455,10 @@ export default function ChatPage() {
     setShowEmojiPicker(false)
     setShowMessageSearch(false)
     setMessageSearch('')
+    // Aninda unread badge'i sifirla
+    setRooms(prev => prev.map(r =>
+      r.id === roomId ? { ...r, unread_count: 0 } : r
+    ))
     if (window.innerWidth < 768) setShowSidebar(false)
   }, [])
 

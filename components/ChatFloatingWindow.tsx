@@ -80,15 +80,18 @@ export default function ChatFloatingWindow() {
             animation: 'fadeInUp 0.3s ease-out',
           }}
         >
-          <div className="relative flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+          <div className={`relative flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 ${totalUnread > 0 ? 'notify-glow' : ''}`}>
             <MessageCircle size={22} />
             <span className="font-semibold text-sm">Mesajlar</span>
             {totalUnread > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md"
-                style={{ animation: 'scaleIn 0.3s ease-out' }}
-              >
-                {totalUnread}
-              </span>
+              <>
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-md notify-badge">
+                  {totalUnread}
+                </span>
+                {/* Yanip sonen isik efekti */}
+                <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-400 notify-ping" />
+                <span className="absolute inset-0 rounded-2xl notify-border" />
+              </>
             )}
           </div>
         </button>
@@ -169,6 +172,38 @@ export default function ChatFloatingWindow() {
         @keyframes scaleIn {
           from { opacity: 0; transform: scale(0.9); }
           to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes notifyPing {
+          0% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(1); opacity: 0; }
+        }
+        @keyframes notifyGlow {
+          0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0), 0 4px 12px rgba(0,0,0,0.15); }
+          50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5), 0 0 40px rgba(239, 68, 68, 0.2), 0 4px 12px rgba(0,0,0,0.15); }
+        }
+        @keyframes notifyBorder {
+          0%, 100% { box-shadow: inset 0 0 0 0 rgba(255,255,255,0); }
+          50% { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.4); }
+        }
+        @keyframes notifyBadgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
+        }
+        .notify-ping {
+          animation: notifyPing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+          pointer-events: none;
+        }
+        .notify-glow {
+          animation: notifyGlow 2s ease-in-out infinite;
+        }
+        .notify-border {
+          animation: notifyBorder 2s ease-in-out infinite;
+          pointer-events: none;
+          border-radius: 1rem;
+        }
+        .notify-badge {
+          animation: notifyBadgePulse 1.5s ease-in-out infinite;
         }
       `}</style>
     </>

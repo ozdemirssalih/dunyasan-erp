@@ -2976,15 +2976,15 @@ export default function ChatPage() {
             {/* Avatar */}
             <div className="flex flex-col items-center py-8 bg-gradient-to-b from-gray-50 to-white">
               <div
-                className="relative cursor-pointer group"
-                onClick={() => selectedRoom.type === 'group' && groupAvatarInputRef.current?.click()}
+                className={`relative ${selectedRoom.type === 'group' && selectedRoom.created_by === currentUserId ? 'cursor-pointer group' : ''}`}
+                onClick={() => selectedRoom.type === 'group' && selectedRoom.created_by === currentUserId && groupAvatarInputRef.current?.click()}
               >
                 <Avatar
                   src={getRoomAvatar(selectedRoom)}
                   name={getRoomDisplayName(selectedRoom)}
                   size={120}
                 />
-                {selectedRoom.type === 'group' && (
+                {selectedRoom.type === 'group' && selectedRoom.created_by === currentUserId && (
                   <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all">
                     <Camera size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
@@ -3015,10 +3015,11 @@ export default function ChatPage() {
                   {getRoleLabel(selectedRoom.other_user.role_name)}
                 </p>
               )}
-              {selectedRoom.type === 'group' && (
-                <p className="text-xs text-gray-400 mt-1">
-                  {selectedRoom.type === 'group' ? 'Simge degistirmek icin resme tiklayin' : ''}
-                </p>
+              {selectedRoom.type === 'group' && selectedRoom.created_by === currentUserId && (
+                <p className="text-xs text-gray-400 mt-1">Simge degistirmek icin resme tiklayin</p>
+              )}
+              {selectedRoom.type === 'group' && selectedRoom.created_by !== currentUserId && (
+                <p className="text-xs text-gray-400 mt-1">Bu grubu {selectedRoom.participants.find((p: any) => p.user_id === selectedRoom.created_by)?.profile?.full_name || 'biri'} yonetiyor</p>
               )}
             </div>
 
@@ -3081,7 +3082,27 @@ export default function ChatPage() {
                           </div>
                           <div className="text-xs text-gray-500">{getRoleLabel(profile.role_name)}</div>
                         </div>
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        {/* Remove button - only for group creator, not for self */}
+                        {selectedRoom.created_by === currentUserId && profile.id !== currentUserId ? (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`${profile.full_name} kisisi gruptan cikarilsin mi?`)) return
+                              await supabase.from('chat_participants').delete()
+                                .eq('room_id', selectedRoom.id).eq('user_id', profile.id)
+                              await supabase.from('chat_messages').insert({
+                                room_id: selectedRoom.id, sender_id: currentUserId,
+                                message_type: 'system', message: `${profile.full_name} gruptan cikarildi`,
+                              })
+                              await loadRooms()
+                            }}
+                            className="p-1.5 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+                            title="Gruptan cikar"
+                          >
+                            <X size={14} className="text-red-400" />
+                          </button>
+                        ) : (
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        )}
                       </div>
                     )
                   })}

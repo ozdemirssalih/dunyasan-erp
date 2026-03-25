@@ -11,7 +11,8 @@ import {
   Hash, Lock, Globe, Camera, AtSign, Star, Pin, Bell, BellOff,
   LogOut, Settings, Loader2, AlertCircle, RefreshCw, StopCircle
 } from 'lucide-react'
-import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react'
+import dynamic from 'next/dynamic'
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false })
 import { useDropzone } from 'react-dropzone'
 
 // ============================================================================
@@ -1145,23 +1146,43 @@ export default function ChatPage() {
   const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
     if (!currentUserId) return
 
-    // Check if already reacted with this emoji
-    const { data: existing } = await supabase
-      .from('chat_message_reactions')
-      .select('id')
-      .eq('message_id', messageId)
-      .eq('user_id', currentUserId)
-      .eq('emoji', emoji)
-      .maybeSingle()
+    try {
+      // Check if already reacted with this emoji
+      const { data: existing, error: checkErr } = await supabase
+        .from('chat_message_reactions')
+        .select('id')
+        .eq('message_id', messageId)
+        .eq('user_id', currentUserId)
+        .eq('emoji', emoji)
+        .maybeSingle()
 
-    if (existing) {
-      await supabase.from('chat_message_reactions').delete().eq('id', existing.id)
-    } else {
-      await supabase.from('chat_message_reactions').insert({
-        message_id: messageId,
-        user_id: currentUserId,
-        emoji,
-      })
+      if (checkErr) { console.error('Reaction check error:', checkErr); return }
+
+      if (existing) {
+        const { error: delErr } = await supabase.from('chat_message_reactions').delete().eq('id', existing.id)
+        if (delErr) console.error('Reaction delete error:', delErr)
+        // Optimistic update
+        setMessages(prev => prev.map(m =>
+          m.id === messageId
+            ? { ...m, reactions: (m.reactions || []).filter(r => !(r.user_id === currentUserId && r.emoji === emoji)) }
+            : m
+        ))
+      } else {
+        const { error: insErr } = await supabase.from('chat_message_reactions').insert({
+          message_id: messageId,
+          user_id: currentUserId,
+          emoji,
+        })
+        if (insErr) console.error('Reaction insert error:', insErr)
+        // Optimistic update
+        setMessages(prev => prev.map(m =>
+          m.id === messageId
+            ? { ...m, reactions: [...(m.reactions || []), { id: crypto.randomUUID(), message_id: messageId, user_id: currentUserId, emoji, created_at: new Date().toISOString() }] }
+            : m
+        ))
+      }
+    } catch (err) {
+      console.error('Reaction error:', err)
     }
     setShowReactionPicker(null)
   }, [currentUserId])
@@ -2582,11 +2603,11 @@ export default function ChatPage() {
                     {showEmojiPicker && (
                       <div className="absolute bottom-12 left-0 z-50">
                         <EmojiPicker
-                          onEmojiClick={(emojiData: EmojiClickData) => {
+                          onEmojiClick={(emojiData: any) => {
                             setMessageText(prev => prev + emojiData.emoji)
                             messageInputRef.current?.focus()
                           }}
-                          theme={Theme.LIGHT}
+                          theme={"light" as any}
                           width={320}
                           height={400}
                           searchPlaceHolder="Emoji ara..."

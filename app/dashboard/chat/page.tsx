@@ -717,7 +717,7 @@ export default function ChatPage() {
               .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
               .eq('id', newMsg.reply_to)
               .single()
-            if (replyMsg) fullMsg.reply_to = replyMsg as any
+            if (replyMsg) fullMsg.reply_to_msg = replyMsg as any
           }
 
           // Add to messages if viewing this room
@@ -776,7 +776,7 @@ export default function ChatPage() {
           const updated = payload.new as any
           setMessages(prev => prev.map(m =>
             m.id === updated.id
-              ? { ...m, content: updated.message, is_edited: updated.is_edited, is_deleted: updated.is_deleted }
+              ? { ...m, message: updated.message, is_edited: updated.is_edited, is_deleted: updated.is_deleted }
               : m
           ))
         }
@@ -973,7 +973,7 @@ export default function ChatPage() {
         room_id: selectedRoomId,
         sender_id: currentUserId,
         message_type: 'text',
-        content: text,
+        message: text,
         reply_to: replyingTo?.id || null,
       })
 

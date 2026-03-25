@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { MessageCircle, X, Send, Minimize2, Paperclip, Smile, Check, CheckCheck, Phone, Video, MoreVertical, Search } from 'lucide-react'
+import { MessageCircle, X, Send, Minimize2, Paperclip, Smile, Check, CheckCheck, Phone, Video, MoreVertical, Search, Globe, Briefcase, Factory, ShoppingCart, Wrench, Folder } from 'lucide-react'
 
 interface ChatMessage {
   id: string
@@ -279,14 +279,14 @@ export default function CompanyChat() {
   }
 
   const getGroupIcon = (group: string) => {
-    const icons: Record<string, string> = {
-      'all': '🌍',
-      'Yönetim': '👔',
-      'Üretim': '🏭',
-      'Satış': '💼',
-      'Teknik': '🔧'
+    const iconMap: Record<string, JSX.Element> = {
+      'all': <Globe size={18} className="text-blue-500" />,
+      'Yönetim': <Briefcase size={18} className="text-purple-500" />,
+      'Üretim': <Factory size={18} className="text-orange-500" />,
+      'Satış': <ShoppingCart size={18} className="text-green-500" />,
+      'Teknik': <Wrench size={18} className="text-red-500" />,
     }
-    return icons[group] || '📁'
+    return iconMap[group] || <Folder size={18} className="text-gray-500" />
   }
 
   const getInitials = (name?: string) => {
@@ -337,7 +337,7 @@ export default function CompanyChat() {
                 </button>
               )}
               <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-lg font-bold">
-                {view === 'groups' ? '💬' : getGroupIcon(selectedGroup)}
+                {view === 'groups' ? <MessageCircle size={20} className="text-white" /> : getGroupIcon(selectedGroup)}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-base truncate">

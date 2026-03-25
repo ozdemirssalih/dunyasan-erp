@@ -248,33 +248,55 @@ function groupReactions(reactions: MessageReaction[]): { emoji: string; count: n
   return Array.from(map.entries()).map(([emoji, data]) => ({ emoji, ...data }))
 }
 
-// Notification sound using Web Audio API - enhanced ding-dong
+// Notification sound - loud multi-tone chime
 function playNotificationSound() {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
     const ctx = new AudioCtx()
-    // First tone
-    const osc1 = ctx.createOscillator()
-    const gain1 = ctx.createGain()
-    osc1.connect(gain1)
-    gain1.connect(ctx.destination)
-    osc1.frequency.setValueAtTime(880, ctx.currentTime)
-    osc1.type = 'sine'
-    gain1.gain.setValueAtTime(0.15, ctx.currentTime)
-    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
-    osc1.start(ctx.currentTime)
-    osc1.stop(ctx.currentTime + 0.2)
-    // Second tone (higher)
-    const osc2 = ctx.createOscillator()
-    const gain2 = ctx.createGain()
-    osc2.connect(gain2)
-    gain2.connect(ctx.destination)
-    osc2.frequency.setValueAtTime(1100, ctx.currentTime + 0.15)
-    osc2.type = 'sine'
-    gain2.gain.setValueAtTime(0.12, ctx.currentTime + 0.15)
-    gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45)
-    osc2.start(ctx.currentTime + 0.15)
-    osc2.stop(ctx.currentTime + 0.45)
+    const t = ctx.currentTime
+
+    // Tone 1 - ding (high)
+    const o1 = ctx.createOscillator()
+    const g1 = ctx.createGain()
+    o1.connect(g1); g1.connect(ctx.destination)
+    o1.frequency.setValueAtTime(880, t)
+    o1.type = 'sine'
+    g1.gain.setValueAtTime(0.35, t)
+    g1.gain.exponentialRampToValueAtTime(0.08, t + 0.3)
+    g1.gain.exponentialRampToValueAtTime(0.01, t + 0.6)
+    o1.start(t); o1.stop(t + 0.6)
+
+    // Tone 2 - dong (higher)
+    const o2 = ctx.createOscillator()
+    const g2 = ctx.createGain()
+    o2.connect(g2); g2.connect(ctx.destination)
+    o2.frequency.setValueAtTime(1175, t + 0.2)
+    o2.type = 'sine'
+    g2.gain.setValueAtTime(0.3, t + 0.2)
+    g2.gain.exponentialRampToValueAtTime(0.06, t + 0.5)
+    g2.gain.exponentialRampToValueAtTime(0.01, t + 0.9)
+    o2.start(t + 0.2); o2.stop(t + 0.9)
+
+    // Tone 3 - resolution (octave)
+    const o3 = ctx.createOscillator()
+    const g3 = ctx.createGain()
+    o3.connect(g3); g3.connect(ctx.destination)
+    o3.frequency.setValueAtTime(1760, t + 0.45)
+    o3.type = 'sine'
+    g3.gain.setValueAtTime(0.2, t + 0.45)
+    g3.gain.exponentialRampToValueAtTime(0.04, t + 0.8)
+    g3.gain.exponentialRampToValueAtTime(0.01, t + 1.2)
+    o3.start(t + 0.45); o3.stop(t + 1.2)
+
+    // Subtle harmonic undertone
+    const o4 = ctx.createOscillator()
+    const g4 = ctx.createGain()
+    o4.connect(g4); g4.connect(ctx.destination)
+    o4.frequency.setValueAtTime(440, t)
+    o4.type = 'triangle'
+    g4.gain.setValueAtTime(0.1, t)
+    g4.gain.exponentialRampToValueAtTime(0.01, t + 1.0)
+    o4.start(t); o4.stop(t + 1.0)
   } catch (e) {
     // Audio not available
   }
@@ -331,6 +353,9 @@ export default function ChatPage() {
   const [showProfileUpload, setShowProfileUpload] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false)
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null)
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -1245,6 +1270,72 @@ export default function ChatPage() {
     }
   }, [currentUserId])
 
+  // GROUP AVATAR UPLOAD
+  const handleGroupAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedRoomId) return
+    if (!file.type.startsWith('image/')) { alert('Lütfen bir resim dosyası seçin.'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('Resim boyutu en fazla 5MB olabilir.'); return }
+
+    setUploadingGroupAvatar(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const filePath = `groups/${selectedRoomId}/avatar.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('chat-files')
+        .upload(filePath, file, { upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-files')
+        .getPublicUrl(filePath)
+
+      const { error: updateError } = await supabase
+        .from('chat_rooms')
+        .update({ avatar_url: publicUrl })
+        .eq('id', selectedRoomId)
+      if (updateError) throw updateError
+
+      setRooms(prev => prev.map(r =>
+        r.id === selectedRoomId ? { ...r, avatar_url: publicUrl } : r
+      ))
+    } catch (err) {
+      console.error('Group avatar upload error:', err)
+      alert('Grup resmi yüklenirken hata oluştu.')
+    } finally {
+      setUploadingGroupAvatar(false)
+      if (groupAvatarInputRef.current) groupAvatarInputRef.current.value = ''
+    }
+  }, [selectedRoomId])
+
+  // LEAVE GROUP
+  const leaveGroup = useCallback(async () => {
+    if (!selectedRoomId || !currentUserId) return
+    if (!confirm('Bu gruptan cikmak istediginize emin misiniz?')) return
+
+    try {
+      await supabase
+        .from('chat_participants')
+        .delete()
+        .eq('room_id', selectedRoomId)
+        .eq('user_id', currentUserId)
+
+      // System message
+      await supabase.from('chat_messages').insert({
+        room_id: selectedRoomId,
+        sender_id: currentUserId,
+        message_type: 'system',
+        message: `${currentProfile?.full_name} gruptan ayrildi`,
+      })
+
+      setShowGroupInfo(false)
+      setSelectedRoomId(null)
+      await loadRooms()
+    } catch (err) {
+      console.error('Error leaving group:', err)
+    }
+  }, [selectedRoomId, currentUserId, currentProfile, loadRooms])
+
   // ============================================================================
   // CREATE ROOM
   // ============================================================================
@@ -1455,6 +1546,7 @@ export default function ChatPage() {
     setShowEmojiPicker(false)
     setShowMessageSearch(false)
     setMessageSearch('')
+    setShowGroupInfo(false)
     // Aninda unread badge'i sifirla
     setRooms(prev => prev.map(r =>
       r.id === roomId ? { ...r, unread_count: 0 } : r
@@ -2364,6 +2456,7 @@ export default function ChatPage() {
                 >
                   <ArrowLeft size={20} className="text-gray-600" />
                 </button>
+                <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setShowGroupInfo(true)}>
                 <Avatar
                   src={selectedRoom ? getRoomAvatar(selectedRoom) : null}
                   name={selectedRoom ? getRoomDisplayName(selectedRoom) : '?'}
@@ -2395,6 +2488,7 @@ export default function ChatPage() {
                       getRoomOnlineStatus(selectedRoom)
                     ) : null}
                   </div>
+                </div>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -2856,6 +2950,158 @@ export default function ChatPage() {
           >
             <Download size={24} />
           </a>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* GROUP / CONTACT INFO PANEL */}
+      {/* ================================================================== */}
+      {showGroupInfo && selectedRoom && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex justify-end" onClick={() => setShowGroupInfo(false)}>
+          <div
+            className="bg-white w-full max-w-md h-full overflow-y-auto chat-scrollbar"
+            style={{ animation: 'slideInRight 0.25s ease-out' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
+              <button onClick={() => setShowGroupInfo(false)} className="p-1 hover:bg-white/20 rounded-full">
+                <X size={20} className="text-white" />
+              </button>
+              <span className="text-white font-semibold text-lg">
+                {selectedRoom.type === 'group' ? 'Grup Bilgisi' : 'Kisi Bilgisi'}
+              </span>
+            </div>
+
+            {/* Avatar */}
+            <div className="flex flex-col items-center py-8 bg-gradient-to-b from-gray-50 to-white">
+              <div
+                className="relative cursor-pointer group"
+                onClick={() => selectedRoom.type === 'group' && groupAvatarInputRef.current?.click()}
+              >
+                <Avatar
+                  src={getRoomAvatar(selectedRoom)}
+                  name={getRoomDisplayName(selectedRoom)}
+                  size={120}
+                />
+                {selectedRoom.type === 'group' && (
+                  <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all">
+                    <Camera size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                )}
+                {uploadingGroupAvatar && (
+                  <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                    <Loader2 size={28} className="text-white animate-spin" />
+                  </div>
+                )}
+                <input
+                  ref={groupAvatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleGroupAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mt-4">
+                {getRoomDisplayName(selectedRoom)}
+              </h2>
+              {selectedRoom.type === 'group' && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Grup - {selectedRoom.participants.length} katilimci
+                </p>
+              )}
+              {selectedRoom.type === 'direct' && selectedRoom.other_user && (
+                <p className="text-sm text-green-600 font-medium mt-1">
+                  {getRoleLabel(selectedRoom.other_user.role_name)}
+                </p>
+              )}
+              {selectedRoom.type === 'group' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  {selectedRoom.type === 'group' ? 'Simge degistirmek icin resme tiklayin' : ''}
+                </p>
+              )}
+            </div>
+
+            {/* Description */}
+            {selectedRoom.description && (
+              <div className="px-6 py-4 border-b border-gray-100">
+                <div className="text-xs text-gray-400 uppercase font-semibold mb-1">Aciklama</div>
+                <div className="text-sm text-gray-700">{selectedRoom.description}</div>
+              </div>
+            )}
+
+            {/* Info */}
+            <div className="px-6 py-4 border-b border-gray-100">
+              <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Bilgi</div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 text-sm text-gray-600">
+                  <Clock size={16} className="text-gray-400 flex-shrink-0" />
+                  <span>Olusturulma: {new Date(selectedRoom.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                </div>
+                {selectedRoom.type === 'direct' && selectedRoom.other_user && (
+                  <>
+                    <div className="flex items-center gap-3 text-sm text-gray-600">
+                      <Circle size={16} className={`flex-shrink-0 ${isUserOnline(selectedRoom.other_user.id) ? 'text-green-500 fill-green-500' : 'text-gray-400'}`} />
+                      <span>{isUserOnline(selectedRoom.other_user.id) ? 'Cevrimici' : `Son gorulme: ${formatLastSeen(presenceMap.get(selectedRoom.other_user.id)?.last_seen || selectedRoom.other_user.id)}`}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Participants (for groups) */}
+            {selectedRoom.type === 'group' && (
+              <div className="px-6 py-4">
+                <div className="text-xs text-gray-400 uppercase font-semibold mb-3">
+                  {selectedRoom.participants.length} Katilimci
+                </div>
+                <div className="space-y-1">
+                  {selectedRoom.participants.map((p: any) => {
+                    const profile = p.profile ? mapProfile(p.profile) : null
+                    if (!profile) return null
+                    const online = isUserOnline(profile.id)
+                    return (
+                      <div key={p.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors">
+                        <Avatar
+                          src={profile.avatar_url}
+                          name={profile.full_name}
+                          size={40}
+                          online={online}
+                          showStatus={true}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {profile.full_name}
+                              {profile.id === currentUserId && <span className="text-gray-400 ml-1">(Sen)</span>}
+                            </span>
+                            {p.role === 'admin' && (
+                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Admin</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">{getRoleLabel(profile.role_name)}</div>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Leave Group Button */}
+            {selectedRoom.type === 'group' && (
+              <div className="px-6 py-6 border-t border-gray-100">
+                <button
+                  onClick={leaveGroup}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors font-medium"
+                >
+                  <LogOut size={18} />
+                  Gruptan Ayril
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -1249,6 +1249,9 @@ export default function WarehousePage() {
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-green-700 uppercase">Toplam Giriş</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-red-700 uppercase">Toplam Çıkış</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Hurda</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Konum</th>
                       {canEdit('warehouse') && (
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
@@ -1269,6 +1272,30 @@ export default function WarehousePage() {
                           <span className="text-lg font-bold text-gray-900">
                             {item.current_stock} <span className="text-sm text-gray-600">{item.unit}</span>
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const totalEntry = transactions.filter(t => t.item_id === item.id && t.type === 'entry').reduce((s, t) => s + t.quantity, 0)
+                            return totalEntry > 0 ? (
+                              <span className="text-sm font-semibold text-green-600">+{totalEntry} {item.unit}</span>
+                            ) : <span className="text-sm text-gray-300">0</span>
+                          })()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const totalExit = transactions.filter(t => t.item_id === item.id && t.type === 'exit').reduce((s, t) => s + t.quantity, 0)
+                            return totalExit > 0 ? (
+                              <span className="text-sm font-semibold text-red-600">-{totalExit} {item.unit}</span>
+                            ) : <span className="text-sm text-gray-300">0</span>
+                          })()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const totalScrap = transactions.filter(t => t.item_id === item.id && t.type === 'scrap').reduce((s, t) => s + t.quantity, 0)
+                            return totalScrap > 0 ? (
+                              <span className="text-sm font-semibold text-orange-600">{totalScrap} {item.unit}</span>
+                            ) : <span className="text-sm text-gray-300">0</span>
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{item.location || '-'}</td>
                         {canEdit('warehouse') && (

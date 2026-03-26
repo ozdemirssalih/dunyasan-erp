@@ -119,6 +119,7 @@ export default function ProductionPage() {
   const [showQCTransferModal, setShowQCTransferModal] = useState(false)
   const [showEditOutputModal, setShowEditOutputModal] = useState(false)
   const [editingOutput, setEditingOutput] = useState<any>(null)
+  const [showDirectWarehouseModal, setShowDirectWarehouseModal] = useState(false)
 
   // Submitting states (çift tıklama engellemek için)
   const [submittingRequest, setSubmittingRequest] = useState(false)
@@ -126,6 +127,7 @@ export default function ProductionPage() {
   const [submittingTransfer, setSubmittingTransfer] = useState(false)
   const [submittingManualStock, setSubmittingManualStock] = useState(false)
   const [submittingQCTransfer, setSubmittingQCTransfer] = useState(false)
+  const [submittingDirectWarehouse, setSubmittingDirectWarehouse] = useState(false)
 
   // Form states
   const [requestForm, setRequestForm] = useState({
@@ -164,6 +166,13 @@ export default function ProductionPage() {
   const [qcTransferForm, setQCTransferForm] = useState({
     item_id: '',
     quantity: 0,
+    notes: '',
+  })
+
+  const [directWarehouseForm, setDirectWarehouseForm] = useState({
+    item_id: '',
+    quantity: 0,
+    transfer_type: 'normal' as 'normal' | 'hurda',
     notes: '',
   })
 
@@ -1046,6 +1055,77 @@ export default function ProductionPage() {
     })
   }
 
+  // =====================================================
+  // DEPOYA DİREKT TRANSFER (Normal veya Hurda)
+  // =====================================================
+  const handleDirectWarehouseTransfer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId || submittingDirectWarehouse) return
+
+    try {
+      setSubmittingDirectWarehouse(true)
+
+      // 1. Üretim stoğu kontrol
+      const { data: prodStock, error: checkErr } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', directWarehouseForm.item_id)
+        .single()
+
+      if (checkErr || !prodStock) throw new Error('Üretim stoğu bulunamadı!')
+
+      if (prodStock.current_stock < directWarehouseForm.quantity) {
+        alert(`❌ Yetersiz stok!\n\nÜretim deposunda: ${prodStock.current_stock}\nTransfer miktarı: ${directWarehouseForm.quantity}`)
+        return
+      }
+
+      // 2. Üretim stoğunu düş
+      const { error: updateErr } = await supabase
+        .from('production_inventory')
+        .update({
+          current_stock: prodStock.current_stock - directWarehouseForm.quantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('company_id', companyId)
+        .eq('item_id', directWarehouseForm.item_id)
+
+      if (updateErr) throw updateErr
+
+      const isScrap = directWarehouseForm.transfer_type === 'hurda'
+
+      // 3. Depo işlemi oluştur (trigger stoku güncelleyecek)
+      const { error: txErr } = await supabase
+        .from('warehouse_transactions')
+        .insert({
+          company_id: companyId,
+          item_id: directWarehouseForm.item_id,
+          type: isScrap ? 'scrap' : 'entry',
+          quantity: directWarehouseForm.quantity,
+          supplier: 'Üretim Deposu',
+          reference_number: `UR-${isScrap ? 'HURDA' : 'TRANSFER'}-${Date.now()}`,
+          notes: `Üretim deposundan ${isScrap ? 'hurda olarak' : 'direkt'} transfer - ${directWarehouseForm.notes || ''}`.trim(),
+          created_by: currentUserId,
+          transaction_date: new Date().toISOString().split('T')[0],
+        })
+
+      if (txErr) throw txErr
+
+      setShowDirectWarehouseModal(false)
+      setDirectWarehouseForm({ item_id: '', quantity: 0, transfer_type: 'normal', notes: '' })
+      await loadData()
+
+      alert(isScrap
+        ? '✅ Ürün hurda olarak işaretlendi ve hurda deposuna gönderildi!'
+        : '✅ Ürün başarıyla ana depoya transfer edildi!')
+    } catch (error: any) {
+      console.error('Error direct warehouse transfer:', error)
+      alert('❌ Hata: ' + error.message)
+    } finally {
+      setSubmittingDirectWarehouse(false)
+    }
+  }
+
   const handleManualStockAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyId) return
@@ -1844,14 +1924,22 @@ export default function ProductionPage() {
         {/* TRANSFERS TAB */}
         {activeTab === 'transfers' && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-3">
               {canCreate('production') && (
-                <button
-                  onClick={() => setShowTransferModal(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold"
-                >
-                  + Ana Depoya Transfer Talebi
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowDirectWarehouseModal(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold"
+                  >
+                    + Depoya Direkt Transfer
+                  </button>
+                  <button
+                    onClick={() => setShowTransferModal(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold"
+                  >
+                    + Ana Depoya Transfer Talebi
+                  </button>
+                </>
               )}
             </div>
 
@@ -2647,6 +2735,118 @@ export default function ProductionPage() {
                     onClick={() => {
                       setShowTransferModal(false)
                       resetTransferForm()
+                    }}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* =====================================================
+            DEPOYA DİREKT TRANSFER MODAL
+            ===================================================== */}
+        {showDirectWarehouseModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Depoya Direkt Transfer</h3>
+              <p className="text-sm text-gray-600 mb-6">Üretim stoğundan ürünleri doğrudan depoya veya hurda deposuna gönderin</p>
+
+              <form onSubmit={handleDirectWarehouseTransfer} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Ürün <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={directWarehouseForm.item_id}
+                      onChange={(e) => setDirectWarehouseForm({ ...directWarehouseForm, item_id: e.target.value })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seçin...</option>
+                      {productionInventory
+                        .filter(item => item.current_stock > 0)
+                        .map(item => (
+                          <option key={item.id} value={item.item_id}>
+                            {item.item_code} - {item.item_name} ({item.item_type === 'finished_product' ? 'Bitmiş' : item.item_type === 'tashih' ? 'Tashih' : 'Hammadde'}) — Stok: {item.current_stock} {item.unit}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Miktar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      value={directWarehouseForm.quantity || ''}
+                      onChange={(e) => setDirectWarehouseForm({ ...directWarehouseForm, quantity: parseFloat(e.target.value) || 0 })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Transfer Tipi <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={directWarehouseForm.transfer_type}
+                      onChange={(e) => setDirectWarehouseForm({ ...directWarehouseForm, transfer_type: e.target.value as 'normal' | 'hurda' })}
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="normal">Normal Transfer (Ana Depoya)</option>
+                      <option value="hurda">Hurda (Fire/Hurda Deposuna)</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Açıklama</label>
+                    <textarea
+                      value={directWarehouseForm.notes}
+                      onChange={(e) => setDirectWarehouseForm({ ...directWarehouseForm, notes: e.target.value })}
+                      rows={3}
+                      placeholder="Transfer sebebi, detaylar..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {directWarehouseForm.transfer_type === 'hurda' && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-sm text-red-700 font-medium">
+                      ⚠️ Hurda olarak işaretlenen ürünler depodaki "Hurda" bölümüne gönderilecektir.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="submit"
+                    disabled={submittingDirectWarehouse}
+                    className={`flex-1 py-3 rounded-lg font-semibold text-white ${
+                      directWarehouseForm.transfer_type === 'hurda'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-green-600 hover:bg-green-700'
+                    } disabled:opacity-50`}
+                  >
+                    {submittingDirectWarehouse ? 'Gönderiliyor...' : (
+                      directWarehouseForm.transfer_type === 'hurda' ? 'Hurda Olarak Gönder' : 'Depoya Transfer Et'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDirectWarehouseModal(false)
+                      setDirectWarehouseForm({ item_id: '', quantity: 0, transfer_type: 'normal', notes: '' })
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
                   >

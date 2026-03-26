@@ -379,7 +379,6 @@ export default function ProductionPage() {
       `)
       .eq('company_id', companyId)
       .order('production_date', { ascending: false })
-      .limit(100)
 
     if (error) {
       console.error('Error loading outputs:', error)
@@ -1742,6 +1741,69 @@ export default function ProductionPage() {
               )}
             </div>
 
+            {/* Ürün Bazlı Üretim Özeti */}
+            {outputs.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-800">📊 Ürün Bazlı Toplam Üretim</h3>
+                  <p className="text-sm text-gray-500 mt-1">Tüm zamanlar için ürün bazında toplam üretim miktarları</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Kodu</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Toplam Üretim</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kayıt Sayısı</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Son Üretim</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {(() => {
+                        const grouped = new Map<string, { code: string; name: string; unit: string; total: number; count: number; lastDate: string }>()
+                        outputs.forEach(o => {
+                          const key = o.output_item_id
+                          const existing = grouped.get(key)
+                          if (existing) {
+                            existing.total += o.quantity
+                            existing.count += 1
+                            if (o.production_date > existing.lastDate) existing.lastDate = o.production_date
+                          } else {
+                            grouped.set(key, {
+                              code: o.output_item_code,
+                              name: o.output_item_name,
+                              unit: o.unit,
+                              total: o.quantity,
+                              count: 1,
+                              lastDate: o.production_date,
+                            })
+                          }
+                        })
+                        return Array.from(grouped.values())
+                          .sort((a, b) => b.total - a.total)
+                          .map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-6 py-3 text-sm font-medium text-gray-900">{item.code}</td>
+                              <td className="px-6 py-3 text-sm text-gray-900">{item.name}</td>
+                              <td className="px-6 py-3">
+                                <span className="text-lg font-bold text-purple-700">{item.total}</span>
+                                <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
+                              </td>
+                              <td className="px-6 py-3 text-sm text-gray-600">{item.count} kayıt</td>
+                              <td className="px-6 py-3 text-sm text-gray-600">
+                                {new Date(item.lastDate).toLocaleDateString('tr-TR')}
+                              </td>
+                            </tr>
+                          ))
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tüm Üretim Kayıtları */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">

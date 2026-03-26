@@ -308,7 +308,7 @@ export default function ManagementDashboard() {
         .from('projects')
         .select('id')
         .eq('company_id', companyId)
-        .eq('status', 'active')
+        .in('status', ['active', 'in_progress'])
 
       if (projError) console.error('Proje verileri hatası:', projError)
       console.log('✅ Aktif proje:', projectsData?.length || 0)

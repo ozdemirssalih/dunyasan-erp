@@ -1338,7 +1338,7 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.finishedProducts}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenen Mamul</h3>
-            <p className="text-xs text-gray-600 mt-1">Üretilen + Fire</p>
+            <p className="text-xs text-gray-600 mt-1">Sağlam Üretilen + Fire</p>
           </div>
 
           {/* Kalite Kontrolde Bekleyen */}

@@ -502,8 +502,9 @@ export default function ProductionPage() {
 
     const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-    // 5. İşlenen Mamul = Üretilen + Fire
-    const processedProducts = totalProducedEver + totalFire
+    // 5. İşlenen Mamul = toplam üretim kayıtları (fire zaten dahil)
+    // Sağlam Üretilen = İşlenen - Fire
+    const processedProducts = totalProducedEver
 
     // 6. Bugünkü üretim
     const today = new Date().toISOString().split('T')[0]
@@ -1338,7 +1339,10 @@ export default function ProductionPage() {
               <span className="text-3xl font-bold text-gray-900">{stats.finishedProducts}</span>
             </div>
             <h3 className="text-sm font-medium text-gray-900">İşlenen Mamul</h3>
-            <p className="text-xs text-gray-600 mt-1">Sağlam Üretilen + Fire</p>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-xs text-green-600 font-medium">Sağlam: {stats.finishedProducts - stats.recordedFire}</span>
+              <span className="text-xs text-red-500 font-medium">Fire: {stats.recordedFire}</span>
+            </div>
           </div>
 
           {/* Kalite Kontrolde Bekleyen */}

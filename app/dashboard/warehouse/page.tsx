@@ -1817,6 +1817,7 @@ export default function WarehousePage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kaynak/Hedef</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referans</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Açıklama</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemi Yapan</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
                   </tr>
@@ -1853,6 +1854,13 @@ export default function WarehousePage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {tx.reference_number || '-'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px]">
+                        {tx.notes ? (
+                          <span className="truncate block" title={tx.notes}>{tx.notes}</span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {tx.created_by_name}

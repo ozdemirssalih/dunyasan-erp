@@ -99,6 +99,7 @@ export default function ProductionPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [projectParts, setProjectParts] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
+  const [scrapRecords, setScrapRecords] = useState<{ item_id: string; quantity: number }[]>([])
 
   // Stats states
   const [stats, setStats] = useState({
@@ -265,6 +266,7 @@ export default function ProductionPage() {
         loadProductionInventory(finalCompanyId),
         loadMaterialRequests(finalCompanyId),
         loadOutputs(finalCompanyId),
+        loadScrapRecords(finalCompanyId),
         loadWarehouseItems(finalCompanyId),
         loadWarehouseTransfers(finalCompanyId),
         loadQCTransfers(finalCompanyId),
@@ -405,6 +407,16 @@ export default function ProductionPage() {
     })) || []
 
     setOutputs(outputsData)
+  }
+
+  const loadScrapRecords = async (companyId: string) => {
+    const { data } = await supabase
+      .from('production_scrap_records')
+      .select('item_id, quantity')
+      .eq('company_id', companyId)
+      .eq('source_type', 'production')
+
+    setScrapRecords(data || [])
   }
 
   const loadWarehouseItems = async (companyId: string) => {
@@ -1754,14 +1766,15 @@ export default function ProductionPage() {
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Kodu</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Toplam Üretim</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-purple-700 uppercase">Üretilen</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-red-600 uppercase">Fire</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kayıt Sayısı</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Son Üretim</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {(() => {
-                        const grouped = new Map<string, { code: string; name: string; unit: string; total: number; count: number; lastDate: string }>()
+                        const grouped = new Map<string, { id: string; code: string; name: string; unit: string; total: number; count: number; lastDate: string }>()
                         outputs.forEach(o => {
                           const key = o.output_item_id
                           const existing = grouped.get(key)
@@ -1771,6 +1784,7 @@ export default function ProductionPage() {
                             if (o.production_date > existing.lastDate) existing.lastDate = o.production_date
                           } else {
                             grouped.set(key, {
+                              id: o.output_item_id,
                               code: o.output_item_code,
                               name: o.output_item_name,
                               unit: o.unit,
@@ -1782,20 +1796,30 @@ export default function ProductionPage() {
                         })
                         return Array.from(grouped.values())
                           .sort((a, b) => b.total - a.total)
-                          .map((item, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-6 py-3 text-sm font-medium text-gray-900">{item.code}</td>
-                              <td className="px-6 py-3 text-sm text-gray-900">{item.name}</td>
-                              <td className="px-6 py-3">
-                                <span className="text-lg font-bold text-purple-700">{item.total}</span>
-                                <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
-                              </td>
-                              <td className="px-6 py-3 text-sm text-gray-600">{item.count} kayıt</td>
-                              <td className="px-6 py-3 text-sm text-gray-600">
-                                {new Date(item.lastDate).toLocaleDateString('tr-TR')}
-                              </td>
-                            </tr>
-                          ))
+                          .map((item, idx) => {
+                            const fireTotal = scrapRecords.filter(s => s.item_id === item.id).reduce((sum, s) => sum + s.quantity, 0)
+                            return (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-6 py-3 text-sm font-medium text-gray-900">{item.code}</td>
+                                <td className="px-6 py-3 text-sm text-gray-900">{item.name}</td>
+                                <td className="px-6 py-3">
+                                  <span className="text-lg font-bold text-purple-700">{item.total}</span>
+                                  <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
+                                </td>
+                                <td className="px-6 py-3">
+                                  {fireTotal > 0 ? (
+                                    <span className="text-lg font-bold text-red-600">{fireTotal} <span className="text-sm text-gray-500">{item.unit}</span></span>
+                                  ) : (
+                                    <span className="text-sm text-gray-300">0</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-3 text-sm text-gray-600">{item.count} kayıt</td>
+                                <td className="px-6 py-3 text-sm text-gray-600">
+                                  {new Date(item.lastDate).toLocaleDateString('tr-TR')}
+                                </td>
+                              </tr>
+                            )
+                          })
                       })()}
                     </tbody>
                   </table>

@@ -1766,7 +1766,8 @@ export default function ProductionPage() {
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Kodu</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-purple-700 uppercase">Üretilen</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-blue-700 uppercase">Toplam İşlenen</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-green-700 uppercase">Sağlam Üretilen</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-red-600 uppercase">Fire</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kayıt Sayısı</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Son Üretim</th>
@@ -1803,7 +1804,11 @@ export default function ProductionPage() {
                                 <td className="px-6 py-3 text-sm font-medium text-gray-900">{item.code}</td>
                                 <td className="px-6 py-3 text-sm text-gray-900">{item.name}</td>
                                 <td className="px-6 py-3">
-                                  <span className="text-lg font-bold text-purple-700">{item.total}</span>
+                                  <span className="text-lg font-bold text-blue-700">{item.total}</span>
+                                  <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
+                                </td>
+                                <td className="px-6 py-3">
+                                  <span className="text-lg font-bold text-green-600">{item.total - fireTotal}</span>
                                   <span className="text-sm text-gray-500 ml-1">{item.unit}</span>
                                 </td>
                                 <td className="px-6 py-3">

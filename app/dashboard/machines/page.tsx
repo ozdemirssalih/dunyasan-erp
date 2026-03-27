@@ -201,15 +201,23 @@ export default function MachinesPage() {
           // En yüksek verimliliği kullan
           const finalEfficiency = Math.max(calculatedEfficiency, avgEfficiencyFromRecords)
 
+          // Proje ataması (project_machines tablosundan)
+          const { data: machineAssignment } = await supabase
+            .from('project_machines')
+            .select('project_id, project:projects(project_name)')
+            .eq('machine_id', machine.id)
+            .maybeSingle()
+
           return {
             ...machine,
             production_count: productionCount,
-            material_assignments_count: 0, // Artık kullanılmıyor
+            material_assignments_count: 0,
             last_production_date: lastProductionDate,
             total_given: totalTarget,
             total_produced: totalProduced,
             total_defects: totalDefects,
-            calculated_efficiency: finalEfficiency
+            calculated_efficiency: finalEfficiency,
+            assigned_project: machineAssignment?.project || null
           }
         })
       )
@@ -434,13 +442,13 @@ export default function MachinesPage() {
                   <span className="text-gray-600">Model:</span>
                   <span className="font-semibold text-gray-800">{machine.model || '-'}</span>
                 </div>
-                {machine.project && (
+                {(machine.project || machine.assigned_project) && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 flex items-center gap-1">
                       <FolderKanban className="w-3 h-3" />
-                      Proje:
+                      Atanan Proje:
                     </span>
-                    <span className="font-semibold text-blue-600">{machine.project.project_name}</span>
+                    <span className="font-semibold text-blue-600">{machine.assigned_project?.project_name || machine.project?.project_name || '-'}</span>
                   </div>
                 )}
               </div>

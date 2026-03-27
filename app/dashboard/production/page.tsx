@@ -516,19 +516,28 @@ export default function ProductionPage() {
 
     const todayProduction = todayOutputs?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
+    // 7. Kalite kontrolde bekleyen ürünler (KK deposundaki toplam)
+    const { data: qcStock } = await supabase
+      .from('quality_control_inventory')
+      .select('current_stock')
+      .eq('company_id', companyId)
+
+    const pendingQC = qcStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
+
     console.log('📊 [PRODUCTION] İstatistikler:', {
       'Üretim Deposu Hammadde': rawMaterialsReady,
       'İşlenen Mamul (Üretilen+Fire)': processedProducts,
       'Bugünkü Üretim': todayProduction,
-      'Toplam Fire': totalFire
+      'Toplam Fire': totalFire,
+      'KK Deposunda Bekleyen': pendingQC
     })
 
     setStats({
       rawMaterialsReady,
-      finishedProducts: processedProducts, // İşlenen mamul = üretilen + fire
-      pendingQC: 0, // Kalite kontrol sistemi henüz yok
+      finishedProducts: processedProducts,
+      pendingQC,
       todayProduction,
-      calculatedScrap: 0, // Hesaplanamaz - oran bilgisi yok
+      calculatedScrap: 0,
       recordedFire: totalFire,
       recentProjects: []
     })

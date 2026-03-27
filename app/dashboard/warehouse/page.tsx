@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers' | 'returns'
+type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers' | 'returns' | 'send-to-qc'
 
 // ── Sabit Konfigürasyonlar ───────────────
 const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
@@ -89,6 +89,8 @@ export default function WarehousePage() {
   const [suppliers, setSuppliers] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [pendingWaybills, setPendingWaybills] = useState<any[]>([])
+  const [showQCSendModal, setShowQCSendModal] = useState(false)
+  const [qcSendForm, setQCSendForm] = useState({ item_id: '', quantity: 0, notes: '' })
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -603,6 +605,87 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error rejecting QC transfer:', error)
       alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  // Depodan Kaliteye Gönder
+  const handleSendToQC = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId) return
+
+    try {
+      // Stok kontrolü
+      const { data: warehouseItem, error: stockError } = await supabase
+        .from('warehouse_items')
+        .select('current_stock, name')
+        .eq('id', qcSendForm.item_id)
+        .eq('company_id', companyId)
+        .single()
+
+      if (stockError) throw new Error('Ürün bulunamadı!')
+      if (warehouseItem.current_stock < qcSendForm.quantity) {
+        alert(`Yetersiz stok! Depoda: ${warehouseItem.current_stock}`)
+        return
+      }
+
+      // 1. Depodan çıkış yap
+      const { error: exitError } = await supabase
+        .from('warehouse_transactions')
+        .insert({
+          company_id: companyId,
+          item_id: qcSendForm.item_id,
+          type: 'exit',
+          quantity: qcSendForm.quantity,
+          supplier: 'Kalite Kontrol',
+          reference_number: `DEPO-KK-${new Date().getTime()}`,
+          notes: `Kalite kontrole gönderildi - ${qcSendForm.notes || ''}`,
+          created_by: currentUserId,
+          transaction_date: new Date().toISOString().split('T')[0],
+        })
+
+      if (exitError) throw exitError
+
+      // 2. Kalite kontrol inventory'ye ekle
+      const { data: existingQC, error: qcCheckError } = await supabase
+        .from('quality_control_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', qcSendForm.item_id)
+        .maybeSingle()
+
+      if (qcCheckError && qcCheckError.code !== 'PGRST116') throw qcCheckError
+
+      if (existingQC) {
+        const { error: updateError } = await supabase
+          .from('quality_control_inventory')
+          .update({
+            current_stock: existingQC.current_stock + qcSendForm.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', qcSendForm.item_id)
+
+        if (updateError) throw updateError
+      } else {
+        const { error: insertError } = await supabase
+          .from('quality_control_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: qcSendForm.item_id,
+            current_stock: qcSendForm.quantity,
+            notes: `Depodan kalite kontrole gönderildi - ${qcSendForm.notes || ''}`
+          })
+
+        if (insertError) throw insertError
+      }
+
+      alert('Ürün kalite kontrole gönderildi!')
+      setShowQCSendModal(false)
+      setQCSendForm({ item_id: '', quantity: 0, notes: '' })
+      loadData()
+    } catch (error: any) {
+      console.error('Error sending to QC:', error)
+      alert('Hata: ' + error.message)
     }
   }
 
@@ -1166,6 +1249,7 @@ export default function WarehousePage() {
               { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
               { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result !== 'return').length },
               { id: 'returns', label: 'İadeler', icon: '🔄', count: qcTransfers.filter((t: any) => t.quality_result === 'return').length },
+              { id: 'send-to-qc', label: 'Kaliteye Gönder', icon: '🔬' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -2302,6 +2386,65 @@ export default function WarehousePage() {
           </div>
         )}
 
+        {/* KALİTEYE GÖNDER TAB */}
+        {activeTab === 'send-to-qc' && (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-purple-900 mb-2">🔬 Depodan Kalite Kontrole Gönder</h3>
+              <p className="text-sm text-purple-700">
+                Depodaki ürünleri kalite kontrol birimine gönderin. Red gelen girişleri veya kontrol edilmesi gereken ürünleri buradan kaliteye yönlendirin.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowQCSendModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold"
+            >
+              + Kaliteye Ürün Gönder
+            </button>
+
+            {/* Son gönderimler - depodan kaliteye yapılan çıkışlar */}
+            <h4 className="font-bold text-gray-700 mt-6">Son Kalite Kontrol Gönderimleri</h4>
+            <div className="grid grid-cols-1 gap-4">
+              {transactions.filter(t => t.type === 'exit' && (t.supplier === 'Kalite Kontrol' || t.notes?.includes('Kalite kontrol'))).map((t) => (
+                <div key={t.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-gray-800">{t.item_name || 'Bilinmiyor'}</h4>
+                      <p className="text-sm text-gray-500">{t.item_code || '-'}</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                      KALİTEYE GÖNDERİLDİ
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-sm mt-3">
+                    <div className="bg-gray-50 p-2 rounded">
+                      <span className="text-gray-500 text-xs block">Miktar</span>
+                      <span className="font-semibold">{t.quantity} {t.unit || ''}</span>
+                    </div>
+                    <div className="bg-gray-50 p-2 rounded">
+                      <span className="text-gray-500 text-xs block">Tarih</span>
+                      <span>{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                    <div className="bg-gray-50 p-2 rounded">
+                      <span className="text-gray-500 text-xs block">Referans</span>
+                      <span>{t.reference_number || '-'}</span>
+                    </div>
+                  </div>
+                  {t.notes && (
+                    <p className="text-sm text-gray-600 mt-2">{t.notes}</p>
+                  )}
+                </div>
+              ))}
+              {transactions.filter(t => t.type === 'exit' && (t.supplier === 'Kalite Kontrol' || t.notes?.includes('Kalite kontrol'))).length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Henüz kaliteye gönderim yapılmamış</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* İADELER TAB */}
         {activeTab === 'returns' && (
           <div className="space-y-4">
@@ -2697,6 +2840,70 @@ export default function WarehousePage() {
                       setEditingTransaction(null)
                     }}
                     className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-semibold"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* Kaliteye Gönder Modal */}
+        {showQCSendModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-8 max-w-lg w-full shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">🔬 Kalite Kontrole Gönder</h3>
+              <form onSubmit={handleSendToQC} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Ürün Seçin</label>
+                  <select
+                    value={qcSendForm.item_id}
+                    onChange={(e) => setQCSendForm({ ...qcSendForm, item_id: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="">-- Ürün Seçin --</option>
+                    {items.filter(i => i.current_stock > 0).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.code} - {item.name} (Stok: {item.current_stock} {item.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={qcSendForm.quantity || ''}
+                    onChange={(e) => setQCSendForm({ ...qcSendForm, quantity: parseFloat(e.target.value) || 0 })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Miktar girin"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Not (Opsiyonel)</label>
+                  <textarea
+                    value={qcSendForm.notes}
+                    onChange={(e) => setQCSendForm({ ...qcSendForm, notes: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Red sebebi, kontrol nedeni vb."
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold"
+                  >
+                    Kaliteye Gönder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowQCSendModal(false); setQCSendForm({ item_id: '', quantity: 0, notes: '' }) }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-lg font-semibold"
                   >
                     İptal
                   </button>

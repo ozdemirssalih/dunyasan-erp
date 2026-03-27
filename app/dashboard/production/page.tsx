@@ -1247,41 +1247,7 @@ export default function ProductionPage() {
 
       if (updateError) throw updateError
 
-      // 3. Kalite kontrol deposuna direkt ekle
-      const { data: existingQC, error: qcCheckError } = await supabase
-        .from('quality_control_inventory')
-        .select('current_stock')
-        .eq('company_id', companyId)
-        .eq('item_id', qcTransferForm.item_id)
-        .maybeSingle()
-
-      if (qcCheckError && qcCheckError.code !== 'PGRST116') throw qcCheckError
-
-      if (existingQC) {
-        const { error: qcUpdateError } = await supabase
-          .from('quality_control_inventory')
-          .update({
-            current_stock: existingQC.current_stock + qcTransferForm.quantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('company_id', companyId)
-          .eq('item_id', qcTransferForm.item_id)
-
-        if (qcUpdateError) throw qcUpdateError
-      } else {
-        const { error: qcInsertError } = await supabase
-          .from('quality_control_inventory')
-          .insert({
-            company_id: companyId,
-            item_id: qcTransferForm.item_id,
-            current_stock: qcTransferForm.quantity,
-            notes: `Üretimden direkt transfer - ${qcTransferForm.notes || ''}`
-          })
-
-        if (qcInsertError) throw qcInsertError
-      }
-
-      // 4. Transfer kaydı oluştur (approved olarak, kayıt amaçlı)
+      // 3. Kalite kontrole transfer talebi oluştur (pending)
       const { error } = await supabase
         .from('production_to_qc_transfers')
         .insert({
@@ -1290,9 +1256,7 @@ export default function ProductionPage() {
           quantity: qcTransferForm.quantity,
           notes: qcTransferForm.notes,
           requested_by: currentUserId,
-          status: 'approved',
-          reviewed_by: currentUserId,
-          reviewed_at: new Date().toISOString()
+          status: 'pending' // Kalite kontrolde onaylanacak
         })
 
       if (error) throw error
@@ -1301,7 +1265,7 @@ export default function ProductionPage() {
       resetQCTransferForm()
       await loadData()
 
-      alert('✅ Ürün üretim deposundan düşüldü ve kalite kontrol deposuna direkt eklendi!')
+      alert('✅ Üretim deposundan düşüldü ve kalite kontrole transfer talebi gönderildi!')
     } catch (error: any) {
       console.error('Error creating QC transfer:', error)
       alert('❌ Hata: ' + error.message)

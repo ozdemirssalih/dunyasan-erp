@@ -231,7 +231,7 @@ export default function DailyProductionPage() {
         query = query.lte('production_date', filterEndDate)
       }
 
-      const { data, error } = await query.order('production_date', { ascending: false })
+      const { data, error } = await query.order('production_date', { ascending: false }).order('created_at', { ascending: false })
 
       if (error) {
         console.error('❌ [LOAD] Query error:', error)

@@ -168,6 +168,7 @@ export default function ProductionPage() {
     item_id: '',
     quantity: 0,
     notes: '',
+    item_type: 'finished_product' as string,
   })
 
   const [directWarehouseForm, setDirectWarehouseForm] = useState({
@@ -1220,7 +1221,7 @@ export default function ProductionPage() {
         .select('current_stock')
         .eq('company_id', companyId)
         .eq('item_id', qcTransferForm.item_id)
-        .eq('item_type', 'finished_product')
+        .eq('item_type', qcTransferForm.item_type)
         .single()
 
       if (stockError) {
@@ -1243,7 +1244,7 @@ export default function ProductionPage() {
         })
         .eq('company_id', companyId)
         .eq('item_id', qcTransferForm.item_id)
-        .eq('item_type', 'finished_product')
+        .eq('item_type', qcTransferForm.item_type)
 
       if (updateError) throw updateError
 
@@ -1286,6 +1287,7 @@ export default function ProductionPage() {
     setQCTransferForm({
       item_id: '',
       quantity: 0,
+      item_type: 'finished_product',
       notes: '',
     })
   }
@@ -2697,13 +2699,28 @@ export default function ProductionPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl p-8 max-w-2xl w-full shadow-2xl">
               <h3 className="text-2xl font-bold text-gray-800 mb-6">Kalite Kontrole Gönder</h3>
-              <p className="text-sm text-gray-600 mb-6">Bitmiş ürünleri kalite kontrol bölümüne gönderin</p>
+              <p className="text-sm text-gray-600 mb-6">Üretim deposundaki ürünleri kalite kontrol bölümüne gönderin</p>
 
               <form onSubmit={handleCreateQCTransfer} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Bitmiş Ürün <span className="text-red-500">*</span>
+                      Ürün Tipi <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={qcTransferForm.item_type}
+                      onChange={(e) => setQCTransferForm({ ...qcTransferForm, item_type: e.target.value, item_id: '' })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                    >
+                      <option value="finished_product">Bitmiş Ürün (Mamül)</option>
+                      <option value="raw_material">Hammadde</option>
+                      <option value="tashih">Tashih</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Ürün <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={qcTransferForm.item_id}
@@ -2713,7 +2730,7 @@ export default function ProductionPage() {
                     >
                       <option value="">Seçin...</option>
                       {productionInventory
-                        .filter(item => item.item_type === 'finished_product')
+                        .filter(item => item.item_type === qcTransferForm.item_type && item.current_stock > 0)
                         .map(item => (
                           <option key={item.id} value={item.item_id}>
                             {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})

@@ -693,6 +693,42 @@ export default function QualityControlPage() {
         if (transferError) throw transferError
 
         alert('✅ Kalite test sonucu kaydedildi! Ürün kalite deposundan düşüldü ve ana depoya eklendi.')
+      } else if (transferForm.quality_result === 'return') {
+        // İADE: Direkt ana depoya geri gönder
+        const { error: transactionError } = await supabase
+          .from('warehouse_transactions')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            type: 'entry',
+            quantity: transferForm.quantity,
+            supplier: 'Kalite Kontrol - İade',
+            reference_number: `KK-IADE-${new Date().getTime()}`,
+            notes: `Kalite kontrolden iade - ${transferForm.notes || 'Depoya geri gönderildi'}`,
+            created_by: currentUserId,
+            transaction_date: new Date().toISOString().split('T')[0],
+          })
+
+        if (transactionError) throw transactionError
+
+        // Transfer kaydı oluştur
+        const { error: transferError } = await supabase
+          .from('qc_to_warehouse_transfers')
+          .insert({
+            company_id: companyId,
+            item_id: transferForm.item_id,
+            quantity: transferForm.quantity,
+            quality_result: 'return',
+            notes: `İade - ${transferForm.notes || 'Depoya geri gönderildi'}`,
+            requested_by: currentUserId,
+            status: 'approved',
+            approved_by: currentUserId,
+            approved_at: new Date().toISOString(),
+          })
+
+        if (transferError) throw transferError
+
+        alert('✅ Ürün depoya iade edildi.')
       } else if (transferForm.quality_result === 'scrap') {
         // HURDA: Direkt hurda deposuna gönder
         // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı
@@ -1714,6 +1750,7 @@ export default function QualityControlPage() {
                     >
                       <option value="passed">✅ Geçti (Ana Depoya Gönder)</option>
                       <option value="failed">❌ Kaldı (Üretime Geri Gönder)</option>
+                      <option value="return">🔄 İade (Depoya Geri Gönder)</option>
                       <option value="scrap">🗑️ Hurda (Hurda Deposuna Gönder)</option>
                     </select>
                   </div>

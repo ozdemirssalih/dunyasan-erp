@@ -840,7 +840,7 @@ export default function ManagementDashboard() {
           <div>
             <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
               <Activity className="w-10 h-10" />
-              YÖNETİM DASHBOARD
+              ÜRETİM DASHBOARD
             </h1>
             <p className="text-blue-100 text-lg">Gerçek zamanlı üretim ve performans takibi • Detaylı Analiz</p>
             <div className="mt-4 flex items-center gap-4 text-sm">

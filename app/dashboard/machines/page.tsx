@@ -26,6 +26,7 @@ interface Machine {
   total_given?: number
   total_produced?: number
   total_defects?: number
+  assigned_project?: { project_name: string } | null
 }
 
 export default function MachinesPage() {

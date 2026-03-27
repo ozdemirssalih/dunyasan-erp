@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers'
+type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers' | 'returns'
 
 // ── Sabit Konfigürasyonlar ───────────────
 const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
@@ -1164,7 +1164,8 @@ export default function WarehousePage() {
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
               { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
-              { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'pending').length },
+              { id: 'qc-transfers', label: 'Kalite Kontrolden', count: qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result !== 'return').length },
+              { id: 'returns', label: 'İadeler', icon: '🔄', count: qcTransfers.filter((t: any) => t.quality_result === 'return').length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -2227,8 +2228,8 @@ export default function WarehousePage() {
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[transfer.status] || 'bg-gray-100 text-gray-700'}`}>
                           {transfer.status.toUpperCase()}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${qualityColors[transfer.quality_result]}`}>
-                          {transfer.quality_result === 'passed' ? 'GEÇTİ' : 'KALDI'}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${qualityColors[transfer.quality_result] || 'bg-blue-100 text-blue-700'}`}>
+                          {transfer.quality_result === 'passed' ? 'GEÇTİ' : transfer.quality_result === 'return' ? 'İADE' : transfer.quality_result === 'scrap' ? 'HURDA' : 'KALDI'}
                         </span>
                       </div>
                     </div>
@@ -2245,7 +2246,7 @@ export default function WarehousePage() {
                       <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-xs block mb-1">Hedef</span>
                         <span className="font-semibold text-gray-900">
-                          {transfer.quality_result === 'passed' ? '→ Ana Depo' : '→ Üretim Deposu (Geri Dönüş)'}
+                          {transfer.quality_result === 'passed' ? '→ Ana Depo' : transfer.quality_result === 'return' ? '→ Ana Depo (İade)' : '→ Üretim Deposu (Geri Dönüş)'}
                         </span>
                       </div>
                       <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
@@ -2296,6 +2297,70 @@ export default function WarehousePage() {
             {qcTransfers.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz kalite kontrolden transfer talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* İADELER TAB */}
+        {activeTab === 'returns' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-blue-900 mb-2">🔄 İade Edilen Ürünler</h3>
+              <p className="text-sm text-blue-700">
+                Kalite kontrolden iade edilen ürünlerin listesi. Bu ürünler direkt depoya geri eklenmiştir.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {qcTransfers.filter((t: any) => t.quality_result === 'return').map((transfer: any) => (
+                <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h4 className="font-bold text-gray-800">{transfer.item?.name || 'Bilinmiyor'}</h4>
+                      <p className="text-sm text-gray-500">{transfer.item?.code || '-'}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${transfer.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {transfer.status === 'approved' ? 'TAMAMLANDI' : transfer.status.toUpperCase()}
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                        İADE
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <span className="text-gray-500 text-xs block mb-1">Miktar</span>
+                      <span className="font-semibold text-gray-900">{transfer.quantity} {transfer.item?.unit || ''}</span>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <span className="text-gray-500 text-xs block mb-1">İade Eden</span>
+                      <span className="text-gray-900">{transfer.requested_by?.full_name || 'Bilinmiyor'}</span>
+                    </div>
+                    <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                      <span className="text-gray-500 text-xs block mb-1">Hedef</span>
+                      <span className="font-semibold text-gray-900">→ Ana Depo (İade)</span>
+                    </div>
+                    <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                      <span className="text-gray-500 text-xs block mb-1">Tarih</span>
+                      <span className="text-gray-900">{new Date(transfer.requested_at).toLocaleString('tr-TR')}</span>
+                    </div>
+                    {transfer.notes && (
+                      <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-xs block mb-1">Not</span>
+                        <p className="text-gray-900">{transfer.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {qcTransfers.filter((t: any) => t.quality_result === 'return').length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Henüz iade edilen ürün yok</p>
               </div>
             )}
           </div>

@@ -11,6 +11,49 @@ export default function ChatFloatingWindow() {
   const [isMaximized, setIsMaximized] = useState(false)
   const [totalUnread, setTotalUnread] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [prevUnread, setPrevUnread] = useState(0)
+
+  // Notification sound - louder, more noticeable
+  const playNotificationSound = () => {
+    try {
+      const ctx = new AudioContext()
+      // First beep - high pitch
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      osc1.type = 'square'
+      osc1.frequency.setValueAtTime(1200, ctx.currentTime)
+      gain1.gain.setValueAtTime(0.4, ctx.currentTime)
+      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15)
+      osc1.connect(gain1)
+      gain1.connect(ctx.destination)
+      osc1.start(ctx.currentTime)
+      osc1.stop(ctx.currentTime + 0.15)
+
+      // Second beep - higher pitch
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.type = 'square'
+      osc2.frequency.setValueAtTime(1600, ctx.currentTime + 0.18)
+      gain2.gain.setValueAtTime(0.5, ctx.currentTime + 0.18)
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35)
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.start(ctx.currentTime + 0.18)
+      osc2.stop(ctx.currentTime + 0.35)
+
+      // Third beep - highest
+      const osc3 = ctx.createOscillator()
+      const gain3 = ctx.createGain()
+      osc3.type = 'square'
+      osc3.frequency.setValueAtTime(2000, ctx.currentTime + 0.38)
+      gain3.gain.setValueAtTime(0.6, ctx.currentTime + 0.38)
+      gain3.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.55)
+      osc3.connect(gain3)
+      gain3.connect(ctx.destination)
+      osc3.start(ctx.currentTime + 0.38)
+      osc3.stop(ctx.currentTime + 0.55)
+    } catch {}
+  }
 
   // Get current user
   useEffect(() => {
@@ -55,19 +98,64 @@ export default function ChatFloatingWindow() {
             total += otherMsgs.filter(m => !readSet.has(m.id)).length
           }
         }
+        if (total > prevUnread && !isOpen) {
+          playNotificationSound()
+        }
+        setPrevUnread(total)
         setTotalUnread(total)
       } catch {}
     }
 
     fetchUnread()
-    const interval = setInterval(fetchUnread, 15000) // Her 15 saniyede kontrol
+    const interval = setInterval(fetchUnread, 10000) // Her 10 saniyede kontrol
     return () => clearInterval(interval)
   }, [currentUserId])
 
-  // Reset unread when opening
+  // Mark all as read when opening chat + reset unread
   useEffect(() => {
-    if (isOpen) setTotalUnread(0)
-  }, [isOpen])
+    if (!isOpen || !currentUserId) return
+    setTotalUnread(0)
+
+    const markAllRead = async () => {
+      try {
+        const { data: participations } = await supabase
+          .from('chat_participants')
+          .select('room_id')
+          .eq('user_id', currentUserId)
+
+        if (!participations) return
+
+        for (const p of participations) {
+          const { data: unreadMsgs } = await supabase
+            .from('chat_messages')
+            .select('id')
+            .eq('room_id', p.room_id)
+            .neq('sender_id', currentUserId)
+            .eq('is_deleted', false)
+
+          if (!unreadMsgs || unreadMsgs.length === 0) continue
+
+          const { data: existingReads } = await supabase
+            .from('chat_message_reads')
+            .select('message_id')
+            .eq('user_id', currentUserId)
+            .in('message_id', unreadMsgs.map(m => m.id))
+
+          const readIds = new Set(existingReads?.map(r => r.message_id) || [])
+          const toInsert = unreadMsgs
+            .filter(m => !readIds.has(m.id))
+            .map(m => ({ message_id: m.id, user_id: currentUserId, read_at: new Date().toISOString() }))
+
+          if (toInsert.length > 0) {
+            await supabase.from('chat_message_reads').insert(toInsert)
+          }
+        }
+      } catch (err) {
+        console.error('Mark all read error:', err)
+      }
+    }
+    markAllRead()
+  }, [isOpen, currentUserId])
 
   return (
     <>

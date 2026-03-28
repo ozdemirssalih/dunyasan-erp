@@ -292,7 +292,7 @@ export default function ExecutiveDashboard() {
             <div className="p-2 bg-green-100 rounded-lg"><Wallet className="w-5 h-5 text-green-600" /></div>
             <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">KASA</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{fmt(cashBalance.balance)}</p>
+          <p className="text-2xl font-bold text-green-600">{fmt(cashBalance.balance)}</p>
           <div className="flex gap-4 mt-2 text-xs">
             <span className="text-green-600 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" />{fmt(cashBalance.income)}</span>
             <span className="text-red-600 flex items-center gap-1"><ArrowDownRight className="w-3 h-3" />{fmt(cashBalance.expense)}</span>
@@ -304,7 +304,7 @@ export default function ExecutiveDashboard() {
             <div className="p-2 bg-blue-100 rounded-lg"><ArrowUpRight className="w-5 h-5 text-blue-600" /></div>
             <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">ALACAKLAR</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{fmt(receivables.unpaid)}</p>
+          <p className="text-2xl font-bold text-blue-600">{fmt(receivables.unpaid)}</p>
           <p className="text-xs text-gray-500 mt-2">{receivables.count} açık fatura • Toplam: {fmt(receivables.total)}</p>
         </div>
 
@@ -313,7 +313,7 @@ export default function ExecutiveDashboard() {
             <div className="p-2 bg-red-100 rounded-lg"><ArrowDownRight className="w-5 h-5 text-red-600" /></div>
             <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded-full">BORÇLAR</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{fmt(payables.unpaid)}</p>
+          <p className="text-2xl font-bold text-red-600">{fmt(payables.unpaid)}</p>
           <p className="text-xs text-gray-500 mt-2">{payables.count} açık borç • Toplam: {fmt(payables.total)}</p>
         </div>
 
@@ -322,7 +322,7 @@ export default function ExecutiveDashboard() {
             <div className="p-2 bg-purple-100 rounded-lg"><Box className="w-5 h-5 text-purple-600" /></div>
             <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">DEPO</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{fmt(warehouseStats.totalValue)}</p>
+          <p className="text-2xl font-bold text-purple-600">{fmt(warehouseStats.totalValue)}</p>
           <p className="text-xs text-gray-500 mt-2">{warehouseStats.totalItems} kalem • {warehouseStats.lowStock > 0 ? <span className="text-red-600 font-semibold">{warehouseStats.lowStock} kritik stok</span> : 'Stoklar yeterli'}</p>
         </div>
       </div>
@@ -331,42 +331,42 @@ export default function ExecutiveDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
         <div onClick={() => router.push('/dashboard/production')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Factory className="w-5 h-5 text-blue-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{fmtN(productionStats.total)}</p>
+          <p className="text-xl font-bold text-blue-600">{fmtN(productionStats.total)}</p>
           <p className="text-[10px] text-gray-500">Toplam Üretim</p>
         </div>
         <div onClick={() => router.push('/dashboard/daily-production')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Target className="w-5 h-5 text-green-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{fmtN(productionStats.today)}</p>
+          <p className="text-xl font-bold text-green-600">{fmtN(productionStats.today)}</p>
           <p className="text-[10px] text-gray-500">Bugün</p>
         </div>
         <div onClick={() => router.push('/dashboard/daily-production')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <BarChart3 className="w-5 h-5 text-cyan-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{fmtN(productionStats.week)}</p>
+          <p className="text-xl font-bold text-cyan-600">{fmtN(productionStats.week)}</p>
           <p className="text-[10px] text-gray-500">Bu Hafta</p>
         </div>
         <div onClick={() => router.push('/dashboard/management')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <TrendingUp className="w-5 h-5 text-indigo-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">%{productionStats.efficiency}</p>
+          <p className="text-xl font-bold text-indigo-600">%{productionStats.efficiency}</p>
           <p className="text-[10px] text-gray-500">Verimlilik</p>
         </div>
         <div onClick={() => router.push('/dashboard/management')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Flame className="w-5 h-5 text-red-500 mx-auto mb-1" />
-          <p className="text-xl font-bold text-red-600">%{productionStats.fireRate}</p>
+          <p className="text-xl font-bold text-red-500">%{productionStats.fireRate}</p>
           <p className="text-[10px] text-gray-500">Fire Oranı</p>
         </div>
         <div onClick={() => router.push('/dashboard/machines')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Wrench className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{machineStats.active}<span className="text-sm text-gray-400">/{machineStats.total}</span></p>
+          <p className="text-xl font-bold text-gray-600">{machineStats.active}<span className="text-sm text-gray-400">/{machineStats.total}</span></p>
           <p className="text-[10px] text-gray-500">Tezgah</p>
         </div>
         <div onClick={() => router.push('/dashboard/employees')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Users className="w-5 h-5 text-teal-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{employeeCount}</p>
+          <p className="text-xl font-bold text-teal-600">{employeeCount}</p>
           <p className="text-[10px] text-gray-500">Personel</p>
         </div>
         <div onClick={() => router.push('/dashboard/quality-control')} className="bg-white rounded-xl shadow-sm border p-3 text-center cursor-pointer hover:shadow-md transition-all">
           <Shield className="w-5 h-5 text-orange-600 mx-auto mb-1" />
-          <p className="text-xl font-bold">{qcStats.inQC}</p>
+          <p className="text-xl font-bold text-orange-600">{qcStats.inQC}</p>
           <p className="text-[10px] text-gray-500">KK Bekleyen</p>
         </div>
       </div>

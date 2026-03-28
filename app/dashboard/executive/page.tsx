@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import {
   Factory, Package, TrendingUp, Users, Activity, Award, Target,
   BarChart3, Wallet, Truck, Shield, AlertTriangle, CheckCircle2,
-  Clock, ArrowUpRight, ArrowDownRight, Box, FolderKanban
+  Clock, ArrowUpRight, ArrowDownRight, Box, FolderKanban, Settings,
+  ExternalLink, DollarSign, Wrench
 } from 'lucide-react'
 
 export default function ExecutiveDashboard() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -65,7 +68,7 @@ export default function ExecutiveDashboard() {
   const loadProjects = async (cid: string) => {
     const { data } = await supabase
       .from('projects')
-      .select('id, project_name, project_code, status')
+      .select('id, project_name, project_code, status, last_calculated_total_cost, last_calculated_unit_cost, last_cost_calculation_date, customer_company:customer_companies(customer_name)')
       .eq('company_id', cid)
       .order('project_name')
 
@@ -73,11 +76,23 @@ export default function ExecutiveDashboard() {
       const projectsWithProduction = await Promise.all(data.map(async (p) => {
         const { data: prod } = await supabase
           .from('machine_daily_production')
-          .select('actual_production, defect_count')
+          .select('actual_production, defect_count, efficiency_rate')
           .eq('project_id', p.id)
         const totalProd = prod?.reduce((s, r) => s + (r.actual_production || 0), 0) || 0
         const totalDefects = prod?.reduce((s, r) => s + (r.defect_count || 0), 0) || 0
-        return { ...p, totalProduction: totalProd, totalDefects: totalDefects }
+        const avgEfficiency = prod && prod.length > 0 ? prod.reduce((s, r) => s + (r.efficiency_rate || 0), 0) / prod.length : 0
+        const { count: machineCount } = await supabase
+          .from('project_machines')
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', p.id)
+        return {
+          ...p,
+          totalProduction: totalProd,
+          totalDefects: totalDefects,
+          avgEfficiency: Math.round(avgEfficiency * 10) / 10,
+          machineCount: machineCount || 0,
+          customerName: (p as any).customer_company?.customer_name || null,
+        }
       }))
       setProjects(projectsWithProduction)
     }
@@ -272,7 +287,7 @@ export default function ExecutiveDashboard() {
 
       {/* KPI Row 1 - Finansal */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border p-5">
+        <div onClick={() => router.push('/dashboard/accounting')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-green-100 rounded-lg"><Wallet className="w-5 h-5 text-green-600" /></div>
             <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">KASA</span>
@@ -284,7 +299,7 @@ export default function ExecutiveDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
+        <div onClick={() => router.push('/dashboard/accounting')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-blue-100 rounded-lg"><ArrowUpRight className="w-5 h-5 text-blue-600" /></div>
             <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">ALACAKLAR</span>
@@ -293,7 +308,7 @@ export default function ExecutiveDashboard() {
           <p className="text-xs text-gray-500 mt-2">Toplam: {formatMoney(receivables.total)}</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
+        <div onClick={() => router.push('/dashboard/accounting')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-red-100 rounded-lg"><ArrowDownRight className="w-5 h-5 text-red-600" /></div>
             <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded-full">BORÇLAR</span>
@@ -302,7 +317,7 @@ export default function ExecutiveDashboard() {
           <p className="text-xs text-gray-500 mt-2">Toplam: {formatMoney(payables.total)}</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
+        <div onClick={() => router.push('/dashboard/warehouse')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-purple-100 rounded-lg"><Box className="w-5 h-5 text-purple-600" /></div>
             <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">DEPO DEĞER</span>
@@ -314,33 +329,33 @@ export default function ExecutiveDashboard() {
 
       {/* KPI Row 2 - Operasyonel */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+        <div onClick={() => router.push('/dashboard/production')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
           <Factory className="w-6 h-6 text-blue-600 mx-auto mb-2" />
           <p className="text-2xl font-bold">{formatNumber(productionStats.total)}</p>
           <p className="text-xs text-gray-500">Toplam Üretim</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+        <div onClick={() => router.push('/dashboard/daily-production')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
           <Target className="w-6 h-6 text-green-600 mx-auto mb-2" />
           <p className="text-2xl font-bold">{formatNumber(productionStats.today)}</p>
           <p className="text-xs text-gray-500">Bugün Üretim</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+        <div onClick={() => router.push('/dashboard/management')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
           <TrendingUp className="w-6 h-6 text-indigo-600 mx-auto mb-2" />
           <p className="text-2xl font-bold">%{productionStats.efficiency}</p>
           <p className="text-xs text-gray-500">Verimlilik</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
-          <Settings className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+        <div onClick={() => router.push('/dashboard/machines')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
+          <Wrench className="w-6 h-6 text-gray-600 mx-auto mb-2" />
           <p className="text-2xl font-bold text-green-600">{machineStats.active}</p>
           <p className="text-xs text-gray-500">Aktif Tezgah</p>
           {machineStats.maintenance > 0 && <p className="text-xs text-yellow-600 mt-1">{machineStats.maintenance} bakımda</p>}
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+        <div onClick={() => router.push('/dashboard/employees')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
           <Users className="w-6 h-6 text-teal-600 mx-auto mb-2" />
           <p className="text-2xl font-bold">{employeeCount}</p>
           <p className="text-xs text-gray-500">Aktif Personel</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+        <div onClick={() => router.push('/dashboard/quality-control')} className="bg-white rounded-xl shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow">
           <Shield className="w-6 h-6 text-orange-600 mx-auto mb-2" />
           <p className="text-2xl font-bold">{qcStats.inQC}</p>
           <p className="text-xs text-gray-500">KK Bekleyen</p>
@@ -365,18 +380,49 @@ export default function ExecutiveDashboard() {
             ) : (
               <div className="space-y-3">
                 {projects.map(p => (
-                  <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${p.status === 'completed' ? 'bg-green-500' : p.status === 'in_progress' ? 'bg-blue-500' : 'bg-yellow-500'}`}></div>
-                      <div>
-                        <p className="font-semibold text-gray-800 text-sm">{p.project_name}</p>
-                        <p className="text-xs text-gray-500">{p.project_code || ''}</p>
+                  <div key={p.id} onClick={() => router.push(`/dashboard/projects/${p.id}`)} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer border border-transparent hover:border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${p.status === 'completed' ? 'bg-green-500' : p.status === 'in_progress' ? 'bg-blue-500' : 'bg-yellow-500'}`}></div>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{p.project_name}</p>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            {p.project_code && <span>{p.project_code}</span>}
+                            {p.customerName && <span>• {p.customerName}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 mt-3">
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Üretim</p>
+                        <p className="font-bold text-sm text-gray-900">{formatNumber(p.totalProduction)}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Fire</p>
+                        <p className="font-bold text-sm text-red-600">{p.totalDefects}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Verimlilik</p>
+                        <p className="font-bold text-sm text-indigo-600">%{p.avgEfficiency}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Tezgah</p>
+                        <p className="font-bold text-sm text-gray-900">{p.machineCount}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900 text-sm">{formatNumber(p.totalProduction)} üretim</p>
-                      {p.totalDefects > 0 && <p className="text-xs text-red-500">{p.totalDefects} fire</p>}
-                    </div>
+                    {p.last_calculated_total_cost && (
+                      <div className="mt-2 bg-blue-50 rounded-lg p-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-xs text-blue-700">
+                          <DollarSign className="w-3 h-3" />
+                          <span>Toplam Maliyet: <strong>{p.last_calculated_total_cost?.toFixed(2)} €</strong></span>
+                        </div>
+                        {p.last_calculated_unit_cost && (
+                          <span className="text-xs text-blue-600">Birim: {p.last_calculated_unit_cost?.toFixed(4)} €</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

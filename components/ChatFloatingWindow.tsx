@@ -98,7 +98,7 @@ export default function ChatFloatingWindow() {
             total += otherMsgs.filter(m => !readSet.has(m.id)).length
           }
         }
-        if (total > prevUnread && !isOpen) {
+        if (total > prevUnread) {
           playNotificationSound()
         }
         setPrevUnread(total)

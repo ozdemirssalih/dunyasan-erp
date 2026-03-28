@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
   Factory, TrendingUp, Users, Activity, Award, Target,
   Wallet, Truck, Shield, AlertTriangle,
@@ -13,6 +14,7 @@ import {
 
 export default function ExecutiveDashboard() {
   const router = useRouter()
+  const { isSuperAdmin, loading: permLoading } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -256,7 +258,7 @@ export default function ExecutiveDashboard() {
   const fmt = (n: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n)
   const fmtN = (n: number) => new Intl.NumberFormat('tr-TR').format(n)
 
-  if (loading) return (
+  if (loading || permLoading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -264,6 +266,19 @@ export default function ExecutiveDashboard() {
       </div>
     </div>
   )
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center bg-white rounded-2xl shadow-lg p-10 max-w-md">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Erişim Engellendi</h2>
+          <p className="text-gray-600 mb-6">Bu sayfayı sadece Super Admin yetkisine sahip kullanıcılar görüntüleyebilir.</p>
+          <button onClick={() => router.push('/dashboard')} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold">Ana Dashboard'a Dön</button>
+        </div>
+      </div>
+    )
+  }
 
   const activeProjects = projects.filter(p => p.status === 'in_progress' || p.status === 'active')
   const completedProjects = projects.filter(p => p.status === 'completed')

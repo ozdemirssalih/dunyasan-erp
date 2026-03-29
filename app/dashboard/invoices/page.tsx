@@ -31,8 +31,12 @@ export default function InvoicesPage() {
     tax_amount: '',
     discount_amount: '',
     status: 'draft',
-    notes: ''
+    notes: '',
+    category: ''
   })
+  const [invoiceCategories, setInvoiceCategories] = useState<any[]>([])
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
 
   const [waybillForm, setWaybillForm] = useState({
     waybill_number: '',
@@ -86,7 +90,7 @@ export default function InvoicesPage() {
   const loadData = async () => {
     if (!companyId) return
 
-    const [invoicesData, customersData, suppliersData] = await Promise.all([
+    const [invoicesData, customersData, suppliersData, categoriesData] = await Promise.all([
       supabase
         .from('invoices')
         .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
@@ -102,12 +106,19 @@ export default function InvoicesPage() {
         .select('*')
         .eq('company_id', companyId)
         .eq('is_active', true)
-        .order('company_name')
+        .order('company_name'),
+      supabase
+        .from('invoice_categories')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .order('name')
     ])
 
     setInvoices(invoicesData.data || [])
     setCustomers(customersData.data || [])
     setSuppliers(suppliersData.data || [])
+    setInvoiceCategories(categoriesData.data || [])
   }
 
   // Invoice CRUD
@@ -142,6 +153,7 @@ export default function InvoicesPage() {
         discount_amount: parseFloat(invoiceForm.discount_amount) || 0,
         status: invoiceForm.status,
         notes: invoiceForm.notes || null,
+        category: invoiceForm.category || null,
         company_id: companyId
       }
 
@@ -165,18 +177,28 @@ export default function InvoicesPage() {
         const customerTransactions = ['sales', 'outgoing_return', 'sales_fx']
         const transactionType = customerTransactions.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
 
-        // Cariye otomatik yansıt
-        const currentAccountData = {
+        // Cariye otomatik yansıt - constraint'e uygun: receivable ise sadece customer_id, payable ise sadece supplier_id
+        const currentAccountData: any = {
           company_id: companyId,
           transaction_type: transactionType,
-          customer_id: invoiceForm.customer_id || null,
-          supplier_id: invoiceForm.supplier_id || null,
           amount: parseFloat(invoiceForm.total_amount),
+          paid_amount: 0,
+          status: 'unpaid',
           currency: 'TRY',
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
           description: `Fatura: ${invoiceForm.invoice_number}`,
           reference_number: invoiceForm.invoice_number
+        }
+
+        // Constraint: receivable → customer_id NOT NULL, supplier_id NULL
+        // Constraint: payable → supplier_id NOT NULL, customer_id NULL
+        if (transactionType === 'receivable') {
+          currentAccountData.customer_id = invoiceForm.customer_id
+          currentAccountData.supplier_id = null
+        } else {
+          currentAccountData.supplier_id = invoiceForm.supplier_id
+          currentAccountData.customer_id = null
         }
 
         const { error: currentAccountError } = await supabase
@@ -205,7 +227,8 @@ export default function InvoicesPage() {
         tax_amount: '',
         discount_amount: '',
         status: 'draft',
-        notes: ''
+        notes: '',
+        category: ''
       })
       setEditingId(null)
       loadData()
@@ -228,7 +251,8 @@ export default function InvoicesPage() {
       tax_amount: invoice.tax_amount?.toString() || '',
       discount_amount: invoice.discount_amount?.toString() || '',
       status: invoice.status,
-      notes: invoice.notes || ''
+      notes: invoice.notes || '',
+      category: invoice.category || ''
     })
     setShowInvoiceModal(true)
   }
@@ -1023,6 +1047,29 @@ export default function InvoicesPage() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Kategorisi</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={invoiceForm.category}
+                      onChange={(e) => setInvoiceForm({...invoiceForm, category: e.target.value})}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="">Kategori Seçin (Opsiyonel)</option>
+                      {invoiceCategories.map((cat: any) => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryModal(true)}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Notlar</label>
                   <textarea
                     value={invoiceForm.notes}
@@ -1169,6 +1216,56 @@ export default function InvoicesPage() {
                   Kaydet
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Kategori Ekleme Modal */}
+        {showCategoryModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Yeni Fatura Kategorisi</h3>
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Kategori adı girin"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 mb-4"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    if (!newCategoryName.trim() || !companyId) return
+                    const { error } = await supabase.from('invoice_categories').insert({
+                      company_id: companyId,
+                      name: newCategoryName.trim()
+                    })
+                    if (error) { alert('Hata: ' + error.message); return }
+                    setNewCategoryName('')
+                    setShowCategoryModal(false)
+                    loadData()
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
+                >
+                  Ekle
+                </button>
+                <button
+                  onClick={() => { setShowCategoryModal(false); setNewCategoryName('') }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg font-semibold"
+                >
+                  İptal
+                </button>
+              </div>
+
+              {invoiceCategories.length > 0 && (
+                <div className="mt-4 border-t pt-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Mevcut Kategoriler:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {invoiceCategories.map((cat: any) => (
+                      <span key={cat.id} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">{cat.name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

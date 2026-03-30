@@ -90,6 +90,11 @@ export default function WarehousePage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [pendingWaybills, setPendingWaybills] = useState<any[]>([])
   const [showQCSendModal, setShowQCSendModal] = useState(false)
+  // Geçmiş filtreleri
+  const [historyTypeFilter, setHistoryTypeFilter] = useState('all')
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyDateFrom, setHistoryDateFrom] = useState('')
+  const [historyDateTo, setHistoryDateTo] = useState('')
   const [qcSendForm, setQCSendForm] = useState({ item_id: '', quantity: 0, notes: '' })
 
   // Filter states
@@ -1917,25 +1922,61 @@ export default function WarehousePage() {
         )}
 
         {/* HISTORY TAB */}
-        {activeTab === 'history' && (
+        {activeTab === 'history' && (() => {
+          const filteredTx = transactions.filter(tx => {
+            const matchType = historyTypeFilter === 'all' || tx.type === historyTypeFilter
+            const matchSearch = historySearch === '' ||
+              (tx.item_name || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+              (tx.item_code || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+              (tx.supplier || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+              (tx.shipment_destination || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+              (tx.reference_number || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+              (tx.notes || '').toLowerCase().includes(historySearch.toLowerCase())
+            const matchDateFrom = !historyDateFrom || tx.transaction_date >= historyDateFrom
+            const matchDateTo = !historyDateTo || tx.transaction_date <= historyDateTo
+            return matchType && matchSearch && matchDateFrom && matchDateTo
+          })
+          return (
           <div className="space-y-4">
+            {/* Filtreler */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <input
+                  type="text"
+                  placeholder="Ürün, kaynak, referans ara..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="all">Tüm İşlemler</option>
+                  <option value="entry">Giriş</option>
+                  <option value="exit">Çıkış</option>
+                  <option value="scrap">Hurda</option>
+                </select>
+                <input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Başlangıç" />
+                <input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Bitiş" />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">{filteredTx.length} / {transactions.length} kayıt</p>
+            </div>
+
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tip</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Ürün</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kaynak/Hedef</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referans</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Açıklama</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlemi Yapan</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">İşlem</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tarih</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tip</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Ürün</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Miktar</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Kaynak/Hedef</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Referans</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Açıklama</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">İşlemi Yapan</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {transactions.map(tx => (
+                  {filteredTx.map(tx => (
                     <tr key={tx.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
@@ -2002,14 +2043,15 @@ export default function WarehousePage() {
                 </tbody>
               </table>
 
-              {transactions.length === 0 && (
+              {filteredTx.length === 0 && (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">Henüz hareket kaydı yok</p>
+                  <p className="text-gray-500">Kayıt bulunamadı</p>
                 </div>
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* REQUESTS TAB */}
         {activeTab === 'requests' && (

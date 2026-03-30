@@ -884,62 +884,89 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        {activeTab === 'waybills' && (
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">İrsaliye No</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Belge</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {completedWaybills.map((waybill) => (
-                    <tr key={waybill.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{waybill.waybill_number}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{formatDate(waybill.waybill_date)}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          waybill.waybill_type === 'outbound' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+        {activeTab === 'waybills' && (() => {
+          const waybillSearch = searchTerm
+          const filteredWaybills = completedWaybills.filter((w: any) => {
+            const matchSearch = waybillSearch === '' ||
+              (w.waybill_number || '').toLowerCase().includes(waybillSearch.toLowerCase()) ||
+              (w.notes || '').toLowerCase().includes(waybillSearch.toLowerCase()) ||
+              (w.customer?.customer_name || '').toLowerCase().includes(waybillSearch.toLowerCase()) ||
+              (w.supplier?.company_name || '').toLowerCase().includes(waybillSearch.toLowerCase())
+            return matchSearch
+          })
+          return (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">{filteredWaybills.length} irsaliye</p>
+            <div className="space-y-3">
+              {filteredWaybills.map((waybill: any) => {
+                let formData: any = {}
+                try { formData = waybill.notes ? JSON.parse(waybill.notes) : {} } catch { formData = { raw_notes: waybill.notes } }
+                const contactName = customers.find(c => c.id === waybill.customer_id)?.customer_name ||
+                  customers.find(c => c.id === waybill.supplier_id)?.customer_name || '-'
+
+                return (
+                  <div key={waybill.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          waybill.waybill_type === 'outbound' || waybill.waybill_type === 'outgoing' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
-                          {waybill.waybill_type === 'outbound' ? '↑ Çıkış' : '↓ Giriş'}
+                          {waybill.waybill_type === 'outbound' || waybill.waybill_type === 'outgoing' ? 'Çıkış' : 'Giriş'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1 w-fit bg-green-100 text-green-800">
-                          <Check className="w-3 h-3" />
-                          Tamamlandı
+                        <h4 className="font-bold text-gray-900">{waybill.waybill_number}</h4>
+                        <span className="text-sm text-gray-500">{formatDate(waybill.waybill_date)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Tamamlandı
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {waybill.document_url ? (
-                          <button
-                            onClick={() => handleDownloadDocument(waybill.document_url!)}
-                            className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm font-medium"
-                          >
-                            <FileDown className="w-4 h-4" />
-                            PDF İndir
+                        {waybill.document_url && (
+                          <button onClick={() => handleDownloadDocument(waybill.document_url!)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs font-medium">
+                            <FileDown className="w-3 h-3" /> PDF
                           </button>
-                        ) : (
-                          <span className="text-gray-400 text-sm">Yok</span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {completedWaybills.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                  Henüz tamamlanmış irsaliye yok
-                </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="bg-gray-50 rounded p-2">
+                        <p className="text-xs text-gray-500">Cari Hesap</p>
+                        <p className="font-medium text-gray-800">{contactName}</p>
+                      </div>
+                      {formData.item_name && (
+                        <div className="bg-gray-50 rounded p-2">
+                          <p className="text-xs text-gray-500">Ürün</p>
+                          <p className="font-medium text-gray-800">{formData.item_name} {formData.item_code ? `(${formData.item_code})` : ''}</p>
+                        </div>
+                      )}
+                      {formData.quantity && (
+                        <div className="bg-gray-50 rounded p-2">
+                          <p className="text-xs text-gray-500">Miktar</p>
+                          <p className="font-medium text-gray-800">{formData.quantity} {formData.unit || ''}</p>
+                        </div>
+                      )}
+                      {formData.destination && (
+                        <div className="bg-gray-50 rounded p-2">
+                          <p className="text-xs text-gray-500">Hedef</p>
+                          <p className="font-medium text-gray-800">{formData.destination}</p>
+                        </div>
+                      )}
+                      {formData.raw_notes && (
+                        <div className="bg-gray-50 rounded p-2 col-span-2">
+                          <p className="text-xs text-gray-500">Notlar</p>
+                          <p className="text-gray-700">{formData.raw_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {filteredWaybills.length === 0 && (
+                <div className="text-center py-12 text-gray-500">Henüz tamamlanmış irsaliye yok</div>
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* Invoice Modal */}
         {showInvoiceModal && (

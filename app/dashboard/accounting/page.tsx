@@ -14,7 +14,7 @@ export default function AccountingPageV2() {
   const { canCreate } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'current-history' | 'checks'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'current-history' | 'checks' | 'accounts'>('dashboard')
 
   // Döviz kurları
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
@@ -50,6 +50,11 @@ export default function AccountingPageV2() {
   const [deletingTransaction, setDeletingTransaction] = useState<any>(null)
   const [deletingTransactionType, setDeletingTransactionType] = useState<'cash' | 'account' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Kasa/Hesap yönetimi
+  const [cashAccounts, setCashAccounts] = useState<any[]>([])
+  const [showAccountModal, setShowAccountModal] = useState(false)
+  const [accountForm, setAccountForm] = useState({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY' })
 
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
@@ -99,7 +104,8 @@ export default function AccountingPageV2() {
     payment_method: 'cash' as 'cash' | 'transfer' | 'check' | 'other',
     currency: 'TRY',
     customer_id: '',
-    supplier_id: ''
+    supplier_id: '',
+    cash_account_id: ''
   })
 
   // Edit form state
@@ -165,6 +171,10 @@ export default function AccountingPageV2() {
     if (!companyId) return
 
     try {
+      // Kasaları yükle
+      const { data: accounts } = await supabase.from('cash_accounts').select('*').eq('company_id', companyId).eq('is_active', true).order('display_order')
+      setCashAccounts(accounts || [])
+
       // Kasa işlemlerini yükle
       const { data: cashTxns } = await supabase
         .from('cash_transactions')
@@ -536,7 +546,8 @@ export default function AccountingPageV2() {
           description: transactionForm.description,
           reference_number: `CASH-${Date.now()}`,
           document_url: documentUrl,
-          created_by: user?.id
+          created_by: user?.id,
+          cash_account_id: transactionForm.cash_account_id || null
         }
 
         if (transactionForm.customer_id) {
@@ -554,6 +565,22 @@ export default function AccountingPageV2() {
         }
 
         console.log('✅ Kasa işlemi başarıyla eklendi:', cashInsertedData)
+
+        // Seçilen kasanın bakiyesini güncelle
+        if (transactionForm.cash_account_id) {
+          const selectedAccount = cashAccounts.find((a: any) => a.id === transactionForm.cash_account_id)
+          if (selectedAccount) {
+            const isIncome = !!transactionForm.customer_id
+            const newBalance = isIncome
+              ? selectedAccount.current_balance + amount
+              : selectedAccount.current_balance - amount
+
+            await supabase.from('cash_accounts')
+              .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+              .eq('id', transactionForm.cash_account_id)
+            console.log('✅ Kasa bakiyesi güncellendi:', selectedAccount.account_name, newBalance)
+          }
+        }
 
         // Ödeme/Tahsilatı cari hesaplara da yansıt
         try {
@@ -611,7 +638,8 @@ export default function AccountingPageV2() {
       payment_method: 'cash',
       currency: 'TRY',
       customer_id: '',
-      supplier_id: ''
+      supplier_id: '',
+      cash_account_id: ''
     })
   }
 
@@ -1189,6 +1217,17 @@ export default function AccountingPageV2() {
             >
               <FileCheck className="w-4 h-4" />
               Çek Takip
+            </button>
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm whitespace-nowrap ${
+                activeTab === 'accounts'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Wallet className="w-4 h-4" />
+              Kasalar ({cashAccounts.length})
             </button>
           </div>
         </div>
@@ -2479,6 +2518,21 @@ export default function AccountingPageV2() {
                         </select>
                       </div>
                       <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Hesabı (Kasa) *</label>
+                        <select
+                          value={transactionForm.cash_account_id || ''}
+                          onChange={(e) => setTransactionForm({...transactionForm, cash_account_id: e.target.value})}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                        >
+                          <option value="">Hesap Seçin</option>
+                          {cashAccounts.map((acc: any) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.account_name} ({acc.currency}) - Bakiye: {new Intl.NumberFormat('tr-TR').format(acc.current_balance)} {acc.currency}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
                         <input
                           type="date"
@@ -2964,6 +3018,122 @@ export default function AccountingPageV2() {
                 >
                   <Trash2 className="w-4 h-4" />
                   {isSubmitting ? 'Siliniyor...' : 'Sil'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* KASALAR TAB */}
+        {activeTab === 'accounts' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-800">Kasa / Hesap Yönetimi</h2>
+              <button onClick={() => setShowAccountModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Yeni Kasa Ekle
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {cashAccounts.map((acc: any) => (
+                <div key={acc.id} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-gray-800">{acc.account_name}</h3>
+                    <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{acc.currency}</span>
+                  </div>
+                  {acc.bank_name && <p className="text-sm text-gray-500 mb-2">{acc.bank_name}</p>}
+                  <p className={`text-2xl font-bold ${acc.current_balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.current_balance)} {acc.currency}
+                  </p>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={async () => {
+                        const newBalance = prompt(`${acc.account_name} yeni bakiye:`, acc.current_balance.toString())
+                        if (newBalance === null) return
+                        await supabase.from('cash_accounts').update({ current_balance: parseFloat(newBalance), updated_at: new Date().toISOString() }).eq('id', acc.id)
+                        loadData()
+                      }}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-semibold"
+                    >
+                      Bakiye Güncelle
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`${acc.account_name} kasasını silmek istiyor musunuz?`)) return
+                        await supabase.from('cash_accounts').update({ is_active: false }).eq('id', acc.id)
+                        loadData()
+                      }}
+                      className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {cashAccounts.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-400">Henüz kasa eklenmemiş</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Kasa Ekleme Modal */}
+        {showAccountModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Yeni Kasa / Hesap</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hesap Adı *</label>
+                  <input type="text" value={accountForm.account_name} onChange={(e) => setAccountForm({...accountForm, account_name: e.target.value})} placeholder="Örn: Garanti TL" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hesap Tipi</label>
+                  <select value={accountForm.account_type} onChange={(e) => setAccountForm({...accountForm, account_type: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="bank">Banka Hesabı</option>
+                    <option value="credit_card">Kredi Kartı</option>
+                    <option value="cash">Nakit Kasa</option>
+                    <option value="other">Diğer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banka Adı</label>
+                  <input type="text" value={accountForm.bank_name} onChange={(e) => setAccountForm({...accountForm, bank_name: e.target.value})} placeholder="Örn: Garanti Bankası" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Para Birimi *</label>
+                  <select value={accountForm.currency} onChange={(e) => setAccountForm({...accountForm, currency: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="TRY">TRY (Türk Lirası)</option>
+                    <option value="USD">USD (Amerikan Doları)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="GBP">GBP (İngiliz Sterlini)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={async () => {
+                    if (!accountForm.account_name || !companyId) return alert('Hesap adı zorunludur!')
+                    const { error } = await supabase.from('cash_accounts').insert({
+                      company_id: companyId,
+                      account_name: accountForm.account_name,
+                      account_type: accountForm.account_type,
+                      bank_name: accountForm.bank_name || null,
+                      currency: accountForm.currency,
+                      current_balance: 0
+                    })
+                    if (error) return alert('Hata: ' + error.message)
+                    setShowAccountModal(false)
+                    setAccountForm({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY' })
+                    loadData()
+                    alert('Kasa başarıyla eklendi!')
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
+                >
+                  Ekle
+                </button>
+                <button onClick={() => setShowAccountModal(false)} className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg font-semibold">
+                  İptal
                 </button>
               </div>
             </div>

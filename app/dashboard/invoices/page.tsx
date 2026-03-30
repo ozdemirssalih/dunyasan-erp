@@ -556,7 +556,8 @@ export default function InvoicesPage() {
                   tax_amount: '',
                   discount_amount: '',
                   status: 'draft',
-                  notes: ''
+                  notes: '',
+                  category: ''
                 })
                 setShowInvoiceModal(true)
               }}

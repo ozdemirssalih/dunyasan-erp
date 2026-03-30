@@ -229,9 +229,9 @@ export default function AccountingPageV2() {
       const receivableByCurrency: Record<string, number> = {}
       const payableByCurrency: Record<string, number> = {}  // ← ÖNCElikle tanımla!
 
-      customersData?.forEach(customer => {
-        // Bu müşterinin alacak kayıtları
-        const customerReceivables = receivables?.filter(r => r.customer_id === customer.id) || []
+      allContacts?.forEach(customer => {
+        // Bu müşterinin alacak kayıtları (customer_id veya contact_id ile eşleş)
+        const customerReceivables = receivables?.filter(r => r.customer_id === customer.id || r.supplier_id === customer.id || r.contact_id === customer.id) || []
 
         // Bu müşterinin tahsilat kayıtları
         const customerPayments = cashTxns?.filter(t =>
@@ -302,24 +302,14 @@ export default function AccountingPageV2() {
       const supplierBalances: any[] = []
       // payableByCurrency zaten yukarıda tanımlandı
 
-      suppliersData?.forEach(supplier => {
-        // Bu tedarikçinin borç kayıtları
-        const supplierPayables = payables?.filter(p => p.supplier_id === supplier.id) || []
+      allContacts?.forEach(supplier => {
+        // Bu cari hesabın borç kayıtları
+        const supplierPayables = payables?.filter(p => p.supplier_id === supplier.id || p.contact_id === supplier.id) || []
 
-        // Bu tedarikçinin ödeme kayıtları
+        // Bu cari hesabın ödeme kayıtları
         const supplierPayments = cashTxns?.filter(t =>
-          t.transaction_type === 'expense' && t.supplier_id === supplier.id
+          t.transaction_type === 'expense' && (t.supplier_id === supplier.id || t.contact_id === supplier.id)
         ) || []
-
-        // Debug log - BAŞLANGIÇ
-        if (supplierPayables.length > 0 || supplierPayments.length > 0) {
-          console.log(`🔍 ${supplier.company_name} - BAŞLANGIÇ:`, {
-            borç_sayısı: supplierPayables.length,
-            ödeme_sayısı: supplierPayments.length,
-            borçlar: supplierPayables.map(p => ({ tutar: p.amount, currency: p.currency })),
-            ödemeler: supplierPayments.map(p => ({ tutar: p.amount, currency: p.currency, method: p.payment_method }))
-          })
-        }
 
         // Para birimi bazında hesapla
         const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
@@ -358,7 +348,7 @@ export default function AccountingPageV2() {
 
         // Debug log - HESAPLAMA SONUCU
         if (supplierPayables.length > 0 || supplierPayments.length > 0) {
-          console.log(`💰 ${supplier.company_name} - HESAPLAMA:`, {
+          console.log(`💰 ${supplier.contact_name || supplier.company_name} - HESAPLAMA:`, {
             balancesByCurrency,
             toplam_kalan: Object.values(balancesByCurrency).reduce((sum, b) => sum + b.remaining, 0)
           })
@@ -369,7 +359,7 @@ export default function AccountingPageV2() {
         if (hasRemaining) {
           supplierBalances.push({
             supplier_id: supplier.id,
-            supplier_name: supplier.company_name,
+            supplier_name: supplier.contact_name || supplier.company_name,
             balancesByCurrency,
             transaction_date: supplierPayables[0]?.transaction_date
           })
@@ -1622,7 +1612,7 @@ export default function AccountingPageV2() {
                     } else if (transaction.supplier_id) {
                       const supplier = suppliers.find(s => s.id === transaction.supplier_id)
                       if (supplier) {
-                        companyName = supplier.company_name
+                        companyName = supplier.contact_name || supplier.company_name
                         companyType = 'Tedarikçi'
                       }
                     }
@@ -1845,7 +1835,7 @@ export default function AccountingPageV2() {
                     } else if (transaction.supplier_id) {
                       const supplier = suppliers.find(s => s.id === transaction.supplier_id)
                       if (supplier) {
-                        companyName = supplier.company_name
+                        companyName = supplier.contact_name || supplier.company_name
                         companyType = 'Tedarikçi'
                       }
                     }
@@ -2697,7 +2687,7 @@ export default function AccountingPageV2() {
                         <option value="">Tedarikçi Seçiniz...</option>
                         {suppliers.map(supplier => (
                           <option key={supplier.id} value={supplier.id}>
-                            {supplier.company_name}
+                            {supplier.contact_name || supplier.company_name}
                           </option>
                         ))}
                       </select>

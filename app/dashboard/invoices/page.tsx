@@ -501,8 +501,7 @@ export default function InvoicesPage() {
       (inv.contact_display_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inv.category || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchType = typeFilter === 'all' || inv.invoice_type === typeFilter
-    const matchStatus = statusFilter === 'all' || inv.status === statusFilter
-    return matchSearch && matchType && matchStatus
+    return matchSearch && matchType
   })
 
   // Özet istatistikler
@@ -577,13 +576,6 @@ export default function InvoicesPage() {
             <option value="purchase_fx">Alış KF</option>
             <option value="sales_fx">Satış KF</option>
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            <option value="all">Tüm Durumlar</option>
-            <option value="draft">Taslak</option>
-            <option value="approved">Onaylı</option>
-            <option value="paid">Ödendi</option>
-            <option value="cancelled">İptal</option>
-          </select>
           <span className="text-sm text-gray-500">{filteredInvoices.length} sonuç</span>
           {canCreate('invoices') && (
             <button
@@ -627,7 +619,6 @@ export default function InvoicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Vade</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Tutar</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">KDV</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Durum</th>
                   {(canEdit('invoices') || canDelete('invoices')) && (
                     <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
                   )}
@@ -668,11 +659,6 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-right text-gray-500">
                       {parseFloat(invoice.tax_amount || 0) > 0 ? formatCurrency(parseFloat(invoice.tax_amount)) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <span className={`px-2 py-1 rounded font-medium ${getStatusColor(invoice.status)}`}>
-                        {getStatusLabel(invoice.status)}
-                      </span>
                     </td>
                     {(canEdit('invoices') || canDelete('invoices')) && (
                       <td className="px-6 py-4 text-right">
@@ -1081,19 +1067,6 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Durum *</label>
-                  <select
-                    value={invoiceForm.status}
-                    onChange={(e) => setInvoiceForm({...invoiceForm, status: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                  >
-                    <option value="draft">Taslak</option>
-                    <option value="approved">Onaylandı</option>
-                    <option value="paid">Ödendi</option>
-                    <option value="cancelled">İptal</option>
-                  </select>
-                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Kategorisi</label>

@@ -95,7 +95,7 @@ export default function InvoicesPage() {
     const [invoicesData, contactsData, categoriesData] = await Promise.all([
       supabase
         .from('invoices')
-        .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
+        .select('*')
         .eq('company_id', companyId)
         .order('invoice_date', { ascending: false }),
       supabase
@@ -112,8 +112,15 @@ export default function InvoicesPage() {
         .order('name')
     ])
 
-    setInvoices(invoicesData.data || [])
     const allContacts = contactsData.data || []
+    const contactMap = new Map(allContacts.map(c => [c.id, c.contact_name]))
+
+    // Faturalara contact isimlerini ekle
+    const invoicesWithNames = (invoicesData.data || []).map(inv => ({
+      ...inv,
+      contact_display_name: contactMap.get(inv.customer_id) || contactMap.get(inv.supplier_id) || inv.contact_name || '-'
+    }))
+    setInvoices(invoicesWithNames)
     setCustomers(allContacts.map(c => ({ id: c.id, customer_name: c.contact_name })))
     setSuppliers(allContacts.map(c => ({ id: c.id, company_name: c.contact_name })))
     setInvoiceCategories(categoriesData.data || [])
@@ -491,8 +498,7 @@ export default function InvoicesPage() {
   const filteredInvoices = invoices.filter(inv => {
     const matchSearch = searchTerm === '' ||
       inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.customer?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.supplier?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.contact_display_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inv.category || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchType = typeFilter === 'all' || inv.invoice_type === typeFilter
     const matchStatus = statusFilter === 'all' || inv.status === statusFilter
@@ -653,7 +659,7 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{invoice.category || '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {invoice.customer?.customer_name || invoice.supplier?.company_name || '-'}
+                      {invoice.contact_display_name || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
                     <td className="px-4 py-3 text-sm text-gray-400">{invoice.due_date ? formatDate(invoice.due_date) : '-'}</td>
@@ -851,9 +857,7 @@ export default function InvoicesPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        {invoice.invoice_type === 'sales'
-                          ? invoice.customer?.customer_name || '-'
-                          : invoice.supplier?.company_name || '-'}
+                        {invoice.contact_display_name || '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
                       <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">

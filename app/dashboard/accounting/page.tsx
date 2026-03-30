@@ -2387,38 +2387,34 @@ export default function AccountingPageV2() {
                 {/* CARİ KAYIT FORMU */}
                 {formMode === 'account' && (
                   <>
-                    {/* Müşteri veya Tedarikçi Seçimi */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri (Alacak)</label>
-                        <select
-                          value={transactionForm.customer_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: '', transaction_type: 'receivable'})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Seçiniz...</option>
-                          {customers.map(customer => (
-                            <option key={customer.id} value={customer.id}>
-                              {customer.customer_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi (Borç)</label>
-                        <select
-                          value={transactionForm.supplier_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: '', transaction_type: 'payable'})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Seçiniz...</option>
-                          {suppliers.map(supplier => (
-                            <option key={supplier.id} value={supplier.id}>
-                              {supplier.company_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    {/* Cari Hesap Seçimi - Tek Liste */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap *</label>
+                      <select
+                        value={transactionForm.customer_id ? `customer_${transactionForm.customer_id}` : transactionForm.supplier_id ? `supplier_${transactionForm.supplier_id}` : ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (val.startsWith('customer_')) {
+                            setTransactionForm({...transactionForm, customer_id: val.replace('customer_', ''), supplier_id: '', transaction_type: 'receivable'})
+                          } else if (val.startsWith('supplier_')) {
+                            setTransactionForm({...transactionForm, supplier_id: val.replace('supplier_', ''), customer_id: '', transaction_type: 'payable'})
+                          } else {
+                            setTransactionForm({...transactionForm, customer_id: '', supplier_id: ''})
+                          }
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      >
+                        <option value="">Seçiniz...</option>
+                        {customers.length > 0 && <optgroup label="Müşteriler (Alacak)">
+                          {customers.map(c => <option key={`c_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
+                        </optgroup>}
+                        {suppliers.length > 0 && <optgroup label="Tedarikçiler (Borç)">
+                          {suppliers.map(s => <option key={`s_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
+                        </optgroup>}
+                      </select>
+                      {(transactionForm.customer_id || transactionForm.supplier_id) && (
+                        <p className="text-xs mt-1 font-medium">{transactionForm.customer_id ? <span className="text-green-600">Alacak kaydı oluşturulacak</span> : <span className="text-red-600">Borç kaydı oluşturulacak</span>}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -2463,37 +2459,34 @@ export default function AccountingPageV2() {
                 {/* ÖDEME FORMU */}
                 {formMode === 'payment' && (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri (Tahsilat)</label>
-                        <select
-                          value={transactionForm.customer_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Seçiniz...</option>
-                          {customers.map(customer => (
-                            <option key={customer.id} value={customer.id}>
-                              {customer.customer_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi (Ödeme)</label>
-                        <select
-                          value={transactionForm.supplier_id}
-                          onChange={(e) => setTransactionForm({...transactionForm, supplier_id: e.target.value, customer_id: ''})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Seçiniz...</option>
-                          {suppliers.map(supplier => (
-                            <option key={supplier.id} value={supplier.id}>
-                              {supplier.company_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    {/* Cari Hesap Seçimi - Tek Liste */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap *</label>
+                      <select
+                        value={transactionForm.customer_id ? `customer_${transactionForm.customer_id}` : transactionForm.supplier_id ? `supplier_${transactionForm.supplier_id}` : ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (val.startsWith('customer_')) {
+                            setTransactionForm({...transactionForm, customer_id: val.replace('customer_', ''), supplier_id: ''})
+                          } else if (val.startsWith('supplier_')) {
+                            setTransactionForm({...transactionForm, supplier_id: val.replace('supplier_', ''), customer_id: ''})
+                          } else {
+                            setTransactionForm({...transactionForm, customer_id: '', supplier_id: ''})
+                          }
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      >
+                        <option value="">Seçiniz...</option>
+                        {customers.length > 0 && <optgroup label="Müşteriler (Tahsilat)">
+                          {customers.map(c => <option key={`cp_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
+                        </optgroup>}
+                        {suppliers.length > 0 && <optgroup label="Tedarikçiler (Ödeme)">
+                          {suppliers.map(s => <option key={`sp_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
+                        </optgroup>}
+                      </select>
+                      {(transactionForm.customer_id || transactionForm.supplier_id) && (
+                        <p className="text-xs mt-1 font-medium">{transactionForm.customer_id ? <span className="text-green-600">Tahsilat yapılacak</span> : <span className="text-red-600">Ödeme yapılacak</span>}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

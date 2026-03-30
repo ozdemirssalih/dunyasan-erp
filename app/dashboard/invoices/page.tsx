@@ -92,23 +92,18 @@ export default function InvoicesPage() {
   const loadData = async () => {
     if (!companyId) return
 
-    const [invoicesData, customersData, suppliersData, categoriesData] = await Promise.all([
+    const [invoicesData, contactsData, categoriesData] = await Promise.all([
       supabase
         .from('invoices')
         .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
         .eq('company_id', companyId)
         .order('invoice_date', { ascending: false }),
       supabase
-        .from('customer_companies')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('customer_name'),
-      supabase
-        .from('suppliers')
-        .select('*')
+        .from('contacts')
+        .select('id, contact_name, contact_type, phone, email')
         .eq('company_id', companyId)
         .eq('is_active', true)
-        .order('company_name'),
+        .order('contact_name'),
       supabase
         .from('invoice_categories')
         .select('*')
@@ -118,8 +113,9 @@ export default function InvoicesPage() {
     ])
 
     setInvoices(invoicesData.data || [])
-    setCustomers(customersData.data || [])
-    setSuppliers(suppliersData.data || [])
+    const allContacts = contactsData.data || []
+    setCustomers(allContacts.map(c => ({ id: c.id, customer_name: c.contact_name })))
+    setSuppliers(allContacts.map(c => ({ id: c.id, company_name: c.contact_name })))
     setInvoiceCategories(categoriesData.data || [])
   }
 
@@ -130,16 +126,9 @@ export default function InvoicesPage() {
       return alert('Fatura numarası ve tutar zorunludur!')
     }
 
-    // Müşteri işlemleri için customer_id zorunlu
-    const customerTransactions = ['sales', 'outgoing_return', 'sales_fx']
-    if (customerTransactions.includes(invoiceForm.invoice_type) && !invoiceForm.customer_id) {
-      return alert('Müşteri seçimi zorunludur!')
-    }
-
-    // Tedarikçi işlemleri için supplier_id zorunlu
-    const supplierTransactions = ['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx']
-    if (supplierTransactions.includes(invoiceForm.invoice_type) && !invoiceForm.supplier_id) {
-      return alert('Tedarikçi seçimi zorunludur!')
+    // Cari hesap seçimi zorunlu
+    if (!invoiceForm.customer_id && !invoiceForm.supplier_id) {
+      return alert('Cari hesap seçimi zorunludur!')
     }
 
     try {
@@ -1019,43 +1008,24 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
-                {/* Cari Hesap Seçimi - Birleşik Liste */}
+                {/* Cari Hesap Seçimi */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cari Hesap *
-                    <span className="text-xs text-gray-500 ml-2">
-                      {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) ? '(Müşteri seçin - Alacak)' : '(Tedarikçi seçin - Borç)'}
-                    </span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap *</label>
                   <select
-                    value={invoiceForm.customer_id ? `customer_${invoiceForm.customer_id}` : invoiceForm.supplier_id ? `supplier_${invoiceForm.supplier_id}` : ''}
+                    value={invoiceForm.customer_id || invoiceForm.supplier_id || ''}
                     onChange={(e) => {
-                      const val = e.target.value
-                      if (val.startsWith('customer_')) {
-                        setInvoiceForm({...invoiceForm, customer_id: val.replace('customer_', ''), supplier_id: ''})
-                      } else if (val.startsWith('supplier_')) {
-                        setInvoiceForm({...invoiceForm, supplier_id: val.replace('supplier_', ''), customer_id: ''})
+                      const isCustomerType = ['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type)
+                      if (isCustomerType) {
+                        setInvoiceForm({...invoiceForm, customer_id: e.target.value, supplier_id: ''})
                       } else {
-                        setInvoiceForm({...invoiceForm, customer_id: '', supplier_id: ''})
+                        setInvoiceForm({...invoiceForm, supplier_id: e.target.value, customer_id: ''})
                       }
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     required
                   >
                     <option value="">Seçiniz...</option>
-                    {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) ? (
-                      <>
-                        {customers.length > 0 && <optgroup label="Müşteriler">
-                          {customers.map(c => <option key={`ic_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
-                        </optgroup>}
-                      </>
-                    ) : (
-                      <>
-                        {suppliers.length > 0 && <optgroup label="Tedarikçiler">
-                          {suppliers.map(s => <option key={`is_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
-                        </optgroup>}
-                      </>
-                    )}
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
                   </select>
                 </div>
 
@@ -1218,33 +1188,20 @@ export default function InvoicesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cari Hesap {waybillForm.waybill_type === 'outgoing' ? '(Müşteri)' : '(Tedarikçi)'}
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap</label>
                   <select
-                    value={waybillForm.customer_id ? `customer_${waybillForm.customer_id}` : waybillForm.supplier_id ? `supplier_${waybillForm.supplier_id}` : ''}
+                    value={waybillForm.customer_id || waybillForm.supplier_id || ''}
                     onChange={(e) => {
-                      const val = e.target.value
-                      if (val.startsWith('customer_')) {
-                        setWaybillForm({...waybillForm, customer_id: val.replace('customer_', ''), supplier_id: ''})
-                      } else if (val.startsWith('supplier_')) {
-                        setWaybillForm({...waybillForm, supplier_id: val.replace('supplier_', ''), customer_id: ''})
+                      if (waybillForm.waybill_type === 'outgoing') {
+                        setWaybillForm({...waybillForm, customer_id: e.target.value, supplier_id: ''})
                       } else {
-                        setWaybillForm({...waybillForm, customer_id: '', supplier_id: ''})
+                        setWaybillForm({...waybillForm, supplier_id: e.target.value, customer_id: ''})
                       }
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                   >
                     <option value="">Seçiniz...</option>
-                    {waybillForm.waybill_type === 'outgoing' ? (
-                      customers.length > 0 && <optgroup label="Müşteriler">
-                        {customers.map(c => <option key={`wc_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
-                      </optgroup>
-                    ) : (
-                      suppliers.length > 0 && <optgroup label="Tedarikçiler">
-                        {suppliers.map(s => <option key={`ws_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
-                      </optgroup>
-                    )}
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
                   </select>
                 </div>
 

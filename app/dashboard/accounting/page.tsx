@@ -1661,7 +1661,7 @@ export default function AccountingPageV2() {
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {transaction.transaction_type === 'income' ? 'Tahsilat' : 'Ödeme'}
+                            {transaction.transaction_type === 'income' ? 'Gelen Ödeme' : 'Giden Ödeme'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1879,7 +1879,7 @@ export default function AccountingPageV2() {
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {transaction.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
+                            {transaction.transaction_type === 'receivable' ? 'Alacak (Fatura)' : 'Borç (Fatura)'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
@@ -2365,7 +2365,7 @@ export default function AccountingPageV2() {
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
                     >
-                      Cari Kayıt (Alacak/Borç)
+                      Cari Kayıt (Fatura)
                     </button>
                     <button
                       onClick={() => {
@@ -2471,8 +2471,8 @@ export default function AccountingPageV2() {
                           onChange={(e) => setTransactionForm({...transactionForm, transaction_type: e.target.value === 'income' ? 'receivable' : 'payable' as any})}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                         >
-                          <option value="income">Tahsilat (Para Geldi)</option>
-                          <option value="expense">Ödeme (Para Gitti)</option>
+                          <option value="income">Gelen Ödeme (Tahsilat)</option>
+                          <option value="expense">Giden Ödeme</option>
                         </select>
                       </div>
                     </div>

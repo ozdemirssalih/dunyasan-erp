@@ -1058,7 +1058,6 @@ export default function InvoicesPage() {
                     )}
                   </select>
                 </div>
-                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

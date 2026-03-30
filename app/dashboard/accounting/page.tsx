@@ -55,6 +55,9 @@ export default function AccountingPageV2() {
   const [cashAccounts, setCashAccounts] = useState<any[]>([])
   const [showAccountModal, setShowAccountModal] = useState(false)
   const [accountForm, setAccountForm] = useState({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY' })
+  const [selectedAccount, setSelectedAccount] = useState<any>(null)
+  const [accountTransactions, setAccountTransactions] = useState<any[]>([])
+  const [accountBalanceInput, setAccountBalanceInput] = useState('')
 
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
@@ -625,6 +628,23 @@ export default function AccountingPageV2() {
       console.error('Error:', error)
       alert('Hata oluştu!')
     }
+  }
+
+  const loadAccountTransactions = async (accountId: string) => {
+    const { data } = await supabase
+      .from('cash_transactions')
+      .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
+      .eq('company_id', companyId)
+      .eq('cash_account_id', accountId)
+      .order('transaction_date', { ascending: false })
+      .limit(50)
+    setAccountTransactions(data || [])
+  }
+
+  const openAccountDetail = async (acc: any) => {
+    setSelectedAccount(acc)
+    setAccountBalanceInput(acc.current_balance.toString())
+    await loadAccountTransactions(acc.id)
   }
 
   const resetForm = () => {
@@ -3028,52 +3048,127 @@ export default function AccountingPageV2() {
         {activeTab === 'accounts' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800">Kasa / Hesap Yönetimi</h2>
-              <button onClick={() => setShowAccountModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Yeni Kasa Ekle
-              </button>
+              <h2 className="text-xl font-bold text-gray-800">
+                {selectedAccount ? (
+                  <button onClick={() => setSelectedAccount(null)} className="flex items-center gap-2 hover:text-blue-600">
+                    <span>←</span> {selectedAccount.account_name}
+                  </button>
+                ) : 'Kasa / Hesap Yönetimi'}
+              </h2>
+              {!selectedAccount && (
+                <button onClick={() => setShowAccountModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> Yeni Kasa Ekle
+                </button>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cashAccounts.map((acc: any) => (
-                <div key={acc.id} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-gray-800">{acc.account_name}</h3>
-                    <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{acc.currency}</span>
+            {!selectedAccount ? (
+              /* KASA LİSTESİ */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cashAccounts.map((acc: any) => (
+                  <div key={acc.id} onClick={() => openAccountDetail(acc)} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-gray-800">{acc.account_name}</h3>
+                      <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{acc.currency}</span>
+                    </div>
+                    {acc.bank_name && <p className="text-sm text-gray-500 mb-2">{acc.bank_name}</p>}
+                    <p className={`text-2xl font-bold ${acc.current_balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.current_balance)} {acc.currency}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-2">{acc.account_type === 'bank' ? 'Banka Hesabı' : acc.account_type === 'credit_card' ? 'Kredi Kartı' : acc.account_type === 'cash' ? 'Nakit' : 'Diğer'}</p>
                   </div>
-                  {acc.bank_name && <p className="text-sm text-gray-500 mb-2">{acc.bank_name}</p>}
-                  <p className={`text-2xl font-bold ${acc.current_balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.current_balance)} {acc.currency}
-                  </p>
-                  <div className="flex gap-2 mt-4">
+                ))}
+                {cashAccounts.length === 0 && (
+                  <div className="col-span-full text-center py-12 text-gray-400">Henüz kasa eklenmemiş</div>
+                )}
+              </div>
+            ) : (
+              /* KASA DETAY */
+              <div className="space-y-6">
+                {/* Bakiye Kartı */}
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-gray-500">{selectedAccount.bank_name || selectedAccount.account_type === 'cash' ? 'Nakit Kasa' : ''}</p>
+                      <p className={`text-3xl font-bold ${selectedAccount.current_balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(selectedAccount.current_balance)} {selectedAccount.currency}
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full">{selectedAccount.currency}</span>
+                  </div>
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Bakiye Güncelle</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={accountBalanceInput}
+                        onChange={(e) => setAccountBalanceInput(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
                     <button
                       onClick={async () => {
-                        const newBalance = prompt(`${acc.account_name} yeni bakiye:`, acc.current_balance.toString())
-                        if (newBalance === null) return
-                        await supabase.from('cash_accounts').update({ current_balance: parseFloat(newBalance), updated_at: new Date().toISOString() }).eq('id', acc.id)
-                        loadData()
+                        const newBal = parseFloat(accountBalanceInput)
+                        if (isNaN(newBal)) return
+                        await supabase.from('cash_accounts').update({ current_balance: newBal, updated_at: new Date().toISOString() }).eq('id', selectedAccount.id)
+                        setSelectedAccount({ ...selectedAccount, current_balance: newBal })
+                        setCashAccounts(cashAccounts.map((a: any) => a.id === selectedAccount.id ? { ...a, current_balance: newBal } : a))
+                        alert('Bakiye güncellendi!')
                       }}
-                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-semibold"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold"
                     >
-                      Bakiye Güncelle
+                      <Save className="w-4 h-4" />
                     </button>
                     <button
                       onClick={async () => {
-                        if (!confirm(`${acc.account_name} kasasını silmek istiyor musunuz?`)) return
-                        await supabase.from('cash_accounts').update({ is_active: false }).eq('id', acc.id)
+                        if (!confirm(`${selectedAccount.account_name} kasasını silmek istiyor musunuz?`)) return
+                        await supabase.from('cash_accounts').update({ is_active: false }).eq('id', selectedAccount.id)
+                        setSelectedAccount(null)
                         loadData()
                       }}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm"
+                      className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-              ))}
-              {cashAccounts.length === 0 && (
-                <div className="col-span-full text-center py-12 text-gray-400">Henüz kasa eklenmemiş</div>
-              )}
-            </div>
+
+                {/* İşlem Geçmişi */}
+                <div className="bg-white rounded-xl shadow-sm border">
+                  <div className="p-5 border-b">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><History className="w-5 h-5" /> Kasa Geçmişi</h3>
+                  </div>
+                  <div className="p-5">
+                    {accountTransactions.length === 0 ? (
+                      <p className="text-center text-gray-400 py-8">Bu kasada henüz işlem yok</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {accountTransactions.map((t: any) => (
+                          <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 text-sm">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-8 rounded-full ${t.transaction_type === 'income' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              <div>
+                                <p className="font-semibold text-gray-800">{t.description || '-'}</p>
+                                <p className="text-xs text-gray-500">
+                                  {t.customer?.customer_name || t.supplier?.company_name || '-'} • {t.payment_method === 'cash' ? 'Nakit' : t.payment_method === 'transfer' ? 'Havale' : t.payment_method === 'check' ? 'Çek' : t.payment_method} • {t.reference_number || '-'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold ${t.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                {t.transaction_type === 'income' ? '+' : '-'}{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(t.amount)} {t.currency}
+                              </p>
+                              <p className="text-xs text-gray-500">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

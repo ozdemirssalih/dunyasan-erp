@@ -528,9 +528,11 @@ export default function AccountingPageV2() {
         cashTransactionDate.setHours(nowCash.getHours(), nowCash.getMinutes(), nowCash.getSeconds(), nowCash.getMilliseconds())
 
         // Kasa kaydı oluştur
+        // Tahsilat (receivable) = income (para geldi), Ödeme (payable) = expense (para gitti)
+        const isTahsilat = transactionForm.transaction_type === 'receivable'
         const cashData: any = {
           company_id: companyId,
-          transaction_type: transactionForm.customer_id ? 'income' : 'expense',
+          transaction_type: isTahsilat ? 'income' : 'expense',
           amount: amount,
           currency: transactionForm.currency,
           payment_method: transactionForm.payment_method,
@@ -562,8 +564,7 @@ export default function AccountingPageV2() {
         if (transactionForm.cash_account_id) {
           const selectedAccount = cashAccounts.find((a: any) => a.id === transactionForm.cash_account_id)
           if (selectedAccount) {
-            const isIncome = !!transactionForm.customer_id
-            const newBalance = isIncome
+            const newBalance = isTahsilat
               ? selectedAccount.current_balance + amount
               : selectedAccount.current_balance - amount
 
@@ -574,38 +575,47 @@ export default function AccountingPageV2() {
           }
         }
 
-        // Ödeme/Tahsilatı cari hesaplara da yansıt
+        // Ödeme/Tahsilat → Carideki borcu/alacağı kapat
+        // Tahsilat = alacak azalır (receivable olan kayıtların paid_amount'ı artar)
+        // Ödeme = borç azalır (payable olan kayıtların paid_amount'ı artar)
         try {
-          const isCustomerPayment = !!transactionForm.customer_id
-          const currentAccountEntry: any = {
-            company_id: companyId,
-            transaction_type: isCustomerPayment ? 'receivable' : 'payable',
-            amount: amount,
-            paid_amount: amount,
-            status: 'paid',
-            currency: transactionForm.currency,
-            transaction_date: cashTransactionDate.toISOString(),
-            description: `${isCustomerPayment ? 'Tahsilat' : 'Ödeme'}: ${transactionForm.description || ''} (${transactionForm.payment_method === 'cash' ? 'Nakit' : transactionForm.payment_method === 'transfer' ? 'Havale' : transactionForm.payment_method === 'check' ? 'Çek' : transactionForm.payment_method})`,
-            reference_number: `CASH-${Date.now()}`,
-            created_by: user?.id
-          }
+          const contactId = transactionForm.customer_id || transactionForm.supplier_id
+          const isTahsilat = transactionForm.transaction_type === 'receivable'
+          const targetType = isTahsilat ? 'receivable' : 'payable'
 
-          if (isCustomerPayment) {
-            currentAccountEntry.customer_id = transactionForm.customer_id
-            currentAccountEntry.supplier_id = null
-          } else {
-            currentAccountEntry.supplier_id = transactionForm.supplier_id
-            currentAccountEntry.customer_id = null
-          }
+          // Bu carinin ödenmemiş kayıtlarını bul
+          const { data: unpaidRecords } = await supabase
+            .from('current_account_transactions')
+            .select('id, amount, paid_amount')
+            .eq('company_id', companyId)
+            .eq('transaction_type', targetType)
+            .or(`customer_id.eq.${contactId},supplier_id.eq.${contactId},contact_id.eq.${contactId}`)
+            .neq('status', 'paid')
+            .order('transaction_date', { ascending: true })
 
-          const { error: catError } = await supabase.from('current_account_transactions').insert(currentAccountEntry)
-          if (catError) {
-            console.error('Cari yansıtma hatası:', catError)
-          } else {
-            console.log('✅ Ödeme/Tahsilat cari hesaba yansıtıldı')
+          // Ödeme tutarını ödenmemiş kayıtlara dağıt
+          let remainingAmount = amount
+          if (unpaidRecords) {
+            for (const record of unpaidRecords) {
+              if (remainingAmount <= 0) break
+              const currentPaid = parseFloat(record.paid_amount || 0)
+              const recordAmount = parseFloat(record.amount)
+              const owing = recordAmount - currentPaid
+              const payThis = Math.min(remainingAmount, owing)
+
+              const newPaid = currentPaid + payThis
+              const newStatus = newPaid >= recordAmount ? 'paid' : 'partial'
+
+              await supabase.from('current_account_transactions')
+                .update({ paid_amount: newPaid, status: newStatus })
+                .eq('id', record.id)
+
+              remainingAmount -= payThis
+            }
           }
+          console.log(`✅ ${isTahsilat ? 'Tahsilat' : 'Ödeme'} carideki ${targetType} kayıtlara dağıtıldı`)
         } catch (catErr) {
-          console.error('Cari yansıtma exception:', catErr)
+          console.error('Cari güncelleme hatası:', catErr)
         }
       }
 

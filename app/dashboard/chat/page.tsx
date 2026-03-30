@@ -201,7 +201,7 @@ function mapProfile(p: any): Profile | undefined {
     full_name: p.full_name,
     avatar_url: p.avatar_url,
     role_id: p.role_id,
-    role_name: p.role?.name || null,
+    role_name: p.job_title || p.role?.name || null,
     company_id: p.company_id,
     phone: p.phone,
     email: p.email,
@@ -411,7 +411,7 @@ export default function ChatPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*, role:roles(name)')
+        .select('*, job_title, role:roles(name)')
         .eq('id', user.id)
         .single()
 
@@ -560,7 +560,7 @@ export default function ChatPage() {
         // Transform sender role in last message
         const transformedLastMsg = lastMsg ? {
           ...lastMsg,
-          sender: lastMsg.sender ? { ...lastMsg.sender, role_name: (lastMsg.sender as any)?.role?.name || null } : undefined,
+          sender: lastMsg.sender ? { ...lastMsg.sender, role_name: (lastMsg.sender as any)?.job_title || (lastMsg.sender as any)?.role?.name || null } : undefined,
         } : undefined
 
         roomMetas.push({
@@ -631,7 +631,7 @@ export default function ChatPage() {
 
       const messagesWithReplies = (data || []).map(m => ({
         ...m,
-        sender: m.sender ? { ...m.sender, role_name: (m.sender as any)?.role?.name || null } : undefined,
+        sender: m.sender ? { ...m.sender, role_name: (m.sender as any)?.job_title || (m.sender as any)?.role?.name || null } : undefined,
         reply_to_msg: m.reply_to ? (() => {
           const r = replyMap.get(m.reply_to)
           return r ? { ...r, sender: r.sender ? { ...r.sender, role_name: (r.sender as any)?.role?.name || null } : undefined } : undefined
@@ -729,11 +729,11 @@ export default function ChatPage() {
           // Get sender profile with role
           const { data: senderRaw } = await supabase
             .from('profiles')
-            .select('*, role:roles(name)')
+            .select('*, job_title, role:roles(name)')
             .eq('id', newMsg.sender_id)
             .single()
 
-          const senderProfile = senderRaw ? { ...senderRaw, role_name: (senderRaw as any)?.role?.name || null } : null
+          const senderProfile = senderRaw ? { ...senderRaw, role_name: (senderRaw as any)?.job_title || (senderRaw as any)?.role?.name || null } : null
 
           const fullMsg: ChatMessage = {
             ...newMsg,
@@ -1350,14 +1350,14 @@ export default function ChatPage() {
     if (!companyId) return
     const { data } = await supabase
       .from('profiles')
-      .select('*, role:roles(name)')
+      .select('*, job_title, role:roles(name)')
       .eq('company_id', companyId)
       .neq('id', currentUserId)
       .order('full_name')
 
     const mapped = (data || []).map(u => ({
       ...u,
-      role_name: (u as any).role?.name || null,
+      role_name: (u as any).job_title || (u as any).role?.name || null,
     }))
     setAllUsers(mapped)
   }, [companyId, currentUserId])

@@ -159,6 +159,30 @@ export default function InvoicesPage() {
 
       if (editingId) {
         await supabase.from('invoices').update(data).eq('id', editingId)
+
+        // Düzenleme: eski cari kaydı güncelle (invoice_number referansıyla bul)
+        const customerTransactionsEdit = ['sales', 'outgoing_return', 'sales_fx']
+        const transTypeEdit = customerTransactionsEdit.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
+        const updateCari: any = {
+          amount: parseFloat(invoiceForm.total_amount),
+          transaction_type: transTypeEdit,
+          transaction_date: invoiceForm.invoice_date,
+          due_date: invoiceForm.due_date || null,
+          description: `Fatura: ${invoiceForm.invoice_number}`,
+        }
+        if (transTypeEdit === 'receivable') {
+          updateCari.customer_id = invoiceForm.customer_id
+          updateCari.supplier_id = null
+        } else {
+          updateCari.supplier_id = invoiceForm.supplier_id
+          updateCari.customer_id = null
+        }
+        await supabase.from('current_account_transactions')
+          .update(updateCari)
+          .eq('company_id', companyId)
+          .eq('reference_number', invoiceForm.invoice_number)
+
+        alert('Fatura ve cari hesap güncellendi!')
       } else {
         // Faturayı kaydet
         const { data: insertedInvoice, error: invoiceError } = await supabase

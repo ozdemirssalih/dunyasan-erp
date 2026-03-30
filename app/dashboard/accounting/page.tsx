@@ -278,7 +278,7 @@ export default function AccountingPageV2() {
         if (hasRemaining) {
           customerBalances.push({
             customer_id: customer.id,
-            customer_name: customer.customer_name,
+            customer_name: customer.contact_name,
             balancesByCurrency,
             transaction_date: customerReceivables[0]?.transaction_date
           })

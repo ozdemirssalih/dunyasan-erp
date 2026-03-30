@@ -73,14 +73,65 @@ export default function CurrentAccountsPage() {
     setSelectedContact(contact)
     if (!companyId) return
 
-    const { data } = await supabase
+    // Cari kayıtları (faturalar)
+    const { data: cariData } = await supabase
       .from('current_account_transactions')
       .select('*')
       .eq('company_id', companyId)
       .or(`customer_id.eq.${contact.id},supplier_id.eq.${contact.id},contact_id.eq.${contact.id}`)
       .order('transaction_date', { ascending: false })
 
-    setContactTransactions(data || [])
+    // Fatura bilgilerini reference_number üzerinden eşleştir
+    const refNumbers = (cariData || []).map(t => t.reference_number).filter(Boolean)
+    let invoiceMap: Record<string, any> = {}
+    if (refNumbers.length > 0) {
+      const { data: invoices } = await supabase
+        .from('invoices')
+        .select('invoice_number, invoice_type, category')
+        .eq('company_id', companyId)
+        .in('invoice_number', refNumbers)
+      if (invoices) {
+        invoices.forEach(inv => { invoiceMap[inv.invoice_number] = inv })
+      }
+    }
+
+    // Kasa işlemlerini (gelen/giden ödemeler)
+    const { data: cashData } = await supabase
+      .from('cash_transactions')
+      .select('*, cash_account:cash_accounts(account_name)')
+      .eq('company_id', companyId)
+      .or(`customer_id.eq.${contact.id},supplier_id.eq.${contact.id},contact_id.eq.${contact.id}`)
+      .order('transaction_date', { ascending: false })
+
+    // Birleştir
+    const cariItems = (cariData || []).map(t => {
+      const inv = invoiceMap[t.reference_number] || null
+      return {
+        ...t,
+        source: 'cari' as const,
+        invoice_type: inv?.invoice_type || null,
+        invoice_category: inv?.category || null,
+      }
+    })
+
+    const cashItems = (cashData || []).map(t => ({
+      id: t.id,
+      amount: t.amount,
+      transaction_type: t.transaction_type,
+      transaction_date: t.transaction_date,
+      description: t.description,
+      reference_number: t.reference_number,
+      paid_amount: null,
+      status: null,
+      source: 'cash' as const,
+      payment_method: t.payment_method,
+      cash_account_name: (t as any).cash_account?.account_name || null,
+      invoice_type: null,
+      invoice_category: null,
+    }))
+
+    const all = [...cariItems, ...cashItems].sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
+    setContactTransactions(all)
   }
 
   const filtered = contacts.filter(c => {
@@ -180,30 +231,51 @@ export default function CurrentAccountsPage() {
                 <p className="text-center text-gray-400 py-8">Henüz işlem yok</p>
               ) : (
                 <div className="space-y-2">
-                  {contactTransactions.map(t => (
-                    <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 text-sm">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-8 rounded-full ${t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <div>
-                          <p className="font-semibold text-gray-800">{t.description || t.reference_number || '-'}</p>
-                          <p className="text-xs text-gray-500">
-                            {t.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
-                            {parseFloat(t.paid_amount || 0) > 0 && ` • Ödenen: ${fmt(parseFloat(t.paid_amount))}`}
-                            {t.status === 'paid' ? ' • Kapatıldı' : t.status === 'partial' ? ' • Kısmi Ödeme' : ''}
-                            {' • '}{new Date(t.transaction_date).toLocaleDateString('tr-TR')}
+                  {contactTransactions.map((t: any) => {
+                    const isCash = t.source === 'cash'
+                    const isIncome = isCash && t.transaction_type === 'income'
+                    const invoiceLabels: Record<string, string> = {
+                      sales: 'Satış Faturası', purchase: 'Alış Faturası', incoming_return: 'Gelen İade',
+                      outgoing_return: 'Giden İade', withholding: 'Tevkifatlı', exempt: 'İstisna',
+                      purchase_fx: 'Alış Kur Farkı', sales_fx: 'Satış Kur Farkı',
+                    }
+                    return (
+                      <div key={t.id} className={`flex items-center justify-between p-3 rounded-lg text-sm ${isCash ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-8 rounded-full ${isIncome ? 'bg-blue-500' : isCash ? 'bg-orange-500' : t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <div>
+                            <p className="font-semibold text-gray-800">{t.description || t.reference_number || '-'}</p>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {isCash ? (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isIncome ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {isIncome ? 'Gelen Ödeme' : 'Giden Ödeme'}
+                                </span>
+                              ) : (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${t.transaction_type === 'receivable' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {t.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
+                                </span>
+                              )}
+                              {t.invoice_type && <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-200 text-gray-700">{invoiceLabels[t.invoice_type] || t.invoice_type}</span>}
+                              {t.invoice_category && <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-700">{t.invoice_category}</span>}
+                              {isCash && t.payment_method && <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-200 text-gray-600">{t.payment_method === 'cash' ? 'Nakit' : t.payment_method === 'transfer' ? 'Havale' : t.payment_method === 'check' ? 'Çek' : t.payment_method}</span>}
+                              {isCash && t.cash_account_name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700">{t.cash_account_name}</span>}
+                              {!isCash && t.status === 'paid' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700">Kapatıldı</span>}
+                              {!isCash && t.status === 'partial' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-yellow-100 text-yellow-700">Kısmi Ödeme</span>}
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-bold ${isIncome ? 'text-blue-600' : isCash ? 'text-orange-600' : t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
+                            {(isIncome || t.transaction_type === 'receivable') ? '+' : '-'}{fmt(parseFloat(t.amount))}
                           </p>
+                          {!isCash && parseFloat(t.paid_amount || 0) > 0 && (
+                            <p className="text-[10px] text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-bold ${t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
-                          {t.transaction_type === 'receivable' ? '+' : '-'}{fmt(parseFloat(t.amount))}
-                        </p>
-                        {parseFloat(t.paid_amount || 0) > 0 && (
-                          <p className="text-xs text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

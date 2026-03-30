@@ -108,8 +108,8 @@ export default function EmployeeDetailPage() {
 
       setEmployee(employeeData)
 
-      // Load daily production records
-      const { data: dailyProductionData, error: dailyError } = await supabase
+      // Load daily production records - hem employee_id hem employee_ids array'inden ara
+      const { data: byEmployeeId } = await supabase
         .from('machine_daily_production')
         .select(`
           *,
@@ -119,11 +119,22 @@ export default function EmployeeDetailPage() {
         .eq('employee_id', employeeId)
         .order('production_date', { ascending: false })
 
-      if (dailyError) {
-        console.error('Error loading productions:', dailyError)
-      }
+      const { data: byEmployeeIds } = await supabase
+        .from('machine_daily_production')
+        .select(`
+          *,
+          project:projects(project_code, project_name),
+          machine:machines!machine_daily_production_machine_id_fkey(machine_code, machine_name)
+        `)
+        .contains('employee_ids', [employeeId])
+        .order('production_date', { ascending: false })
 
-      setDailyProductions(dailyProductionData || [])
+      // Birleştir ve tekrarları kaldır
+      const allProductions = [...(byEmployeeId || []), ...(byEmployeeIds || [])]
+      const uniqueMap = new Map(allProductions.map(p => [p.id, p]))
+      const dailyProductionData = Array.from(uniqueMap.values()).sort((a, b) => new Date(b.production_date).getTime() - new Date(a.production_date).getTime())
+
+      setDailyProductions(dailyProductionData)
 
       // Calculate stats
       if (dailyProductionData) {

@@ -75,12 +75,20 @@ export default function EmployeesPage() {
       // Her personel için verimlilik hesapla
       const employeesWithEfficiency = await Promise.all(
         (data || []).map(async (employee) => {
-          const { data: productions } = await supabase
+          const { data: prodById } = await supabase
             .from('machine_daily_production')
-            .select('efficiency_rate')
+            .select('id, efficiency_rate')
             .eq('employee_id', employee.id)
 
-          const totalProductions = productions?.length || 0
+          const { data: prodByIds } = await supabase
+            .from('machine_daily_production')
+            .select('id, efficiency_rate')
+            .contains('employee_ids', [employee.id])
+
+          const allProds = [...(prodById || []), ...(prodByIds || [])]
+          const uniqueProds = Array.from(new Map(allProds.map(p => [p.id, p])).values())
+          const productions = uniqueProds
+          const totalProductions = productions.length
           const avgEfficiency = productions && productions.length > 0
             ? productions.reduce((sum, p) => sum + (p.efficiency_rate || 0), 0) / productions.length
             : 0

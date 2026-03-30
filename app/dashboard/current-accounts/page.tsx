@@ -36,24 +36,26 @@ export default function CurrentAccountsPage() {
 
       // Her contact için bakiye hesapla
       const contactsWithBalance = await Promise.all((contactsData || []).map(async (contact) => {
-        // Alacak kayıtları
+        // Alacak kayıtları (amount - paid_amount = kalan alacak)
         const { data: receivables } = await supabase
           .from('current_account_transactions')
-          .select('amount')
+          .select('amount, paid_amount')
           .eq('company_id', cid)
           .eq('transaction_type', 'receivable')
           .or(`customer_id.eq.${contact.id},supplier_id.eq.${contact.id},contact_id.eq.${contact.id}`)
 
-        // Borç kayıtları
+        // Borç kayıtları (amount - paid_amount = kalan borç)
         const { data: payables } = await supabase
           .from('current_account_transactions')
-          .select('amount')
+          .select('amount, paid_amount')
           .eq('company_id', cid)
           .eq('transaction_type', 'payable')
           .or(`customer_id.eq.${contact.id},supplier_id.eq.${contact.id},contact_id.eq.${contact.id}`)
 
-        const totalReceivable = receivables?.reduce((s, r) => s + parseFloat(r.amount || 0), 0) || 0
-        const totalPayable = payables?.reduce((s, r) => s + parseFloat(r.amount || 0), 0) || 0
+        // Kalan alacak = toplam fatura tutarı - ödenen kısım
+        const totalReceivable = receivables?.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0) || 0
+        // Kalan borç = toplam fatura tutarı - ödenen kısım
+        const totalPayable = payables?.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0) || 0
         const balance = totalReceivable - totalPayable
 
         return { ...contact, balance, totalReceivable, totalPayable, transactionCount: (receivables?.length || 0) + (payables?.length || 0) }
@@ -184,12 +186,22 @@ export default function CurrentAccountsPage() {
                         <div className={`w-2 h-8 rounded-full ${t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                         <div>
                           <p className="font-semibold text-gray-800">{t.description || t.reference_number || '-'}</p>
-                          <p className="text-xs text-gray-500">{t.transaction_type === 'receivable' ? 'Alacak' : 'Borç'} • {new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
+                          <p className="text-xs text-gray-500">
+                            {t.transaction_type === 'receivable' ? 'Alacak' : 'Borç'}
+                            {parseFloat(t.paid_amount || 0) > 0 && ` • Ödenen: ${fmt(parseFloat(t.paid_amount))}`}
+                            {t.status === 'paid' ? ' • Kapatıldı' : t.status === 'partial' ? ' • Kısmi Ödeme' : ''}
+                            {' • '}{new Date(t.transaction_date).toLocaleDateString('tr-TR')}
+                          </p>
                         </div>
                       </div>
-                      <p className={`font-bold ${t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
-                        {t.transaction_type === 'receivable' ? '+' : '-'}{fmt(parseFloat(t.amount))}
-                      </p>
+                      <div className="text-right">
+                        <p className={`font-bold ${t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
+                          {t.transaction_type === 'receivable' ? '+' : '-'}{fmt(parseFloat(t.amount))}
+                        </p>
+                        {parseFloat(t.paid_amount || 0) > 0 && (
+                          <p className="text-xs text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

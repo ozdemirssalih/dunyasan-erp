@@ -2442,30 +2442,29 @@ export default function AccountingPageV2() {
                 {/* ÖDEME FORMU */}
                 {formMode === 'payment' && (
                   <>
-                    {/* Cari Hesap Seçimi */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap *</label>
-                      <select
-                        value={transactionForm.customer_id || ''}
-                        onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      >
-                        <option value="">Seçiniz...</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">İşlem Türü *</label>
-                      <select
-                        value={transactionForm.customer_id ? 'income' : 'expense'}
-                        onChange={(e) => {}}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-gray-50"
-                        disabled
-                      >
-                        <option value="income">Tahsilat (Gelen)</option>
-                        <option value="expense">Ödeme (Giden)</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">İşlem türü fatura/cari kayıt sırasında belirlenir</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Cari Hesap *</label>
+                        <select
+                          value={transactionForm.customer_id || ''}
+                          onChange={(e) => setTransactionForm({...transactionForm, customer_id: e.target.value, supplier_id: ''})}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                        >
+                          <option value="">Seçiniz...</option>
+                          {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">İşlem *</label>
+                        <select
+                          value={transactionForm.transaction_type === 'receivable' ? 'income' : 'expense'}
+                          onChange={(e) => setTransactionForm({...transactionForm, transaction_type: e.target.value === 'income' ? 'receivable' : 'payable' as any})}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                        >
+                          <option value="income">Tahsilat (Para Geldi)</option>
+                          <option value="expense">Ödeme (Para Gitti)</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

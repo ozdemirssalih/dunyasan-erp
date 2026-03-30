@@ -37,6 +37,8 @@ export default function InvoicesPage() {
   const [invoiceCategories, setInvoiceCategories] = useState<any[]>([])
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [completedWaybills, setCompletedWaybills] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<'invoices' | 'waybills'>('invoices')
 
   const [waybillForm, setWaybillForm] = useState({
     waybill_number: '',
@@ -124,6 +126,14 @@ export default function InvoicesPage() {
     setCustomers(allContacts.map(c => ({ id: c.id, customer_name: c.contact_name })))
     setSuppliers(allContacts.map(c => ({ id: c.id, company_name: c.contact_name })))
     setInvoiceCategories(categoriesData.data || [])
+
+    // İrsaliyeleri yükle
+    const { data: waybillsData } = await supabase
+      .from('waybills')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('waybill_date', { ascending: false })
+    setCompletedWaybills(waybillsData || [])
   }
 
   // Invoice CRUD
@@ -577,6 +587,10 @@ export default function InvoicesPage() {
             <option value="sales_fx">Satış KF</option>
           </select>
           <span className="text-sm text-gray-500">{filteredInvoices.length} sonuç</span>
+          <div className="flex gap-2 ml-auto">
+            <button onClick={() => setActiveTab('invoices')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${activeTab === 'invoices' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>Faturalar</button>
+            <button onClick={() => setActiveTab('waybills')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${activeTab === 'waybills' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>İrsaliyeler ({completedWaybills.length})</button>
+          </div>
           {canCreate('invoices') && (
             <button
               onClick={() => {

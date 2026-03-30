@@ -1019,46 +1019,45 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
-                {/* Müşteri İşlemleri: Satış, Giden İade, Satış Kur Farkı */}
-                {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Müşteri *
-                      <span className="text-xs text-gray-500 ml-2">(Alacak artırır)</span>
-                    </label>
-                    <select
-                      value={invoiceForm.customer_id}
-                      onChange={(e) => setInvoiceForm({...invoiceForm, customer_id: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      required
-                    >
-                      <option value="">Müşteri seçin</option>
-                      {customers.map(c => (
-                        <option key={c.id} value={c.id}>{c.customer_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Tedarikçi İşlemleri: Alış, Gelen İade, Tevkifatlı, İstisna, Alış Kur Farkı */}
-                {['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx'].includes(invoiceForm.invoice_type) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tedarikçi *
-                      <span className="text-xs text-gray-500 ml-2">(Borç artırır)</span>
-                    </label>
-                    <select
-                      value={invoiceForm.supplier_id}
-                      onChange={(e) => setInvoiceForm({...invoiceForm, supplier_id: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                      required
-                    >
-                      <option value="">Tedarikçi seçin</option>
-                      {suppliers.map(s => (
-                        <option key={s.id} value={s.id}>{s.company_name}</option>
-                      ))}
-                    </select>
-                  </div>
+                {/* Cari Hesap Seçimi - Birleşik Liste */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cari Hesap *
+                    <span className="text-xs text-gray-500 ml-2">
+                      {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) ? '(Müşteri seçin - Alacak)' : '(Tedarikçi seçin - Borç)'}
+                    </span>
+                  </label>
+                  <select
+                    value={invoiceForm.customer_id ? `customer_${invoiceForm.customer_id}` : invoiceForm.supplier_id ? `supplier_${invoiceForm.supplier_id}` : ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (val.startsWith('customer_')) {
+                        setInvoiceForm({...invoiceForm, customer_id: val.replace('customer_', ''), supplier_id: ''})
+                      } else if (val.startsWith('supplier_')) {
+                        setInvoiceForm({...invoiceForm, supplier_id: val.replace('supplier_', ''), customer_id: ''})
+                      } else {
+                        setInvoiceForm({...invoiceForm, customer_id: '', supplier_id: ''})
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    required
+                  >
+                    <option value="">Seçiniz...</option>
+                    {['sales', 'outgoing_return', 'sales_fx'].includes(invoiceForm.invoice_type) ? (
+                      <>
+                        {customers.length > 0 && <optgroup label="Müşteriler">
+                          {customers.map(c => <option key={`ic_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
+                        </optgroup>}
+                      </>
+                    ) : (
+                      <>
+                        {suppliers.length > 0 && <optgroup label="Tedarikçiler">
+                          {suppliers.map(s => <option key={`is_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
+                        </optgroup>}
+                      </>
+                    )}
+                  </select>
+                </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1219,37 +1218,36 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
-                {waybillForm.waybill_type === 'outgoing' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri</label>
-                    <select
-                      value={waybillForm.customer_id}
-                      onChange={(e) => setWaybillForm({...waybillForm, customer_id: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    >
-                      <option value="">Müşteri seçin</option>
-                      {customers.map(c => (
-                        <option key={c.id} value={c.id}>{c.customer_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {waybillForm.waybill_type === 'incoming' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tedarikçi</label>
-                    <select
-                      value={waybillForm.supplier_id}
-                      onChange={(e) => setWaybillForm({...waybillForm, supplier_id: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    >
-                      <option value="">Tedarikçi seçin</option>
-                      {suppliers.map(s => (
-                        <option key={s.id} value={s.id}>{s.company_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cari Hesap {waybillForm.waybill_type === 'outgoing' ? '(Müşteri)' : '(Tedarikçi)'}
+                  </label>
+                  <select
+                    value={waybillForm.customer_id ? `customer_${waybillForm.customer_id}` : waybillForm.supplier_id ? `supplier_${waybillForm.supplier_id}` : ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (val.startsWith('customer_')) {
+                        setWaybillForm({...waybillForm, customer_id: val.replace('customer_', ''), supplier_id: ''})
+                      } else if (val.startsWith('supplier_')) {
+                        setWaybillForm({...waybillForm, supplier_id: val.replace('supplier_', ''), customer_id: ''})
+                      } else {
+                        setWaybillForm({...waybillForm, customer_id: '', supplier_id: ''})
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="">Seçiniz...</option>
+                    {waybillForm.waybill_type === 'outgoing' ? (
+                      customers.length > 0 && <optgroup label="Müşteriler">
+                        {customers.map(c => <option key={`wc_${c.id}`} value={`customer_${c.id}`}>{c.customer_name}</option>)}
+                      </optgroup>
+                    ) : (
+                      suppliers.length > 0 && <optgroup label="Tedarikçiler">
+                        {suppliers.map(s => <option key={`ws_${s.id}`} value={`supplier_${s.id}`}>{s.company_name}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>

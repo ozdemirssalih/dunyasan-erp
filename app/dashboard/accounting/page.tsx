@@ -554,6 +554,40 @@ export default function AccountingPageV2() {
         }
 
         console.log('✅ Kasa işlemi başarıyla eklendi:', cashInsertedData)
+
+        // Ödeme/Tahsilatı cari hesaplara da yansıt
+        try {
+          const isCustomerPayment = !!transactionForm.customer_id
+          const currentAccountEntry: any = {
+            company_id: companyId,
+            transaction_type: isCustomerPayment ? 'receivable' : 'payable',
+            amount: amount,
+            paid_amount: amount,
+            status: 'paid',
+            currency: transactionForm.currency,
+            transaction_date: cashTransactionDate.toISOString(),
+            description: `${isCustomerPayment ? 'Tahsilat' : 'Ödeme'}: ${transactionForm.description || ''} (${transactionForm.payment_method === 'cash' ? 'Nakit' : transactionForm.payment_method === 'transfer' ? 'Havale' : transactionForm.payment_method === 'check' ? 'Çek' : transactionForm.payment_method})`,
+            reference_number: `CASH-${Date.now()}`,
+            created_by: user?.id
+          }
+
+          if (isCustomerPayment) {
+            currentAccountEntry.customer_id = transactionForm.customer_id
+            currentAccountEntry.supplier_id = null
+          } else {
+            currentAccountEntry.supplier_id = transactionForm.supplier_id
+            currentAccountEntry.customer_id = null
+          }
+
+          const { error: catError } = await supabase.from('current_account_transactions').insert(currentAccountEntry)
+          if (catError) {
+            console.error('Cari yansıtma hatası:', catError)
+          } else {
+            console.log('✅ Ödeme/Tahsilat cari hesaba yansıtıldı')
+          }
+        } catch (catErr) {
+          console.error('Cari yansıtma exception:', catErr)
+        }
       }
 
       alert('İşlem başarıyla kaydedildi!')
@@ -655,7 +689,36 @@ export default function AccountingPageV2() {
 
       if (error) throw error
 
-      alert('Çek başarıyla kaydedildi!')
+      // Çeki cari hesaplara yansıt
+      try {
+        const isIncoming = checkForm.check_type === 'incoming'
+        const checkAmount = parseFloat(checkForm.amount)
+        const checkCariEntry: any = {
+          company_id: companyId,
+          transaction_type: isIncoming ? 'receivable' : 'payable',
+          amount: checkAmount,
+          paid_amount: 0,
+          status: 'unpaid',
+          currency: checkForm.currency,
+          transaction_date: checkForm.check_date,
+          due_date: checkForm.due_date,
+          description: `Çek: ${checkForm.check_number} - ${checkForm.description || ''}`,
+          reference_number: `CHK-${checkForm.check_number}`,
+          created_by: user?.id
+        }
+        if (isIncoming) {
+          checkCariEntry.customer_id = checkForm.customer_id
+          checkCariEntry.supplier_id = null
+        } else {
+          checkCariEntry.supplier_id = checkForm.supplier_id
+          checkCariEntry.customer_id = null
+        }
+        const { error: cariErr } = await supabase.from('current_account_transactions').insert(checkCariEntry)
+        if (cariErr) console.error('Çek cari yansıtma hatası:', cariErr)
+        else console.log('✅ Çek cari hesaba yansıtıldı')
+      } catch (e) { console.error('Çek cari exception:', e) }
+
+      alert('Çek başarıyla kaydedildi ve cari hesaba yansıtıldı!')
       setShowCheckModal(false)
       resetCheckForm()
       loadData()

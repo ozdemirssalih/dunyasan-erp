@@ -50,6 +50,8 @@ export default function InvoicesPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [userId, setUserId] = useState<string>('')
   const [showWaybillModal, setShowWaybillModal] = useState(false)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
@@ -502,12 +504,22 @@ export default function InvoicesPage() {
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
 
-  // Filter by search
-  const filteredInvoices = invoices.filter(inv =>
-    inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    inv.customer?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    inv.supplier?.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Filter
+  const filteredInvoices = invoices.filter(inv => {
+    const matchSearch = searchTerm === '' ||
+      inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.customer?.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.supplier?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+    const matchType = typeFilter === 'all' || inv.invoice_type === typeFilter
+    const matchStatus = statusFilter === 'all' || inv.status === statusFilter
+    return matchSearch && matchType && matchStatus
+  })
+
+  // Özet istatistikler
+  const totalSales = invoices.filter(i => ['sales', 'outgoing_return', 'sales_fx'].includes(i.invoice_type)).reduce((s, i) => s + parseFloat(i.total_amount || 0), 0)
+  const totalPurchases = invoices.filter(i => ['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx'].includes(i.invoice_type)).reduce((s, i) => s + parseFloat(i.total_amount || 0), 0)
+  const unpaidCount = invoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled').length
 
   if (loading) {
     return (
@@ -524,23 +536,66 @@ export default function InvoicesPage() {
     <PermissionGuard module="invoices" permission="view">
       <div className="min-h-screen bg-gray-50 p-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Faturalar</h1>
-          <p className="text-gray-600">Fatura yönetimi</p>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Faturalar</h1>
+          <p className="text-gray-600">Fatura ve irsaliye yönetimi</p>
         </div>
 
-        {/* Search and Actions */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
+        {/* Özet Kartlar */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <p className="text-sm text-gray-500">Toplam Fatura</p>
+            <p className="text-2xl font-bold text-gray-900">{invoices.length}</p>
+            <p className="text-xs text-gray-400 mt-1">{unpaidCount} ödenmemiş</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <p className="text-sm text-gray-500">Satış Faturaları</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSales)}</p>
+            <p className="text-xs text-gray-400 mt-1">{invoices.filter(i => ['sales', 'outgoing_return', 'sales_fx'].includes(i.invoice_type)).length} adet</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <p className="text-sm text-gray-500">Alış Faturaları</p>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalPurchases)}</p>
+            <p className="text-xs text-gray-400 mt-1">{invoices.filter(i => ['purchase', 'incoming_return', 'withholding', 'exempt', 'purchase_fx'].includes(i.invoice_type)).length} adet</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <p className="text-sm text-gray-500">Kategoriler</p>
+            <p className="text-2xl font-bold text-blue-600">{invoiceCategories.length}</p>
+            <p className="text-xs text-gray-400 mt-1">Tanımlı kategori</p>
+          </div>
+        </div>
+
+        {/* Search, Filter and Actions */}
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Ara..."
+              placeholder="Fatura no, müşteri, tedarikçi, kategori ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="all">Tüm Türler</option>
+            <option value="sales">Satış</option>
+            <option value="purchase">Alış</option>
+            <option value="incoming_return">Gelen İade</option>
+            <option value="outgoing_return">Giden İade</option>
+            <option value="withholding">Tevkifatlı</option>
+            <option value="exempt">İstisna</option>
+            <option value="purchase_fx">Alış KF</option>
+            <option value="sales_fx">Satış KF</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="all">Tüm Durumlar</option>
+            <option value="draft">Taslak</option>
+            <option value="approved">Onaylı</option>
+            <option value="paid">Ödendi</option>
+            <option value="cancelled">İptal</option>
+          </select>
+          <span className="text-sm text-gray-500">{filteredInvoices.length} sonuç</span>
           {canCreate('invoices') && (
             <button
               onClick={() => {
@@ -575,12 +630,15 @@ export default function InvoicesPage() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fatura No</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tür</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Müşteri/Tedarikçi</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
-                  <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Fatura No</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tür</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Kategori</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Müşteri/Tedarikçi</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tarih</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Vade</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Tutar</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">KDV</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Durum</th>
                   {(canEdit('invoices') || canDelete('invoices')) && (
                     <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
                   )}
@@ -589,41 +647,41 @@ export default function InvoicesPage() {
               <tbody className="divide-y divide-gray-200">
                 {filteredInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{invoice.invoice_number}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        invoice.invoice_type === 'sales' ? 'bg-green-100 text-green-800' :
-                        invoice.invoice_type === 'outgoing_return' ? 'bg-green-100 text-green-700' :
-                        invoice.invoice_type === 'sales_fx' ? 'bg-green-100 text-green-700' :
-                        invoice.invoice_type === 'purchase' ? 'bg-orange-100 text-orange-800' :
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{invoice.invoice_number}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className={`px-2 py-1 rounded font-medium ${
+                        ['sales', 'outgoing_return', 'sales_fx'].includes(invoice.invoice_type) ? 'bg-green-100 text-green-800' :
+                        ['purchase', 'purchase_fx'].includes(invoice.invoice_type) ? 'bg-orange-100 text-orange-800' :
                         invoice.invoice_type === 'incoming_return' ? 'bg-red-100 text-red-700' :
                         invoice.invoice_type === 'withholding' ? 'bg-purple-100 text-purple-700' :
                         invoice.invoice_type === 'exempt' ? 'bg-blue-100 text-blue-700' :
-                        invoice.invoice_type === 'purchase_fx' ? 'bg-orange-100 text-orange-700' :
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {invoice.invoice_type === 'sales' ? '💰 Satış' :
-                         invoice.invoice_type === 'purchase' ? '🛒 Alış' :
-                         invoice.invoice_type === 'incoming_return' ? '↪️ Gelen İade' :
-                         invoice.invoice_type === 'outgoing_return' ? '↩️ Giden İade' :
-                         invoice.invoice_type === 'withholding' ? '📋 Tevkifatlı' :
-                         invoice.invoice_type === 'exempt' ? '🆓 İstisna' :
-                         invoice.invoice_type === 'purchase_fx' ? '💱 Alış KF' :
-                         invoice.invoice_type === 'sales_fx' ? '💱 Satış KF' :
+                        {invoice.invoice_type === 'sales' ? 'Satış' :
+                         invoice.invoice_type === 'purchase' ? 'Alış' :
+                         invoice.invoice_type === 'incoming_return' ? 'Gelen İade' :
+                         invoice.invoice_type === 'outgoing_return' ? 'Giden İade' :
+                         invoice.invoice_type === 'withholding' ? 'Tevkifatlı' :
+                         invoice.invoice_type === 'exempt' ? 'İstisna' :
+                         invoice.invoice_type === 'purchase_fx' ? 'Alış KF' :
+                         invoice.invoice_type === 'sales_fx' ? 'Satış KF' :
                          invoice.invoice_type}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {invoice.invoice_type === 'sales'
-                        ? invoice.customer?.customer_name || '-'
-                        : invoice.supplier?.company_name || '-'}
+                    <td className="px-4 py-3 text-xs text-gray-500">{invoice.category || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {invoice.customer?.customer_name || invoice.supplier?.company_name || '-'}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
-                    <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
+                    <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-400">{invoice.due_date ? formatDate(invoice.due_date) : '-'}</td>
+                    <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
                       {formatCurrency(parseFloat(invoice.total_amount))}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                    <td className="px-4 py-3 text-xs text-right text-gray-500">
+                      {parseFloat(invoice.tax_amount || 0) > 0 ? formatCurrency(parseFloat(invoice.tax_amount)) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className={`px-2 py-1 rounded font-medium ${getStatusColor(invoice.status)}`}>
                         {getStatusLabel(invoice.status)}
                       </span>
                     </td>

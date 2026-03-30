@@ -154,19 +154,16 @@ export default function InvoicesPage() {
         // Düzenleme: eski cari kaydı güncelle (invoice_number referansıyla bul)
         const customerTransactionsEdit = ['sales', 'outgoing_return', 'sales_fx']
         const transTypeEdit = customerTransactionsEdit.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
+        const editContactId = invoiceForm.customer_id || invoiceForm.supplier_id
         const updateCari: any = {
           amount: parseFloat(invoiceForm.total_amount),
           transaction_type: transTypeEdit,
+          contact_id: editContactId,
+          customer_id: transTypeEdit === 'receivable' ? editContactId : null,
+          supplier_id: transTypeEdit === 'payable' ? editContactId : null,
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
           description: `Fatura: ${invoiceForm.invoice_number}`,
-        }
-        if (transTypeEdit === 'receivable') {
-          updateCari.customer_id = invoiceForm.customer_id
-          updateCari.supplier_id = null
-        } else {
-          updateCari.supplier_id = invoiceForm.supplier_id
-          updateCari.customer_id = null
         }
         await supabase.from('current_account_transactions')
           .update(updateCari)
@@ -192,10 +189,17 @@ export default function InvoicesPage() {
         const customerTransactions = ['sales', 'outgoing_return', 'sales_fx']
         const transactionType = customerTransactions.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
 
-        // Cariye otomatik yansıt - constraint'e uygun: receivable ise sadece customer_id, payable ise sadece supplier_id
+        // Cariye otomatik yansıt
+        const contactId = invoiceForm.customer_id || invoiceForm.supplier_id
+        const contactEntry = customers.find(c => c.id === contactId)
+
         const currentAccountData: any = {
           company_id: companyId,
           transaction_type: transactionType,
+          contact_id: contactId,
+          contact_name: contactEntry?.customer_name || null,
+          customer_id: transactionType === 'receivable' ? contactId : null,
+          supplier_id: transactionType === 'payable' ? contactId : null,
           amount: parseFloat(invoiceForm.total_amount),
           paid_amount: 0,
           status: 'unpaid',
@@ -204,16 +208,6 @@ export default function InvoicesPage() {
           due_date: invoiceForm.due_date || null,
           description: `Fatura: ${invoiceForm.invoice_number}`,
           reference_number: invoiceForm.invoice_number
-        }
-
-        // Constraint: receivable → customer_id NOT NULL, supplier_id NULL
-        // Constraint: payable → supplier_id NOT NULL, customer_id NULL
-        if (transactionType === 'receivable') {
-          currentAccountData.customer_id = invoiceForm.customer_id
-          currentAccountData.supplier_id = null
-        } else {
-          currentAccountData.supplier_id = invoiceForm.supplier_id
-          currentAccountData.customer_id = null
         }
 
         const { error: currentAccountError } = await supabase

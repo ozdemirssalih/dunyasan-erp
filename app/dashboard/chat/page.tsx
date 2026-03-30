@@ -416,7 +416,7 @@ export default function ChatPage() {
         .single()
 
       if (profile) {
-        const roleName = (profile.role as any)?.name || null
+        const roleName = (profile as any).job_title || (profile.role as any)?.name || null
         setCurrentProfile({ ...profile, role_name: roleName })
         setCompanyId(profile.company_id || '')
       }

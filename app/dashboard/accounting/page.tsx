@@ -1014,16 +1014,61 @@ export default function AccountingPageV2() {
     try {
       if (deletingTransactionType === 'cash') {
         // KASA İŞLEMİ SİLME
-        // Kasa işlemini sil
+        const txn = deletingTransaction
+        const amount = parseFloat(txn.amount || 0)
+
+        // 1. Kasa bakiyesini geri al
+        if (txn.cash_account_id) {
+          const account = cashAccounts.find((a: any) => a.id === txn.cash_account_id)
+          if (account) {
+            const newBalance = txn.transaction_type === 'income'
+              ? account.current_balance - amount
+              : account.current_balance + amount
+            await supabase.from('cash_accounts')
+              .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+              .eq('id', txn.cash_account_id)
+          }
+        }
+
+        // 2. Carideki paid_amount'ı geri düş
+        const contactId = txn.customer_id || txn.supplier_id || txn.contact_id
+        if (contactId) {
+          const targetType = txn.transaction_type === 'income' ? 'receivable' : 'payable'
+          const { data: paidRecords } = await supabase
+            .from('current_account_transactions')
+            .select('id, amount, paid_amount, status')
+            .eq('company_id', companyId)
+            .eq('transaction_type', targetType)
+            .or(`customer_id.eq.${contactId},supplier_id.eq.${contactId},contact_id.eq.${contactId}`)
+            .gt('paid_amount', 0)
+            .order('transaction_date', { ascending: false })
+
+          let remaining = amount
+          if (paidRecords) {
+            for (const record of paidRecords) {
+              if (remaining <= 0) break
+              const currentPaid = parseFloat(record.paid_amount || 0)
+              const rollback = Math.min(remaining, currentPaid)
+              const newPaid = currentPaid - rollback
+              const newStatus = newPaid <= 0 ? 'unpaid' : 'partial'
+              await supabase.from('current_account_transactions')
+                .update({ paid_amount: newPaid, status: newStatus })
+                .eq('id', record.id)
+              remaining -= rollback
+            }
+          }
+        }
+
+        // 3. Kasa işlemini sil
         const { error } = await supabase
           .from('cash_transactions')
           .delete()
-          .eq('id', deletingTransaction.id)
+          .eq('id', txn.id)
           .eq('company_id', companyId)
 
         if (error) throw error
 
-        alert('İşlem başarıyla silindi!')
+        alert('İşlem silindi, kasa bakiyesi ve cari hesap güncellendi!')
         setShowDeleteModal(false)
         setDeletingTransaction(null)
         setDeletingTransactionType(null)
@@ -1031,7 +1076,6 @@ export default function AccountingPageV2() {
 
       } else if (deletingTransactionType === 'account') {
         // CARİ İŞLEMİ SİLME
-        // Cari işlemi sil
         const { error } = await supabase
           .from('current_account_transactions')
           .delete()
@@ -1040,7 +1084,7 @@ export default function AccountingPageV2() {
 
         if (error) throw error
 
-        alert('İşlem başarıyla silindi!')
+        alert('Cari kayıt silindi!')
         setShowDeleteModal(false)
         setDeletingTransaction(null)
         setDeletingTransactionType(null)

@@ -312,7 +312,6 @@ export default function WarehousePage() {
       `)
       .eq('company_id', companyId)
       .order('transaction_date', { ascending: false })
-      .limit(100)
 
     const transactionsData = data?.map((t: any) => ({
       id: t.id,
@@ -322,10 +321,10 @@ export default function WarehousePage() {
       type: t.type,
       quantity: t.quantity,
       unit: t.item?.unit || '',
-      supplier: t.supplier || '',
+      supplier: t.supplier || t.shipment_destination || t.department?.name || t.destination_type || '',
       destination_type: t.destination_type || '',
-      department_name: t.department?.name || '',
-      shipment_destination: t.shipment_destination || '',
+      department_name: t.department?.name || t.shipment_destination || '',
+      shipment_destination: t.shipment_destination || t.department?.name || t.supplier || '',
       reference_number: t.reference_number || '',
       notes: t.notes || '',
       transaction_date: t.transaction_date,

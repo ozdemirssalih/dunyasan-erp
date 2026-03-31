@@ -79,8 +79,12 @@ export default function ReportsPage() {
     const byProject = await Promise.all(Object.entries(pm).map(async ([id, s]: any) => { const { data: p } = await supabase.from('projects').select('project_name').eq('id', id).maybeSingle(); return { name: p?.project_name || '?', total: s.t, defects: s.d } }))
 
     const mm: Record<string, any> = {}
-    data.forEach(r => { if (!mm[r.machine_id]) mm[r.machine_id] = { t: 0, d: 0 }; mm[r.machine_id].t += r.actual_production || 0; mm[r.machine_id].d += r.defect_count || 0 })
-    const byMachine = await Promise.all(Object.entries(mm).map(async ([id, s]: any) => { const { data: m } = await supabase.from('machines').select('machine_name').eq('id', id).maybeSingle(); return { name: m?.machine_name || '?', total: s.t, defects: s.d } }))
+    data.forEach(r => { if (!mm[r.machine_id]) mm[r.machine_id] = { t: 0, d: 0, e: 0, c: 0 }; mm[r.machine_id].t += r.actual_production || 0; mm[r.machine_id].d += r.defect_count || 0; mm[r.machine_id].e += r.efficiency_rate || 0; mm[r.machine_id].c++ })
+    const byMachine = await Promise.all(Object.entries(mm).map(async ([id, s]: any) => {
+      const { data: m } = await supabase.from('machines').select('machine_name').eq('id', id).maybeSingle()
+      const { data: pm } = await supabase.from('project_machines').select('project:projects(project_name)').eq('machine_id', id).maybeSingle()
+      return { name: m?.machine_name || '?', total: s.t, defects: s.d, eff: s.c > 0 ? Math.round(s.e / s.c) : 0, project: (pm as any)?.project?.project_name || '-' }
+    }))
 
     const dm: Record<string, any> = {}
     data.forEach(r => { if (!dm[r.production_date]) dm[r.production_date] = { t: 0, d: 0, e: 0, c: 0 }; dm[r.production_date].t += r.actual_production || 0; dm[r.production_date].d += r.defect_count || 0; dm[r.production_date].e += r.efficiency_rate || 0; dm[r.production_date].c++ })
@@ -203,7 +207,43 @@ export default function ReportsPage() {
             {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Verimlilik Trendi</h3><ResponsiveContainer width="100%" height={250}><LineChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} domain={[0, 100]} /><Tooltip /><Line type="monotone" dataKey="Verimlilik" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı Üretim</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name.substring(0, 12)} %${(percent * 100).toFixed(0)}`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div></div>}
-              {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı ({prod.byMachine.length})</h3><ResponsiveContainer width="100%" height={Math.max(250, prod.byMachine.length * 35)}><BarChart data={prod.byMachine} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" tick={{ fontSize: 10 }} /><YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="total" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>}
+              {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
+                <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ve Verimlilik ({prod.byMachine.length} tezgah)</h3>
+                <ResponsiveContainer width="100%" height={Math.max(300, prod.byMachine.length * 35)}>
+                  <BarChart data={prod.byMachine} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="total" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="eff" fill="#10b981" name="Verimlilik %" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 space-y-2">
+                  {prod.byMachine.map((m: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">{i + 1}</div>
+                        <div>
+                          <p className="font-semibold text-gray-800">{m.name}</p>
+                          <p className="text-xs text-gray-500">Proje: <span className="text-blue-600 font-medium">{m.project}</span> • {m.defects} fire</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="font-bold text-blue-600">{f(m.total)}</p>
+                          <p className="text-xs text-gray-500">üretim</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-bold ${m.eff >= 80 ? 'text-green-600' : m.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{m.eff}</p>
+                          <p className="text-xs text-gray-500">verimlilik</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>}
             </div>
           </div>
         )}

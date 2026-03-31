@@ -306,6 +306,7 @@ export default function WarehousePage() {
       `)
       .eq('company_id', companyId)
       .order('transaction_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
     const transactionsData = data?.map((t: any) => ({
       id: t.id,
@@ -322,6 +323,7 @@ export default function WarehousePage() {
       reference_number: t.reference_number || '',
       notes: t.notes || '',
       transaction_date: t.transaction_date,
+      created_at: t.created_at,
       created_by_name: t.creator?.full_name || 'Bilinmiyor'
     })) || []
 
@@ -1887,7 +1889,7 @@ export default function WarehousePage() {
                   {transactions.filter(tx => tx.type === 'scrap').map(tx => (
                     <tr key={tx.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
+                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}{tx.created_at ? <span className="text-gray-400 ml-1">{new Date(tx.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span> : ''}
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{tx.item_name}</div>
@@ -1980,7 +1982,7 @@ export default function WarehousePage() {
                   {filteredTx.map(tx => (
                     <tr key={tx.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}
+                        {new Date(tx.transaction_date).toLocaleDateString('tr-TR')}{tx.created_at ? <span className="text-gray-400 ml-1">{new Date(tx.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span> : ''}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${

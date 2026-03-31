@@ -351,6 +351,20 @@ export default function ReportsPage() {
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {productionData.byProject.map((p: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                          <div>
+                            <p className="font-semibold text-sm text-gray-800">{p.name}</p>
+                            <p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'} fire oranı</p>
+                          </div>
+                        </div>
+                        <p className="font-bold text-blue-600">{fmt(p.total)} adet</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

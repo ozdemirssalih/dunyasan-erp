@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import PermissionGuard from '@/components/PermissionGuard'
 import {
   BarChart3, Factory, Package, Wallet, Users, Shield,
   TrendingUp, ArrowUpRight, ArrowDownRight, FileDown
@@ -200,7 +199,6 @@ export default function ReportsPage() {
   ].filter(d => d.value > 0)
 
   return (
-    <PermissionGuard module="reports" permission="view">
       <div className="min-h-screen bg-gray-50 p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -574,6 +572,5 @@ export default function ReportsPage() {
 
         </div>
       </div>
-    </PermissionGuard>
   )
 }

@@ -342,9 +342,9 @@ export default function ReportsPage() {
 
               {productionData.byMachine.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border p-5">
-                  <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim</h3>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={productionData.byMachine.slice(0, 8)} layout="vertical">
+                  <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ({productionData.byMachine.length} tezgah)</h3>
+                  <ResponsiveContainer width="100%" height={Math.max(250, productionData.byMachine.length * 35)}>
+                    <BarChart data={productionData.byMachine} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />

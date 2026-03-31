@@ -91,6 +91,8 @@ export default function WarehousePage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [pendingWaybills, setPendingWaybills] = useState<any[]>([])
   const [showQCSendModal, setShowQCSendModal] = useState(false)
+  const [showScrapModal, setShowScrapModal] = useState(false)
+  const [scrapForm, setScrapForm] = useState({ item_id: '', quantity: 0, notes: '' })
   // Geçmiş filtreleri
   const [historyTypeFilter, setHistoryTypeFilter] = useState('all')
   const [historySearch, setHistorySearch] = useState('')
@@ -606,6 +608,39 @@ export default function WarehousePage() {
     } catch (error: any) {
       console.error('Error rejecting QC transfer:', error)
       alert('❌ Hata: ' + error.message)
+    }
+  }
+
+  // Manuel Hurda Kaydı
+  const handleAddScrap = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!companyId || !scrapForm.item_id || scrapForm.quantity <= 0) return
+
+    try {
+      const { data: item } = await supabase.from('warehouse_items').select('current_stock, name').eq('id', scrapForm.item_id).eq('company_id', companyId).single()
+      if (!item) { alert('Ürün bulunamadı!'); return }
+      if (item.current_stock < scrapForm.quantity) { alert(`Yetersiz stok! Depoda: ${item.current_stock}`); return }
+
+      const { error } = await supabase.from('warehouse_transactions').insert({
+        company_id: companyId,
+        item_id: scrapForm.item_id,
+        type: 'scrap',
+        quantity: scrapForm.quantity,
+        supplier: 'Manuel Hurda',
+        reference_number: `HURDA-${new Date().getTime()}`,
+        notes: scrapForm.notes || 'Manuel hurda kaydı',
+        created_by: currentUserId,
+        transaction_date: new Date().toISOString().split('T')[0],
+      })
+
+      if (error) throw error
+
+      alert('Hurda kaydı oluşturuldu!')
+      setShowScrapModal(false)
+      setScrapForm({ item_id: '', quantity: 0, notes: '' })
+      loadData()
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
     }
   }
 
@@ -1866,11 +1901,12 @@ export default function WarehousePage() {
         {/* SCRAP TAB */}
         {activeTab === 'scrap' && (
           <div className="space-y-4">
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-gray-900 mb-2">🗑️ Hurda Deposu</h3>
-              <p className="text-sm text-gray-700">
-                Kalite kontrolden hurda olarak işaretlenen ürünler burada listelenir.
-              </p>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900 mb-1">🗑️ Hurda Deposu</h3>
+                <p className="text-sm text-gray-700">Kalite kontrolden veya manuel olarak hurda kaydı yapılabilir.</p>
+              </div>
+              <button onClick={() => setShowScrapModal(true)} className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-semibold text-sm">+ Manuel Hurda Ekle</button>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -2894,6 +2930,38 @@ export default function WarehousePage() {
             </div>
           </div>
         )}
+        {/* Manuel Hurda Modal */}
+        {showScrapModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">🗑️ Manuel Hurda Kaydı</h3>
+              <form onSubmit={handleAddScrap} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Ürün Seçin *</label>
+                  <select value={scrapForm.item_id} onChange={(e) => setScrapForm({ ...scrapForm, item_id: e.target.value })} required className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm">
+                    <option value="">-- Ürün Seçin --</option>
+                    {items.filter(i => i.current_stock > 0).map((item) => (
+                      <option key={item.id} value={item.id}>{item.code} - {item.name} (Stok: {item.current_stock} {item.unit})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Miktar *</label>
+                  <input type="number" step="0.01" min="0.01" value={scrapForm.quantity || ''} onChange={(e) => setScrapForm({ ...scrapForm, quantity: parseFloat(e.target.value) || 0 })} required className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm" placeholder="Miktar girin" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Not</label>
+                  <textarea value={scrapForm.notes} onChange={(e) => setScrapForm({ ...scrapForm, notes: e.target.value })} className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm" rows={3} placeholder="Hurda sebebi..." />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="submit" className="flex-1 bg-gray-700 hover:bg-gray-800 text-white py-3 rounded-lg font-semibold">Hurda Kaydet</button>
+                  <button type="button" onClick={() => { setShowScrapModal(false); setScrapForm({ item_id: '', quantity: 0, notes: '' }) }} className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-lg font-semibold">İptal</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Kaliteye Gönder Modal */}
         {showQCSendModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

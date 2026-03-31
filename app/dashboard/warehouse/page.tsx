@@ -321,7 +321,7 @@ export default function WarehousePage() {
       type: t.type,
       quantity: t.quantity,
       unit: t.item?.unit || '',
-      supplier: t.supplier || t.shipment_destination || t.department?.name || t.destination_type || '',
+      supplier: t.supplier || t.shipment_destination || t.department?.name || t.destination_type || (t.type === 'entry' ? 'Belirtilmemiş' : ''),
       destination_type: t.destination_type || '',
       department_name: t.department?.name || t.shipment_destination || '',
       shipment_destination: t.shipment_destination || t.department?.name || t.supplier || '',
@@ -825,6 +825,14 @@ export default function WarehousePage() {
 
     try {
       setIsSubmitting(true)
+
+      // Firma/kaynak zorunlu kontrolü
+      if (!entryForm.supplier || entryForm.supplier.trim() === '') {
+        alert('❌ Firma/Kaynak alanı zorunludur!')
+        setIsSubmitting(false)
+        return
+      }
+
       // Dosya boyut kontrolü (10 MB = 10 * 1024 * 1024 bytes)
       if (entryForm.delivery_document && entryForm.delivery_document.size > 10 * 1024 * 1024) {
         alert('❌ Dosya boyutu 10 MB\'dan büyük olamaz!')

@@ -8,7 +8,7 @@ import {
   TrendingUp, ArrowUpRight, ArrowDownRight, FileDown
 } from 'lucide-react'
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart
 } from 'recharts'
 import html2canvas from 'html2canvas'
@@ -295,17 +295,31 @@ export default function ReportsPage() {
 
             {productionData.daily.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border p-5">
-                <h3 className="font-bold text-gray-800 mb-4">Günlük Üretim ve Fire</h3>
-                <ResponsiveContainer width="100%" height={300}>
+                <h3 className="font-bold text-gray-800 mb-4">Günlük Üretim</h3>
+                <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={productionData.daily}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip />
-                    <Legend />
                     <Bar dataKey="Üretim" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Fire" fill="#ef4444" radius={[4, 4, 0, 0]} />
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border p-5">
+                <h3 className="font-bold text-gray-800 mb-4">Günlük Fire ve Fire Oranı</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <ComposedChart data={productionData.daily.map((d: any) => ({ ...d, 'Fire Oranı (%)': d.Üretim > 0 ? Math.round(d.Fire / d.Üretim * 1000) / 10 : 0 }))}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} unit="%" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="Fire" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="Fire Oranı (%)" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             )}

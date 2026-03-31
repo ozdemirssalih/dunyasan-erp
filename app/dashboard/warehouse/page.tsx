@@ -40,6 +40,7 @@ interface Transaction {
   reference_number: string
   notes: string
   transaction_date: string
+  created_at?: string
   created_by_name: string
 }
 

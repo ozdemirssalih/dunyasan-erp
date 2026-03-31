@@ -199,6 +199,7 @@ export default function ReportsPage() {
   ].filter(d => d.value > 0)
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50 p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -572,5 +573,6 @@ export default function ReportsPage() {
 
         </div>
     </div>
+    </>
   )
 }

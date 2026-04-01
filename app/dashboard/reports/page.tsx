@@ -279,9 +279,6 @@ export default function ReportsPage() {
                 {prod.byPart.length > 0 && <div className="mb-6">
                   <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-purple-600 rounded-full inline-block"></span>Üretilen Parçalar ({prod.byPart.length} parça)</h4>
                   <div className="space-y-4">
-                    <ResponsiveContainer width="100%" height={220}>
-                      <PieChart><Pie data={prod.byPart.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 10)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byPart.map((_: any, i: number) => <Cell key={i} fill={['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#4c1d95','#ddd6fe'][i % 8]} />)}</Pie><Tooltip /></PieChart>
-                    </ResponsiveContainer>
                     <ResponsiveContainer width="100%" height={Math.max(150, prod.byPart.length * 32)}>
                       <BarChart data={prod.byPart.slice(0, 10)} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" />

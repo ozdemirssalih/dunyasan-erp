@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { BarChart3, Factory, Package, Wallet, Users, Shield, TrendingUp, ArrowUpRight, ArrowDownRight, FileDown } from 'lucide-react'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, LabelList } from 'recharts'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
@@ -271,10 +271,10 @@ export default function ReportsPage() {
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-red-600">{f(prod.defects)}</p><p className="text-sm text-gray-500">Fire ({prod.total > 0 ? `%${(prod.defects / prod.total * 100).toFixed(1)}` : '0'})</p></div>
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-green-600">%{prod.eff}</p><p className="text-sm text-gray-500">Verimlilik</p></div>
             </div>
-            {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Günlük Üretim ve Fire</h3><ResponsiveContainer width="100%" height={300}><BarChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Bar dataKey="Üretim" fill="#3b82f6" radius={[4, 4, 0, 0]} /><Bar dataKey="Fire" fill="#ef4444" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
-            {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Verimlilik Trendi</h3><ResponsiveContainer width="100%" height={250}><LineChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} domain={[0, 100]} /><Tooltip /><Line type="monotone" dataKey="Verimlilik" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>}
+            {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Günlük Üretim ve Fire</h3><ResponsiveContainer width="100%" height={300}><BarChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Bar dataKey="Üretim" fill="#3b82f6" radius={[4, 4, 0, 0]}><LabelList dataKey="Üretim" position="top" style={{ fontSize: 9, fill: '#374151' }} /></Bar><Bar dataKey="Fire" fill="#ef4444" radius={[4, 4, 0, 0]}><LabelList dataKey="Fire" position="top" style={{ fontSize: 9, fill: '#ef4444' }} /></Bar></BarChart></ResponsiveContainer></div>}
+            {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Verimlilik Trendi</h3><ResponsiveContainer width="100%" height={250}><LineChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} domain={[0, 100]} /><Tooltip /><Line type="monotone" dataKey="Verimlilik" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }}><LabelList dataKey="Verimlilik" position="top" style={{ fontSize: 9, fill: '#059669' }} formatter={(v: number) => `%${v}`} /></Line></LineChart></ResponsiveContainer></div>}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı Üretim</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name.substring(0, 12)} %${(percent * 100).toFixed(0)}`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div>
+              {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı Üretim</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 12)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div>
                 {prod.byPart.length > 0 && <div className="mt-6">
                   <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-purple-600 rounded-full inline-block"></span>Üretilen Parçalar ({prod.byPart.length} parça)</h4>
                   <div className="space-y-4">
@@ -284,7 +284,7 @@ export default function ReportsPage() {
                         <XAxis type="number" tick={{ fontSize: 10 }} />
                         <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
                         <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
-                        <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]}><LabelList dataKey="total" position="right" style={{ fontSize: 9, fill: '#374151' }} /></Bar>
                       </BarChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
@@ -381,7 +381,7 @@ export default function ReportsPage() {
                     <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="total" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="total" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]}><LabelList dataKey="total" position="right" style={{ fontSize: 9, fill: '#374151' }} /></Bar>
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2">

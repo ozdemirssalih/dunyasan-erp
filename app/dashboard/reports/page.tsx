@@ -397,7 +397,7 @@ export default function ReportsPage() {
                       <div className="flex items-center gap-4">
                         <div className="text-right">
                           <p className="font-bold text-blue-600">{f(m.total)}</p>
-                          <p className="text-xs text-gray-500">üretim</p>
+                          <p className="text-xs text-gray-500">işlem sayısı</p>
                         </div>
                         <div className="text-right">
                           <p className={`font-bold ${m.eff >= 80 ? 'text-green-600' : m.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{m.eff}</p>

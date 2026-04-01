@@ -277,11 +277,20 @@ export default function ReportsPage() {
               {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı İşlem Kapasitesi (Makine Bazlı Kullanım)</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 12)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div>
                 {prod.byPart.length > 0 && <div className="mt-6">
                   <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-purple-600 rounded-full inline-block"></span>Üretilen Parçalar ({prod.byPart.length} parça)</h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                  <div className="space-y-4">
                     <ResponsiveContainer width="100%" height={200}>
                       <PieChart><Pie data={prod.byPart.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 10)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byPart.map((_: any, i: number) => <Cell key={i} fill={['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#4c1d95','#ddd6fe'][i % 8]} />)}</Pie><Tooltip /></PieChart>
                     </ResponsiveContainer>
-                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    <ResponsiveContainer width="100%" height={Math.max(150, prod.byPart.length * 30)}>
+                      <BarChart data={prod.byPart.slice(0, 10)} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
+                        <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]}><LabelList dataKey="total" position="right" style={{ fontSize: 9, fill: '#374151' }} /></Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1">
                       {prod.byPart.map((p: any, i: number) => (
                         <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
                           <div className="flex items-center gap-2">

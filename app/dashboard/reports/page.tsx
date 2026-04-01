@@ -242,6 +242,37 @@ export default function ReportsPage() {
             {prod.daily.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Verimlilik Trendi</h3><ResponsiveContainer width="100%" height={250}><LineChart data={prod.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} domain={[0, 100]} /><Tooltip /><Line type="monotone" dataKey="Verimlilik" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı Üretim</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name.substring(0, 12)} %${(percent * 100).toFixed(0)}`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div>
+                {prod.byPart.length > 0 && <div className="mt-6">
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-purple-600 rounded-full inline-block"></span>Üretilen Parçalar ({prod.byPart.length} parça)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <ResponsiveContainer width="100%" height={Math.max(200, prod.byPart.length * 30)}>
+                      <BarChart data={prod.byPart.slice(0, 10)} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
+                        <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {prod.byPart.map((p: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">{i + 1}</div>
+                            <div>
+                              <p className="font-semibold text-gray-800 text-xs">{p.name}</p>
+                              <p className="text-xs text-gray-400">{p.code}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-purple-600 text-sm">{f(p.total)}</p>
+                            <p className="text-xs text-gray-400">{p.unit}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>}
                 <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
                   <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><span className="w-1.5 h-5 bg-blue-600 rounded-full inline-block"></span>Rapor Özeti</h4>
                   <p className="text-sm text-gray-700 leading-relaxed">
@@ -250,7 +281,7 @@ export default function ReportsPage() {
                     Toplam üretim <strong className="text-blue-600">{f(prod.total)}</strong> adet, toplam fire <strong className="text-red-600">{f(prod.defects)}</strong> adet olup genel fire oranı <strong className="text-red-600">%{prod.total > 0 ? (prod.defects / prod.total * 100).toFixed(1) : '0'}</strong> seviyesindedir.
                     {prod.byProject.length > 1 && (() => { const sorted = [...prod.byProject].sort((a: any, b: any) => (a.total > 0 ? a.defects / a.total : 0) - (b.total > 0 ? b.defects / b.total : 0)); const best = sorted[0]; const worst = sorted[sorted.length - 1]; return <>{' '}En düşük fire oranı <strong className="text-green-600">%{best.total > 0 ? (best.defects / best.total * 100).toFixed(1) : '0'}</strong> ile <strong className="text-green-600">{best.name}</strong> projesinde, en yüksek fire oranı <strong className="text-red-600">%{worst.total > 0 ? (worst.defects / worst.total * 100).toFixed(1) : '0'}</strong> ile <strong className="text-red-600">{worst.name}</strong> projesinde gerçekleşmiştir.</> })()}
                     {' '}Ortalama verimlilik oranı <strong className={prod.eff >= 80 ? 'text-green-600' : prod.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}>%{prod.eff}</strong> olarak hesaplanmıştır.
-                    {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup en çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet) olmuştur.</>}
+                    {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup toplam <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adet çıktı kaydedilmiştir. En çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet){prod.byPart.length > 1 && <>, en az üretilen parça ise <strong className="text-purple-600">{prod.byPart[prod.byPart.length - 1]?.name}</strong> ({f(prod.byPart[prod.byPart.length - 1]?.total)} adet)</>} olmuştur.</>}
                   </p>
                 </div>
               </div>}
@@ -291,40 +322,6 @@ export default function ReportsPage() {
                 </div>
               </div>}
             </div>
-            {prod.byPart.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
-              <h3 className="font-bold text-gray-800 mb-4">Üretilen Parçalar ({prod.byPart.length} parça)</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ResponsiveContainer width="100%" height={Math.max(250, prod.byPart.length * 32)}>
-                  <BarChart data={prod.byPart.slice(0, 15)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
-                    <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {prod.byPart.map((p: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">{i + 1}</div>
-                        <div>
-                          <p className="font-semibold text-gray-800">{p.name}</p>
-                          <p className="text-xs text-gray-500">{p.code}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-purple-600">{f(p.total)}</p>
-                        <p className="text-xs text-gray-500">{p.unit}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                <p className="text-sm text-gray-700">Toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş, toplam üretim miktarı <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adettir.</p>
-              </div>
-            </div>}
           </div>
         )}
 

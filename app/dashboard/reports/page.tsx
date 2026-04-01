@@ -268,7 +268,7 @@ export default function ReportsPage() {
         {tab === 'production' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-blue-600">{f(prod.total)}</p><p className="text-sm text-gray-500">Toplam Üretim</p></div>
+              <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-blue-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</p><p className="text-sm text-gray-500">Toplam Üretilen Parça</p></div>
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-red-600">{f(prod.defects)}</p><p className="text-sm text-gray-500">Fire ({prod.total > 0 ? `%${(prod.defects / prod.total * 100).toFixed(1)}` : '0'})</p></div>
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-green-600">%{prod.eff}</p><p className="text-sm text-gray-500">Verimlilik</p></div>
             </div>

@@ -67,20 +67,38 @@ export default function ReportsPage() {
       pdf.setDrawColor(200, 200, 200)
       pdf.line(10, 25, pageW - 10, 25)
 
-      // Rapor içeriği
-      const imgW = pageW - 20
+      // Rapor içeriği - A4 kenar boşlukları
+      const margin = { top: 15, bottom: 15, left: 15, right: 15 }
+      const imgW = pageW - margin.left - margin.right
       const imgH = (canvas.height * imgW) / canvas.width
-      let yPos = 30
+      const firstPageTop = 30 // başlık sonrası
+      const usableFirst = pageH - firstPageTop - margin.bottom
+      const usableNext = pageH - margin.top - margin.bottom
+
       let heightLeft = imgH
+      let srcY = 0
 
-      pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH)
-      heightLeft -= (pageH - yPos)
+      // İlk sayfa
+      const firstChunk = Math.min(usableFirst, heightLeft)
+      const firstChunkCanvas = document.createElement('canvas')
+      firstChunkCanvas.width = canvas.width
+      firstChunkCanvas.height = Math.round(canvas.height * (firstChunk / imgH))
+      firstChunkCanvas.getContext('2d')!.drawImage(canvas, 0, 0, canvas.width, firstChunkCanvas.height, 0, 0, canvas.width, firstChunkCanvas.height)
+      pdf.addImage(firstChunkCanvas.toDataURL('image/png'), 'PNG', margin.left, firstPageTop, imgW, firstChunk)
+      heightLeft -= firstChunk
+      srcY = firstChunkCanvas.height
 
+      // Sonraki sayfalar
       while (heightLeft > 0) {
         pdf.addPage()
-        yPos = -(imgH - heightLeft) + 10
-        pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH)
-        heightLeft -= pageH
+        const chunk = Math.min(usableNext, heightLeft)
+        const chunkCanvas = document.createElement('canvas')
+        chunkCanvas.width = canvas.width
+        chunkCanvas.height = Math.round(canvas.height * (chunk / imgH))
+        chunkCanvas.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, chunkCanvas.height, 0, 0, canvas.width, chunkCanvas.height)
+        pdf.addImage(chunkCanvas.toDataURL('image/png'), 'PNG', margin.left, margin.top, imgW, chunk)
+        heightLeft -= chunk
+        srcY += chunkCanvas.height
       }
 
       const tabName = tab === 'overview' ? 'Genel' : tab === 'production' ? 'Üretim' : tab === 'warehouse' ? 'Depo' : tab === 'finance' ? 'Finans' : tab === 'quality' ? 'Kalite' : 'Personel'

@@ -277,30 +277,18 @@ export default function ReportsPage() {
               {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı İşlem Kapasitesi (Makine Bazlı Kullanım)</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 12)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div>
                 {prod.byPart.length > 0 && <div className="mt-6">
                   <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-purple-600 rounded-full inline-block"></span>Üretilen Parçalar ({prod.byPart.length} parça)</h4>
-                  <div className="space-y-4">
-                    <ResponsiveContainer width="100%" height={Math.max(200, prod.byPart.length * 30)}>
-                      <BarChart data={prod.byPart.slice(0, 10)} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} />
-                        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
-                        <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]}><LabelList dataKey="total" position="right" style={{ fontSize: 9, fill: '#374151' }} /></Bar>
-                      </BarChart>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart><Pie data={prod.byPart.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, value, percent }) => `${name.substring(0, 10)} ${value} (%${(percent * 100).toFixed(0)})`}>{prod.byPart.map((_: any, i: number) => <Cell key={i} fill={['#8b5cf6','#a78bfa','#c4b5fd','#7c3aed','#6d28d9','#5b21b6','#4c1d95','#ddd6fe'][i % 8]} />)}</Pie><Tooltip /></PieChart>
                     </ResponsiveContainer>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
                       {prod.byPart.map((p: any, i: number) => (
                         <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">{i + 1}</div>
-                            <div>
-                              <p className="font-semibold text-gray-800 text-xs">{p.name}</p>
-                              <p className="text-xs text-gray-400">{p.code}</p>
-                            </div>
+                            <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold" style={{ fontSize: 9 }}>{i + 1}</div>
+                            <p className="font-semibold text-gray-800 text-xs">{p.name}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-purple-600 text-sm">{f(p.total)}</p>
-                            <p className="text-xs text-gray-400">{p.unit}</p>
-                          </div>
+                          <p className="font-bold text-purple-600 text-xs">{f(p.total)} {p.unit}</p>
                         </div>
                       ))}
                     </div>
@@ -317,60 +305,42 @@ export default function ReportsPage() {
                     {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup toplam <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adet çıktı kaydedilmiştir. En çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet) olmuştur.</>}
                   </p>
                 </div>
-                {prod.topWorkers.length > 0 && <div className="mt-6">
-                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-green-600 rounded-full inline-block"></span>En Verimli 5 Çalışan</h4>
-                  <div className="space-y-2">
-                    {prod.topWorkers.map((w: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{i + 1}</div>
-                          <p className="font-semibold text-gray-800">{w.name}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="font-bold text-blue-600">{f(w.total)}</p>
-                            <p className="text-xs text-gray-400">üretim</p>
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {prod.topWorkers.length > 0 && <div>
+                    <h4 className="font-bold text-gray-800 mb-2 text-sm flex items-center gap-2"><span className="w-1 h-4 bg-green-600 rounded-full inline-block"></span>En Verimli 5 Çalışan</h4>
+                    <div className="space-y-1">
+                      {prod.topWorkers.map((w: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`} style={{ fontSize: 9 }}>{i + 1}</div>
+                            <p className="font-semibold text-gray-800">{w.name}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-red-500">{f(w.defects)}</p>
-                            <p className="text-xs text-gray-400">fire</p>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
-                            <p className="text-xs text-gray-400">verimlilik</p>
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-blue-600">{f(w.total)}</span>
+                            <span className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</span>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>}
-                {prod.topProducers.length > 0 && <div className="mt-6">
-                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-blue-600 rounded-full inline-block"></span>En Çok Üretim Yapan 5 Çalışan</h4>
-                  <div className="space-y-2">
-                    {prod.topProducers.map((w: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>{i + 1}</div>
-                          <p className="font-semibold text-gray-800">{w.name}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="font-bold text-blue-600">{f(w.total)}</p>
-                            <p className="text-xs text-gray-400">üretim</p>
+                      ))}
+                    </div>
+                  </div>}
+                  {prod.topProducers.length > 0 && <div>
+                    <h4 className="font-bold text-gray-800 mb-2 text-sm flex items-center gap-2"><span className="w-1 h-4 bg-blue-600 rounded-full inline-block"></span>En Çok Üretim Yapan 5 Çalışan</h4>
+                    <div className="space-y-1">
+                      {prod.topProducers.map((w: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`} style={{ fontSize: 9 }}>{i + 1}</div>
+                            <p className="font-semibold text-gray-800">{w.name}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-red-500">{f(w.defects)}</p>
-                            <p className="text-xs text-gray-400">fire</p>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
-                            <p className="text-xs text-gray-400">verimlilik</p>
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-blue-600">{f(w.total)}</span>
+                            <span className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</span>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>}
+                      ))}
+                    </div>
+                  </div>}
+                </div>
               </div>}
               {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
                 <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ({prod.byMachine.length} tezgah)</h3>

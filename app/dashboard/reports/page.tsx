@@ -208,7 +208,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {prod.byProject.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Proje Bazlı Üretim</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={prod.byProject.map((p: any) => ({ name: p.name, value: p.total }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name.substring(0, 12)} %${(percent * 100).toFixed(0)}`}>{prod.byProject.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="mt-4 space-y-2">{prod.byProject.map((p: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div><div><p className="font-semibold text-sm" style={{ color: COLORS[i % COLORS.length] }}>{p.name}</p><p className="text-xs text-gray-500">{p.defects} fire • %{p.total > 0 ? (p.defects / p.total * 100).toFixed(1) : '0'}</p></div></div><p className="font-bold text-blue-600">{f(p.total)}</p></div>))}</div></div>}
               {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
-                <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ve Verimlilik ({prod.byMachine.length} tezgah)</h3>
+                <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ({prod.byMachine.length} tezgah)</h3>
                 <ResponsiveContainer width="100%" height={Math.max(300, prod.byMachine.length * 35)}>
                   <BarChart data={prod.byMachine} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
@@ -217,7 +217,6 @@ export default function ReportsPage() {
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="total" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="eff" fill="#10b981" name="Verimlilik %" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2">

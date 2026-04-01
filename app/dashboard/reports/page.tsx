@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [df, setDf] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })
   const [dt, setDt] = useState(new Date().toISOString().split('T')[0])
 
-  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [] })
+  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [], byPart: [] })
   const [wh, setWh] = useState<any>({ entries: 0, exits: 0, scrap: 0, topItems: [], moves: 0, byType: [] })
   const [fin, setFin] = useState<any>({ income: 0, expense: 0, bal: 0, recv: 0, pay: 0, byAcc: [], daily: [] })
   const [qc, setQc] = useState<any>({ passed: 0, failed: 0, returned: 0, scrap: 0, pending: 0 })
@@ -119,7 +119,13 @@ export default function ReportsPage() {
     data.forEach(r => { if (!dm[r.production_date]) dm[r.production_date] = { t: 0, d: 0, e: 0, c: 0 }; dm[r.production_date].t += r.actual_production || 0; dm[r.production_date].d += r.defect_count || 0; dm[r.production_date].e += r.efficiency_rate || 0; dm[r.production_date].c++ })
     const daily = Object.entries(dm).sort().map(([date, s]: any) => ({ date: new Date(date).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }), Üretim: s.t, Fire: s.d, Verimlilik: Math.round(s.e / s.c) }))
 
-    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily })
+    // Üretim takip - üretilen parçalar
+    const { data: outputData } = await supabase.from('production_outputs').select('quantity, output_item_id, output_item:warehouse_items!production_outputs_output_item_id_fkey(name, code, unit)').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    const partMap: Record<string, any> = {}
+    outputData?.forEach((r: any) => { const key = r.output_item_id; if (!partMap[key]) partMap[key] = { name: r.output_item?.name || '?', code: r.output_item?.code || '', unit: r.output_item?.unit || 'adet', total: 0 }; partMap[key].total += r.quantity || 0 })
+    const byPart = Object.values(partMap).sort((a: any, b: any) => b.total - a.total)
+
+    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart })
   }
 
   async function loadWh() {
@@ -244,6 +250,7 @@ export default function ReportsPage() {
                     Toplam üretim <strong className="text-blue-600">{f(prod.total)}</strong> adet, toplam fire <strong className="text-red-600">{f(prod.defects)}</strong> adet olup genel fire oranı <strong className="text-red-600">%{prod.total > 0 ? (prod.defects / prod.total * 100).toFixed(1) : '0'}</strong> seviyesindedir.
                     {prod.byProject.length > 1 && (() => { const sorted = [...prod.byProject].sort((a: any, b: any) => (a.total > 0 ? a.defects / a.total : 0) - (b.total > 0 ? b.defects / b.total : 0)); const best = sorted[0]; const worst = sorted[sorted.length - 1]; return <>{' '}En düşük fire oranı <strong className="text-green-600">%{best.total > 0 ? (best.defects / best.total * 100).toFixed(1) : '0'}</strong> ile <strong className="text-green-600">{best.name}</strong> projesinde, en yüksek fire oranı <strong className="text-red-600">%{worst.total > 0 ? (worst.defects / worst.total * 100).toFixed(1) : '0'}</strong> ile <strong className="text-red-600">{worst.name}</strong> projesinde gerçekleşmiştir.</> })()}
                     {' '}Ortalama verimlilik oranı <strong className={prod.eff >= 80 ? 'text-green-600' : prod.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}>%{prod.eff}</strong> olarak hesaplanmıştır.
+                    {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup en çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet) olmuştur.</>}
                   </p>
                 </div>
               </div>}
@@ -284,6 +291,40 @@ export default function ReportsPage() {
                 </div>
               </div>}
             </div>
+            {prod.byPart.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
+              <h3 className="font-bold text-gray-800 mb-4">Üretilen Parçalar ({prod.byPart.length} parça)</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <ResponsiveContainer width="100%" height={Math.max(250, prod.byPart.length * 32)}>
+                  <BarChart data={prod.byPart.slice(0, 15)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number, _: any, p: any) => [`${f(v)} ${p.payload.unit}`, 'Üretim']} />
+                    <Bar dataKey="total" fill="#8b5cf6" name="Üretim" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {prod.byPart.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">{i + 1}</div>
+                        <div>
+                          <p className="font-semibold text-gray-800">{p.name}</p>
+                          <p className="text-xs text-gray-500">{p.code}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-purple-600">{f(p.total)}</p>
+                        <p className="text-xs text-gray-500">{p.unit}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-sm text-gray-700">Toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş, toplam üretim miktarı <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adettir.</p>
+              </div>
+            </div>}
           </div>
         )}
 

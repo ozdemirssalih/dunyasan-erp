@@ -67,58 +67,38 @@ export default function ReportsPage() {
       pdf.setDrawColor(200, 200, 200)
       pdf.line(10, 25, pageW - 10, 25)
 
-      // Rapor içeriği - her kartı ayrı render et, sayfa geçişlerinde bölme
+      // Rapor içeriği - A4 kenar boşlukları
       const margin = { top: 15, bottom: 15, left: 15, right: 15 }
       const imgW = pageW - margin.left - margin.right
-      let cursorY = 30 // başlık sonrası
+      const imgH = (canvas.height * imgW) / canvas.width
+      const firstPageTop = 30 // başlık sonrası
+      const usableFirst = pageH - firstPageTop - margin.bottom
+      const usableNext = pageH - margin.top - margin.bottom
 
-      // Tüm child bölümleri topla (grid'ler ve kartlar)
-      const container = reportRef.current.querySelector('.space-y-6') || reportRef.current
-      const sections: HTMLElement[] = []
-      const collectSections = (el: HTMLElement) => {
-        for (const child of Array.from(el.children) as HTMLElement[]) {
-          if (child.classList.contains('grid')) {
-            for (const gridChild of Array.from(child.children) as HTMLElement[]) sections.push(gridChild)
-          } else { sections.push(child) }
-        }
-      }
-      collectSections(container as HTMLElement)
+      let heightLeft = imgH
+      let srcY = 0
 
-      for (const section of sections) {
-        const secCanvas = await html2canvas(section, { scale: 2, useCORS: true, backgroundColor: '#f9fafb' })
-        const secH = (secCanvas.height * imgW) / secCanvas.width
-        const usable = pageH - margin.bottom
+      // İlk sayfa
+      const firstChunk = Math.min(usableFirst, heightLeft)
+      const firstChunkCanvas = document.createElement('canvas')
+      firstChunkCanvas.width = canvas.width
+      firstChunkCanvas.height = Math.round(canvas.height * (firstChunk / imgH))
+      firstChunkCanvas.getContext('2d')!.drawImage(canvas, 0, 0, canvas.width, firstChunkCanvas.height, 0, 0, canvas.width, firstChunkCanvas.height)
+      pdf.addImage(firstChunkCanvas.toDataURL('image/png'), 'PNG', margin.left, firstPageTop, imgW, firstChunk)
+      heightLeft -= firstChunk
+      srcY = firstChunkCanvas.height
 
-        // Sığmıyorsa yeni sayfa
-        if (cursorY + secH > usable && cursorY > 35) {
-          pdf.addPage()
-          cursorY = margin.top
-        }
-
-        // Kart tek sayfaya sığıyorsa
-        if (secH <= usable - cursorY) {
-          pdf.addImage(secCanvas.toDataURL('image/png'), 'PNG', margin.left, cursorY, imgW, secH)
-          cursorY += secH + 4
-        } else {
-          // Büyük kart: sayfa sayfa dilimle
-          let srcY = 0
-          let left = secH
-          while (left > 0) {
-            const space = cursorY === margin.top ? usable - margin.top : usable - cursorY
-            const chunk = Math.min(space, left)
-            const ratio = chunk / secH
-            const srcH = Math.round(secCanvas.height * ratio)
-            const sliceCanvas = document.createElement('canvas')
-            sliceCanvas.width = secCanvas.width
-            sliceCanvas.height = srcH
-            sliceCanvas.getContext('2d')!.drawImage(secCanvas, 0, srcY, secCanvas.width, srcH, 0, 0, secCanvas.width, srcH)
-            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin.left, cursorY, imgW, chunk)
-            left -= chunk
-            srcY += srcH
-            if (left > 0) { pdf.addPage(); cursorY = margin.top }
-            else { cursorY += chunk + 4 }
-          }
-        }
+      // Sonraki sayfalar
+      while (heightLeft > 0) {
+        pdf.addPage()
+        const chunk = Math.min(usableNext, heightLeft)
+        const chunkCanvas = document.createElement('canvas')
+        chunkCanvas.width = canvas.width
+        chunkCanvas.height = Math.round(canvas.height * (chunk / imgH))
+        chunkCanvas.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, chunkCanvas.height, 0, 0, canvas.width, chunkCanvas.height)
+        pdf.addImage(chunkCanvas.toDataURL('image/png'), 'PNG', margin.left, margin.top, imgW, chunk)
+        heightLeft -= chunk
+        srcY += chunkCanvas.height
       }
 
       const tabName = tab === 'overview' ? 'Genel' : tab === 'production' ? 'Üretim' : tab === 'warehouse' ? 'Depo' : tab === 'finance' ? 'Finans' : tab === 'quality' ? 'Kalite' : 'Personel'

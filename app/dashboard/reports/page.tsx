@@ -51,11 +51,40 @@ export default function ReportsPage() {
     setExporting(true)
     try {
       const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true, backgroundColor: '#f9fafb' })
+      const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF('p', 'mm', 'a4')
-      const w = pdf.internal.pageSize.getWidth()
-      const h = (canvas.height * w) / canvas.width
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, h)
-      pdf.save(`Rapor_${df}_${dt}.pdf`)
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+
+      // Başlık
+      pdf.setFontSize(18)
+      pdf.setTextColor(30, 30, 46)
+      pdf.text('Dünyasan Üretim Raporu', pageW / 2, 15, { align: 'center' })
+      pdf.setFontSize(10)
+      pdf.setTextColor(113, 113, 122)
+      const dateLabel = df === dt ? df : `${df} - ${dt}`
+      pdf.text(dateLabel, pageW / 2, 22, { align: 'center' })
+      pdf.setDrawColor(200, 200, 200)
+      pdf.line(10, 25, pageW - 10, 25)
+
+      // Rapor içeriği
+      const imgW = pageW - 20
+      const imgH = (canvas.height * imgW) / canvas.width
+      let yPos = 30
+      let heightLeft = imgH
+
+      pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH)
+      heightLeft -= (pageH - yPos)
+
+      while (heightLeft > 0) {
+        pdf.addPage()
+        yPos = -(imgH - heightLeft) + 10
+        pdf.addImage(imgData, 'PNG', 10, yPos, imgW, imgH)
+        heightLeft -= pageH
+      }
+
+      const tabName = tab === 'overview' ? 'Genel' : tab === 'production' ? 'Üretim' : tab === 'warehouse' ? 'Depo' : tab === 'finance' ? 'Finans' : tab === 'quality' ? 'Kalite' : 'Personel'
+      pdf.save(`Dunyasan_${tabName}_Raporu_${df === dt ? df : df + '_' + dt}.pdf`)
     } catch (e) { alert('PDF hatası') }
     finally { setExporting(false) }
   }

@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [df, setDf] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })
   const [dt, setDt] = useState(new Date().toISOString().split('T')[0])
 
-  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [], byPart: [], topWorkers: [] })
+  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [], byPart: [], topWorkers: [], topProducers: [] })
   const [wh, setWh] = useState<any>({ entries: 0, exits: 0, scrap: 0, topItems: [], moves: 0, byType: [] })
   const [fin, setFin] = useState<any>({ income: 0, expense: 0, bal: 0, recv: 0, pay: 0, byAcc: [], daily: [] })
   const [qc, setQc] = useState<any>({ passed: 0, failed: 0, returned: 0, scrap: 0, pending: 0 })
@@ -154,9 +154,11 @@ export default function ReportsPage() {
       const { data: emp } = await supabase.from('employees').select('full_name').eq('id', eid).maybeSingle()
       return { name: emp?.full_name || '?', total: Math.round(s.t), defects: Math.round(s.d), eff: s.c > 0 ? Math.round(s.e / s.c) : 0 }
     }))
-    topWorkers.sort((a, b) => b.eff - a.eff)
+    const filtered = topWorkers.filter(w => w.name !== 'İLKER ÖZTÜRK')
+    const byEff = [...filtered].sort((a, b) => b.eff - a.eff).slice(0, 5)
+    const byProd = [...filtered].sort((a, b) => b.total - a.total).slice(0, 5)
 
-    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart, topWorkers: topWorkers.slice(0, 5) })
+    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart, topWorkers: byEff, topProducers: byProd })
   }
 
   async function loadWh() {
@@ -315,6 +317,60 @@ export default function ReportsPage() {
                     {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup toplam <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adet çıktı kaydedilmiştir. En çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet) olmuştur.</>}
                   </p>
                 </div>
+                {prod.topWorkers.length > 0 && <div className="mt-6">
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-green-600 rounded-full inline-block"></span>En Verimli 5 Çalışan</h4>
+                  <div className="space-y-2">
+                    {prod.topWorkers.map((w: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{i + 1}</div>
+                          <p className="font-semibold text-gray-800">{w.name}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-bold text-blue-600">{f(w.total)}</p>
+                            <p className="text-xs text-gray-400">üretim</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-500">{f(w.defects)}</p>
+                            <p className="text-xs text-gray-400">fire</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
+                            <p className="text-xs text-gray-400">verimlilik</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>}
+                {prod.topProducers.length > 0 && <div className="mt-6">
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-blue-600 rounded-full inline-block"></span>En Çok Üretim Yapan 5 Çalışan</h4>
+                  <div className="space-y-2">
+                    {prod.topProducers.map((w: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>{i + 1}</div>
+                          <p className="font-semibold text-gray-800">{w.name}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-bold text-blue-600">{f(w.total)}</p>
+                            <p className="text-xs text-gray-400">üretim</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-500">{f(w.defects)}</p>
+                            <p className="text-xs text-gray-400">fire</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
+                            <p className="text-xs text-gray-400">verimlilik</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>}
               </div>}
               {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
                 <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ({prod.byMachine.length} tezgah)</h3>
@@ -352,33 +408,6 @@ export default function ReportsPage() {
                   ))}
                 </div>
               </div>}
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border p-5">
-              <h3 className="font-bold text-gray-800 mb-4">En Verimli 5 Çalışan</h3>
-              {prod.topWorkers.length > 0 ? <div className="space-y-2">
-                {prod.topWorkers.map((w: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{i + 1}</div>
-                      <p className="font-semibold text-gray-800">{w.name}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-bold text-blue-600">{f(w.total)}</p>
-                        <p className="text-xs text-gray-400">üretim</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-red-500">{f(w.defects)}</p>
-                        <p className="text-xs text-gray-400">fire</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
-                        <p className="text-xs text-gray-400">verimlilik</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div> : <p className="text-sm text-gray-400">Seçilen tarih aralığında çalışan verisi bulunamadı.</p>}
             </div>
           </div>
         )}

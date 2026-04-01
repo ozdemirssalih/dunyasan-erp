@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [df, setDf] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })
   const [dt, setDt] = useState(new Date().toISOString().split('T')[0])
 
-  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [], byPart: [] })
+  const [prod, setProd] = useState<any>({ total: 0, defects: 0, eff: 0, byProject: [], byMachine: [], daily: [], byPart: [], topWorkers: [] })
   const [wh, setWh] = useState<any>({ entries: 0, exits: 0, scrap: 0, topItems: [], moves: 0, byType: [] })
   const [fin, setFin] = useState<any>({ income: 0, expense: 0, bal: 0, recv: 0, pay: 0, byAcc: [], daily: [] })
   const [qc, setQc] = useState<any>({ passed: 0, failed: 0, returned: 0, scrap: 0, pending: 0 })
@@ -115,7 +115,7 @@ export default function ReportsPage() {
   }
 
   async function loadProd() {
-    const { data } = await supabase.from('machine_daily_production').select('actual_production, defect_count, efficiency_rate, production_date, project_id, machine_id').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    const { data } = await supabase.from('machine_daily_production').select('actual_production, defect_count, efficiency_rate, production_date, project_id, machine_id, created_by').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
     if (!data) return
     const total = data.reduce((s, r) => s + (r.actual_production || 0), 0)
     const defects = data.reduce((s, r) => s + (r.defect_count || 0), 0)
@@ -143,7 +143,13 @@ export default function ReportsPage() {
     outputData?.filter((r: any) => r.output_item?.category !== 'Hammadde').forEach((r: any) => { const key = r.output_item_id; if (!partMap[key]) partMap[key] = { name: r.output_item?.name || '?', code: r.output_item?.code || '', unit: r.output_item?.unit || 'adet', total: 0 }; partMap[key].total += r.quantity || 0 })
     const byPart = Object.values(partMap).sort((a: any, b: any) => b.total - a.total)
 
-    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart })
+    // Operatör bazlı verimlilik - ilk 5
+    const om: Record<string, any> = {}
+    data.forEach(r => { if (!r.created_by) return; if (!om[r.created_by]) om[r.created_by] = { t: 0, d: 0, e: 0, c: 0 }; om[r.created_by].t += r.actual_production || 0; om[r.created_by].d += r.defect_count || 0; om[r.created_by].e += r.efficiency_rate || 0; om[r.created_by].c++ })
+    const topWorkers = await Promise.all(Object.entries(om).map(async ([uid, s]: any) => { const { data: p } = await supabase.from('profiles').select('full_name').eq('id', uid).maybeSingle(); return { name: p?.full_name || '?', total: s.t, defects: s.d, eff: s.c > 0 ? Math.round(s.e / s.c) : 0 } }))
+    topWorkers.sort((a, b) => b.eff - a.eff)
+
+    setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart, topWorkers: topWorkers.slice(0, 5) })
   }
 
   async function loadWh() {
@@ -302,6 +308,33 @@ export default function ReportsPage() {
                     {prod.byPart.length > 0 && <>{' '}Üretim takibinde toplam <strong className="text-purple-600">{prod.byPart.length}</strong> farklı parça üretilmiş olup toplam <strong className="text-purple-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</strong> adet çıktı kaydedilmiştir. En çok üretilen parça <strong className="text-purple-600">{prod.byPart[0]?.name}</strong> ({f(prod.byPart[0]?.total)} adet) olmuştur.</>}
                   </p>
                 </div>
+                {prod.topWorkers.length > 0 && <div className="mt-6">
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><span className="w-1.5 h-5 bg-green-600 rounded-full inline-block"></span>En Verimli 5 Çalışan</h4>
+                  <div className="space-y-2">
+                    {prod.topWorkers.map((w: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{i + 1}</div>
+                          <p className="font-semibold text-gray-800">{w.name}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-bold text-blue-600">{f(w.total)}</p>
+                            <p className="text-xs text-gray-400">üretim</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-500">{f(w.defects)}</p>
+                            <p className="text-xs text-gray-400">fire</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${w.eff >= 80 ? 'text-green-600' : w.eff >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>%{w.eff}</p>
+                            <p className="text-xs text-gray-400">verimlilik</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>}
               </div>}
               {prod.byMachine.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5">
                 <h3 className="font-bold text-gray-800 mb-4">Tezgah Bazlı Üretim ({prod.byMachine.length} tezgah)</h3>

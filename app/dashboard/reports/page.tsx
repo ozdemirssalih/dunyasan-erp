@@ -143,11 +143,22 @@ export default function ReportsPage() {
     outputData?.filter((r: any) => r.output_item?.category !== 'Hammadde').forEach((r: any) => { const key = r.output_item_id; if (!partMap[key]) partMap[key] = { name: r.output_item?.name || '?', code: r.output_item?.code || '', unit: r.output_item?.unit || 'adet', total: 0 }; partMap[key].total += r.quantity || 0 })
     const byPart = Object.values(partMap).sort((a: any, b: any) => b.total - a.total)
 
-    // Operatör bazlı verimlilik - ilk 5
+    // Operatör bazlı verimlilik - ilk 5 (production_outputs + machine_daily_production)
     const om: Record<string, any> = {}
     data.forEach(r => { if (!r.created_by) return; if (!om[r.created_by]) om[r.created_by] = { t: 0, d: 0, e: 0, c: 0 }; om[r.created_by].t += r.actual_production || 0; om[r.created_by].d += r.defect_count || 0; om[r.created_by].e += r.efficiency_rate || 0; om[r.created_by].c++ })
-    const topWorkers = await Promise.all(Object.entries(om).map(async ([uid, s]: any) => { const { data: p } = await supabase.from('profiles').select('full_name').eq('id', uid).maybeSingle(); return { name: p?.full_name || '?', total: s.t, defects: s.d, eff: s.c > 0 ? Math.round(s.e / s.c) : 0 } }))
-    topWorkers.sort((a, b) => b.eff - a.eff)
+    // production_outputs'tan da operatör verisi çek
+    const { data: opData } = await supabase.from('production_outputs').select('operator_id, quantity, operator:profiles!production_outputs_operator_id_fkey(full_name)').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    const om2: Record<string, any> = {}
+    opData?.forEach((r: any) => { if (!r.operator_id) return; if (!om2[r.operator_id]) om2[r.operator_id] = { name: r.operator?.full_name || '?', t: 0, c: 0 }; om2[r.operator_id].t += r.quantity || 0; om2[r.operator_id].c++ })
+    // machine_daily_production verisi varsa onu kullan, yoksa production_outputs
+    let topWorkers: any[] = []
+    if (Object.keys(om).length > 0) {
+      topWorkers = await Promise.all(Object.entries(om).map(async ([uid, s]: any) => { const { data: p } = await supabase.from('profiles').select('full_name').eq('id', uid).maybeSingle(); return { name: p?.full_name || '?', total: s.t, defects: s.d, eff: s.c > 0 ? Math.round(s.e / s.c) : 0 } }))
+      topWorkers.sort((a, b) => b.eff - a.eff)
+    } else if (Object.keys(om2).length > 0) {
+      topWorkers = Object.values(om2).map((s: any) => ({ name: s.name, total: s.t, defects: 0, eff: s.c > 0 ? Math.round(s.t / s.c) : 0 }))
+      topWorkers.sort((a, b) => b.total - a.total)
+    }
 
     setProd({ total, defects, eff, byProject: byProject.sort((a, b) => b.total - a.total), byMachine: byMachine.sort((a, b) => b.total - a.total), daily, byPart, topWorkers: topWorkers.slice(0, 5) })
   }

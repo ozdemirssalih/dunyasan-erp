@@ -62,7 +62,7 @@ export default function ReportsPage() {
       pdf.text('Dünyasan Üretim Raporu', pageW / 2, 15, { align: 'center' })
       pdf.setFontSize(10)
       pdf.setTextColor(113, 113, 122)
-      const dateLabel = df === dt ? df : `${df} - ${dt}`
+      const dateLabel = df === dt ? fd(df) : `${fd(df)} - ${fd(dt)}`
       pdf.text(dateLabel, pageW / 2, 22, { align: 'center' })
       pdf.setDrawColor(200, 200, 200)
       pdf.line(10, 25, pageW - 10, 25)
@@ -102,7 +102,7 @@ export default function ReportsPage() {
       }
 
       const tabName = tab === 'overview' ? 'Genel' : tab === 'production' ? 'Üretim' : tab === 'warehouse' ? 'Depo' : tab === 'finance' ? 'Finans' : tab === 'quality' ? 'Kalite' : 'Personel'
-      pdf.save(`Dunyasan_${tabName}_Raporu_${df === dt ? df : df + '_' + dt}.pdf`)
+      pdf.save(`Dunyasan_${tabName}_Raporu_${df === dt ? fd(df) : fd(df) + '_' + fd(dt)}.pdf`)
     } catch (e) { alert('PDF hatası') }
     finally { setExporting(false) }
   }
@@ -213,6 +213,7 @@ export default function ReportsPage() {
 
   const f = (n: number) => new Intl.NumberFormat('tr-TR').format(n)
   const fm = (n: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n)
+  const fd = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}` }
 
   if (loading && !cid) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
 
@@ -223,7 +224,7 @@ export default function ReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Raporlar</h1>
-          <p className="text-gray-600">{df} - {dt}</p>
+          <p className="text-gray-600">{fd(df)} - {fd(dt)}</p>
         </div>
         <button onClick={exportPDF} disabled={exporting} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-semibold disabled:opacity-50">
           <FileDown className="w-5 h-5" /> {exporting ? 'Oluşturuluyor...' : 'PDF İndir'}

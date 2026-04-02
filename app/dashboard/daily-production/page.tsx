@@ -117,34 +117,17 @@ export default function DailyProductionPage() {
 
       setCompanyId(fetchedCompanyId)
 
-      // Load projects
-      const { data: projectsData } = await supabase
-        .from('projects')
-        .select('id, project_code, project_name')
-        .eq('company_id', fetchedCompanyId)
-        .order('project_name', { ascending: true })
+      // Load ALL reference data in parallel
+      const [projectsRes, machinesRes, employeesRes] = await Promise.all([
+        supabase.from('projects').select('id, project_code, project_name').eq('company_id', fetchedCompanyId).order('project_name', { ascending: true }),
+        supabase.from('machines').select('id, machine_code, machine_name').eq('company_id', fetchedCompanyId).order('machine_name', { ascending: true }),
+        supabase.from('employees').select('id, employee_code, full_name').eq('company_id', fetchedCompanyId).eq('status', 'active').order('full_name', { ascending: true })
+      ])
 
-      setProjects(projectsData || [])
-
-      // Load machines (tüm tezgahlar - filtre için)
-      const { data: machinesData } = await supabase
-        .from('machines')
-        .select('id, machine_code, machine_name')
-        .eq('company_id', fetchedCompanyId)
-        .order('machine_name', { ascending: true })
-
-      setAllMachines(machinesData || [])
-      setMachines([]) // Başlangıçta boş, proje seçilince dolacak
-
-      // Load employees (aktif personeller)
-      const { data: employeesData } = await supabase
-        .from('employees')
-        .select('id, employee_code, full_name')
-        .eq('company_id', fetchedCompanyId)
-        .eq('status', 'active')
-        .order('full_name', { ascending: true })
-
-      setEmployees(employeesData || [])
+      setProjects(projectsRes.data || [])
+      setAllMachines(machinesRes.data || [])
+      setMachines([])
+      setEmployees(employeesRes.data || [])
 
       // Load production records
       await loadProductions(fetchedCompanyId)
@@ -188,7 +171,6 @@ export default function DailyProductionPage() {
         .select('id, machine_code, machine_name')
         .in('id', machineIds)
 
-      console.log('✅ Project machines loaded:', machinesData)
       setMachines(machinesData || [])
     } catch (error) {
       console.error('Error loading project machines:', error)
@@ -199,10 +181,8 @@ export default function DailyProductionPage() {
 
   const loadProductions = async (cId?: string) => {
     const finalCompanyId = cId || companyId
-    console.log('🔄 [LOAD] loadProductions çağrıldı, companyId:', finalCompanyId)
 
     if (!finalCompanyId) {
-      console.log('❌ [LOAD] companyId bulunamadı!')
       return
     }
 
@@ -238,40 +218,29 @@ export default function DailyProductionPage() {
         throw error
       }
 
-      console.log('✅ [LOAD] Yüklenen kayıt sayısı:', data?.length || 0)
-      console.log('📦 [LOAD] İlk kayıt:', data?.[0])
 
-      // Her kayıt için employee_ids varsa personel bilgilerini yükle
+      // Batch load ALL employee_ids at once instead of per-record
       if (data && data.length > 0) {
-        const productionsWithEmployees = await Promise.all(
-          data.map(async (prod) => {
-            if (prod.employee_ids && prod.employee_ids.length > 0) {
-              // employee_ids array'indeki personelleri çek
-              const { data: employeesData } = await supabase
-                .from('employees')
-                .select('id, employee_code, full_name')
-                .in('id', prod.employee_ids)
+        const allEmpIds = Array.from(new Set(data.flatMap(p => p.employee_ids || []).filter(Boolean)))
+        const { data: allEmps } = allEmpIds.length
+          ? await supabase.from('employees').select('id, employee_code, full_name').in('id', allEmpIds)
+          : { data: [] }
+        const empMap = new Map((allEmps ?? []).map(e => [e.id, e]))
 
-              return {
-                ...prod,
-                employees: employeesData || []
-              }
-            }
-            return prod
-          })
-        )
+        const productionsWithEmployees = data.map(prod => ({
+          ...prod,
+          employees: (prod.employee_ids || []).map((id: string) => empMap.get(id)).filter(Boolean)
+        }))
         setProductions(productionsWithEmployees)
       } else {
         setProductions(data || [])
       }
-      console.log('🔄 [LOAD] State güncellendi')
     } catch (error) {
       console.error('❌ [LOAD] Error loading productions:', error)
     }
   }
 
   const handleSubmit = async () => {
-    console.log('🔵 [SUBMIT] Form verileri:', formData)
 
     if (!formData.project_id || !formData.machine_id || !formData.production_date || !formData.capacity_target || !formData.actual_production) {
       alert('Lütfen gerekli tüm alanları doldurun!')
@@ -292,7 +261,6 @@ export default function DailyProductionPage() {
         notes: formData.notes || null
       }
 
-      console.log('🟢 [SUBMIT] Gönderilecek veri:', productionData)
 
       if (editingId) {
         // Update existing
@@ -302,7 +270,6 @@ export default function DailyProductionPage() {
           .eq('id', editingId)
 
         if (error) throw error
-        console.log('✅ [SUBMIT] Güncelleme başarılı')
       } else {
         // Create new
         const { error } = await supabase
@@ -310,7 +277,6 @@ export default function DailyProductionPage() {
           .insert(productionData)
 
         if (error) throw error
-        console.log('✅ [SUBMIT] Ekleme başarılı')
       }
 
       // Reset and reload

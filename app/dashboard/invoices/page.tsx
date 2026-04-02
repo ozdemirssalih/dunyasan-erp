@@ -630,9 +630,7 @@ export default function InvoicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Kategori</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Müşteri/Tedarikçi</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tarih</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Vade</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Tutar</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">KDV</th>
                   {(canEdit('invoices') || canDelete('invoices')) && (
                     <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
                   )}
@@ -667,12 +665,8 @@ export default function InvoicesPage() {
                       {invoice.contact_display_name || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-400">{invoice.due_date ? formatDate(invoice.due_date) : '-'}</td>
                     <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
                       {formatCurrency(parseFloat(invoice.total_amount))}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-right text-gray-500">
-                      {parseFloat(invoice.tax_amount || 0) > 0 ? formatCurrency(parseFloat(invoice.tax_amount)) : '-'}
                     </td>
                     {(canEdit('invoices') || canDelete('invoices')) && (
                       <td className="px-6 py-4 text-right">
@@ -1064,15 +1058,6 @@ export default function InvoicesPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi</label>
-                    <input
-                      type="date"
-                      value={invoiceForm.due_date}
-                      onChange={(e) => setInvoiceForm({...invoiceForm, due_date: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -1083,16 +1068,6 @@ export default function InvoicesPage() {
                       step="0.01"
                       value={invoiceForm.total_amount}
                       onChange={(e) => setInvoiceForm({...invoiceForm, total_amount: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">KDV Tutarı</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={invoiceForm.tax_amount}
-                      onChange={(e) => setInvoiceForm({...invoiceForm, tax_amount: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>

@@ -251,22 +251,16 @@ export default function WarehousePage() {
       // Load customers (contacts tablosundan)
       setCustomers((contactsData || []).map(c => ({ id: c.id, customer_name: c.contact_name })))
 
-      // Load warehouse items
-      await loadItems(finalCompanyId)
-
-      // Load transactions
-      await loadTransactions(finalCompanyId)
-
-      // Load purchase requests
-      await loadRequests(finalCompanyId)
-
-      // Load production requests
-      await loadProductionRequests(finalCompanyId)
-      await loadProductionTransfers(finalCompanyId)
-      await loadQCTransfers(finalCompanyId)
-
-      // Load pending waybills
-      await loadPendingWaybills(finalCompanyId)
+      // Load ALL data in parallel
+      await Promise.all([
+        loadItems(finalCompanyId),
+        loadTransactions(finalCompanyId),
+        loadRequests(finalCompanyId),
+        loadProductionRequests(finalCompanyId),
+        loadProductionTransfers(finalCompanyId),
+        loadQCTransfers(finalCompanyId),
+        loadPendingWaybills(finalCompanyId),
+      ])
 
     } catch (error) {
       console.error('Error loading data:', error)

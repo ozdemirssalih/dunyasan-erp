@@ -71,19 +71,35 @@ export default function ExecutiveDashboard() {
       .order('project_name')
     if (error || !data) return
 
-    const enriched = await Promise.all(data.map(async (p) => {
-      const { data: prod } = await supabase.from('machine_daily_production').select('actual_production, defect_count, efficiency_rate').eq('project_id', p.id)
-      const totalProd = prod?.reduce((s, r) => s + (r.actual_production || 0), 0) || 0
-      const totalDefects = prod?.reduce((s, r) => s + (r.defect_count || 0), 0) || 0
-      const avgEff = prod && prod.length > 0 ? prod.reduce((s, r) => s + (r.efficiency_rate || 0), 0) / prod.length : 0
-      const { count } = await supabase.from('project_machines').select('id', { count: 'exact', head: true }).eq('project_id', p.id)
+    // Batch load ALL production data and machine counts in 2 queries
+    const projectIds = data.map(p => p.id)
+    const [allProdRes, allMachinesRes] = await Promise.all([
+      supabase.from('machine_daily_production').select('project_id, actual_production, defect_count, efficiency_rate').in('project_id', projectIds),
+      supabase.from('project_machines').select('project_id').in('project_id', projectIds)
+    ])
+
+    const prodByProject = new Map<string, any[]>()
+    for (const r of allProdRes.data ?? []) {
+      if (!prodByProject.has(r.project_id)) prodByProject.set(r.project_id, [])
+      prodByProject.get(r.project_id)!.push(r)
+    }
+    const machineCountByProject = new Map<string, number>()
+    for (const r of allMachinesRes.data ?? []) {
+      machineCountByProject.set(r.project_id, (machineCountByProject.get(r.project_id) ?? 0) + 1)
+    }
+
+    const enriched = data.map(p => {
+      const prod = prodByProject.get(p.id) ?? []
+      const totalProd = prod.reduce((s, r) => s + (r.actual_production || 0), 0)
+      const totalDefects = prod.reduce((s, r) => s + (r.defect_count || 0), 0)
+      const avgEff = prod.length > 0 ? prod.reduce((s, r) => s + (r.efficiency_rate || 0), 0) / prod.length : 0
       return {
         ...p, totalProduction: totalProd, totalDefects: totalDefects,
-        avgEfficiency: Math.round(avgEff * 10) / 10, machineCount: count || 0,
+        avgEfficiency: Math.round(avgEff * 10) / 10, machineCount: machineCountByProject.get(p.id) || 0,
         customerName: (p as any).customer_company?.customer_name || null,
         fireRate: totalProd > 0 ? Math.round(totalDefects / totalProd * 1000) / 10 : 0,
       }
-    }))
+    })
     setProjects(enriched)
   }
 
@@ -116,10 +132,13 @@ export default function ExecutiveDashboard() {
       .eq('company_id', cid).order('created_at', { ascending: false }).limit(15)
     if (!data) return
 
-    const withItems = await Promise.all(data.map(async (t) => {
-      const { data: item } = await supabase.from('warehouse_items').select('name, code, unit').eq('id', t.item_id).maybeSingle()
+    const itemIds = Array.from(new Set(data.map(t => t.item_id).filter(Boolean)))
+    const { data: items } = itemIds.length ? await supabase.from('warehouse_items').select('id, name, code, unit').in('id', itemIds) : { data: [] }
+    const itemMap = new Map((items ?? []).map(i => [i.id, i]))
+    const withItems = data.map(t => {
+      const item = itemMap.get(t.item_id)
       return { ...t, item_name: item?.name || '-', item_code: item?.code || '-', unit: item?.unit || '' }
-    }))
+    })
     setRecentShipments(withItems)
   }
 
@@ -140,10 +159,12 @@ export default function ExecutiveDashboard() {
     })
 
     const sorted = Object.entries(byUser).sort((a, b) => b[1].total - a[1].total).slice(0, 5)
-    const topWithNames = await Promise.all(sorted.map(async ([userId, stats]) => {
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle()
-      return { name: profile?.full_name || 'Bilinmiyor', ...stats, efficiency: stats.total > 0 ? Math.round((1 - stats.defects / stats.total) * 1000) / 10 : 0 }
-    }))
+    const topUserIds = sorted.map(([uid]) => uid)
+    const { data: topProfiles } = topUserIds.length ? await supabase.from('profiles').select('id, full_name').in('id', topUserIds) : { data: [] }
+    const nameMap = new Map((topProfiles ?? []).map(p => [p.id, p.full_name]))
+    const topWithNames = sorted.map(([userId, stats]) => {
+      return { name: nameMap.get(userId) || 'Bilinmiyor', ...stats, efficiency: stats.total > 0 ? Math.round((1 - stats.defects / stats.total) * 1000) / 10 : 0 }
+    })
     setTopEmployees(topWithNames)
   }
 
@@ -220,10 +241,16 @@ export default function ExecutiveDashboard() {
       .eq('company_id', cid).order('created_at', { ascending: false }).limit(5)
 
     if (prod) {
+      const machineIds = Array.from(new Set(prod.map(p => p.machine_id).filter(Boolean)))
+      const projectIds2 = Array.from(new Set(prod.map(p => p.project_id).filter(Boolean)))
+      const [machinesRes, projectsRes] = await Promise.all([
+        machineIds.length ? supabase.from('machines').select('id, machine_name').in('id', machineIds) : Promise.resolve({ data: [] }),
+        projectIds2.length ? supabase.from('projects').select('id, project_name').in('id', projectIds2) : Promise.resolve({ data: [] })
+      ])
+      const mMap = new Map(((machinesRes as any).data ?? []).map((m: any) => [m.id, m.machine_name]))
+      const pMap = new Map(((projectsRes as any).data ?? []).map((p: any) => [p.id, p.project_name]))
       for (const p of prod) {
-        const { data: machine } = await supabase.from('machines').select('machine_name').eq('id', p.machine_id).maybeSingle()
-        const { data: project } = await supabase.from('projects').select('project_name').eq('id', p.project_id).maybeSingle()
-        activities.push({ type: 'production', text: `${machine?.machine_name || '?'} - ${project?.project_name || '?'}: ${p.actual_production} adet${p.defect_count > 0 ? ` (${p.defect_count} fire)` : ''}`, date: p.production_date })
+        activities.push({ type: 'production', text: `${mMap.get(p.machine_id) || '?'} - ${pMap.get(p.project_id) || '?'}: ${p.actual_production} adet${p.defect_count > 0 ? ` (${p.defect_count} fire)` : ''}`, date: p.production_date })
       }
     }
 
@@ -232,10 +259,12 @@ export default function ExecutiveDashboard() {
       .eq('company_id', cid).order('created_at', { ascending: false }).limit(5)
 
     if (txns) {
+      const txnItemIds = Array.from(new Set(txns.map(t => t.item_id).filter(Boolean)))
+      const { data: txnItems } = txnItemIds.length ? await supabase.from('warehouse_items').select('id, name').in('id', txnItemIds) : { data: [] }
+      const iMap = new Map((txnItems ?? []).map(i => [i.id, i.name]))
       for (const s of txns) {
-        const { data: item } = await supabase.from('warehouse_items').select('name').eq('id', s.item_id).maybeSingle()
         const dest = s.shipment_destination || s.supplier || ''
-        activities.push({ type: s.type, text: `${item?.name || '?'} - ${s.quantity} adet ${s.type === 'entry' ? 'giriş' : s.type === 'exit' ? `sevk${dest ? ' → ' + dest : ''}` : 'hurda'}`, date: s.transaction_date })
+        activities.push({ type: s.type, text: `${iMap.get(s.item_id) || '?'} - ${s.quantity} adet ${s.type === 'entry' ? 'giriş' : s.type === 'exit' ? `sevk${dest ? ' → ' + dest : ''}` : 'hurda'}`, date: s.transaction_date })
       }
     }
 

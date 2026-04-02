@@ -388,7 +388,13 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageInputRef = useRef<HTMLTextAreaElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const roomsRef = useRef<RoomWithMeta[]>([])
+  const selectedRoomIdRef = useRef<string | null>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+
+  // Keep refs in sync
+  useEffect(() => { roomsRef.current = rooms }, [rooms])
+  useEffect(() => { selectedRoomIdRef.current = selectedRoomId }, [selectedRoomId])
 
   // Selected room derived
   const selectedRoom = useMemo(
@@ -723,7 +729,7 @@ export default function ChatPage() {
           const newMsg = payload.new as any
 
           // Check if this message belongs to a room the user is in
-          const roomIds = rooms.map(r => r.id)
+          const roomIds = roomsRef.current.map(r => r.id)
           if (!roomIds.includes(newMsg.room_id)) return
 
           // Get sender profile with role
@@ -753,7 +759,7 @@ export default function ChatPage() {
           }
 
           // Add to messages if viewing this room
-          if (newMsg.room_id === selectedRoomId) {
+          if (newMsg.room_id === selectedRoomIdRef.current) {
             setMessages(prev => {
               // Avoid duplicates
               if (prev.some(m => m.id === fullMsg.id)) return prev
@@ -890,7 +896,7 @@ export default function ChatPage() {
       supabase.removeChannel(readChannel)
       supabase.removeChannel(presenceChannel)
     }
-  }, [currentUserId, selectedRoomId, rooms.length, markMessagesAsRead])
+  }, [currentUserId, markMessagesAsRead])
 
   // Typing indicator via broadcast
   useEffect(() => {

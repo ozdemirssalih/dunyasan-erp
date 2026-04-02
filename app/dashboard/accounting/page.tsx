@@ -224,49 +224,35 @@ export default function AccountingPageV2() {
 
       if (recError) console.error('Receivables error:', recError)
 
-      // MÜŞTERİ BAZLI BAKIYE HESAPLAMA
+      // ALACAK HESAPLAMA: fatura ham tutarı vs kasa tahsilatları
       const customerBalances: any[] = []
       const receivableByCurrency: Record<string, number> = {}
-      const payableByCurrency: Record<string, number> = {}  // ← ÖNCElikle tanımla!
+      const payableByCurrency: Record<string, number> = {}
+
+      const isContactMatch = (r: any, cid: string) => r.customer_id === cid || r.supplier_id === cid || r.contact_id === cid
 
       allContacts?.forEach(customer => {
-        // Bu müşterinin alacak kayıtları (customer_id veya contact_id ile eşleş)
-        const customerReceivables = receivables?.filter(r => r.customer_id === customer.id || r.supplier_id === customer.id || r.contact_id === customer.id) || []
+        const custReceivables = receivables?.filter(r => isContactMatch(r, customer.id)) || []
+        const custPayments = cashTxns?.filter(t => t.transaction_type === 'income' && isContactMatch(t, customer.id)) || []
 
-        // Bu müşterinin tahsilat kayıtları
-        const customerPayments = cashTxns?.filter(t =>
-          t.transaction_type === 'income' && t.customer_id === customer.id
-        ) || []
-
-        // Para birimi bazında hesapla
         const balancesByCurrency: Record<string, { receivable: number, payment: number, remaining: number }> = {}
 
-        customerReceivables.forEach(r => {
+        // Fatura HAM tutarı (paid_amount kullanılmaz, çift düşme olur)
+        custReceivables.forEach(r => {
           const currency = r.currency || 'TRY'
-          const amount = parseFloat(r.amount) - parseFloat(r.paid_amount || 0)
-          if (amount <= 0) return // Tamamen tahsil edilmişse atla
-          if (!balancesByCurrency[currency]) {
-            balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
-          }
-          balancesByCurrency[currency].receivable += amount
+          if (!balancesByCurrency[currency]) balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
+          balancesByCurrency[currency].receivable += parseFloat(r.amount)
         })
 
-        customerPayments.forEach(p => {
+        // Kasa tahsilatları
+        custPayments.forEach(p => {
           const currency = p.currency || 'TRY'
-          const amount = parseFloat(p.amount)
-          if (!balancesByCurrency[currency]) {
-            balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
-          }
-          balancesByCurrency[currency].payment += amount
+          if (!balancesByCurrency[currency]) balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
+          balancesByCurrency[currency].payment += parseFloat(p.amount)
         })
 
-        // Kalan bakiyeleri hesapla
         Object.keys(balancesByCurrency).forEach(currency => {
-          balancesByCurrency[currency].remaining =
-            balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
-
-          // Pozitif bakiye = müşteri bize borçlu (alacak)
-          // Negatif bakiye = biz müşteriye borçlu (borç - fazla ödeme aldık)
+          balancesByCurrency[currency].remaining = balancesByCurrency[currency].receivable - balancesByCurrency[currency].payment
           if (balancesByCurrency[currency].remaining > 0) {
             receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
           } else if (balancesByCurrency[currency].remaining < 0) {
@@ -274,15 +260,9 @@ export default function AccountingPageV2() {
           }
         })
 
-        // Eğer bu müşterinin herhangi bir bakiyesi varsa (pozitif veya negatif) listeye ekle
         const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
         if (hasRemaining) {
-          customerBalances.push({
-            customer_id: customer.id,
-            customer_name: customer.contact_name,
-            balancesByCurrency,
-            transaction_date: customerReceivables[0]?.transaction_date
-          })
+          customerBalances.push({ customer_id: customer.id, customer_name: customer.contact_name, balancesByCurrency, transaction_date: custReceivables[0]?.transaction_date })
         }
       })
 
@@ -299,48 +279,31 @@ export default function AccountingPageV2() {
 
       if (payError) console.error('Payables error:', payError)
 
-      // TEDARİKÇİ BAZLI BAKIYE HESAPLAMA
+      // BORÇ HESAPLAMA: fatura ham tutarı vs kasa ödemeleri
       const supplierBalances: any[] = []
-      // payableByCurrency zaten yukarıda tanımlandı
 
       allContacts?.forEach(supplier => {
-        // Bu cari hesabın borç kayıtları
-        const supplierPayables = payables?.filter(p => p.supplier_id === supplier.id || p.contact_id === supplier.id) || []
+        const suppPayables = payables?.filter(p => isContactMatch(p, supplier.id)) || []
+        const suppPayments = cashTxns?.filter(t => t.transaction_type === 'expense' && isContactMatch(t, supplier.id)) || []
 
-        // Bu cari hesabın ödeme kayıtları
-        const supplierPayments = cashTxns?.filter(t =>
-          t.transaction_type === 'expense' && (t.supplier_id === supplier.id || t.contact_id === supplier.id)
-        ) || []
-
-        // Para birimi bazında hesapla
         const balancesByCurrency: Record<string, { payable: number, payment: number, remaining: number }> = {}
 
-        supplierPayables.forEach(p => {
+        // Fatura HAM tutarı (paid_amount kullanılmaz)
+        suppPayables.forEach(p => {
           const currency = p.currency || 'TRY'
-          const amount = parseFloat(p.amount) - parseFloat(p.paid_amount || 0)
-          if (amount <= 0) return // Tamamen ödenmişse atla
-          if (!balancesByCurrency[currency]) {
-            balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
-          }
-          balancesByCurrency[currency].payable += amount
+          if (!balancesByCurrency[currency]) balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
+          balancesByCurrency[currency].payable += parseFloat(p.amount)
         })
 
-        supplierPayments.forEach(p => {
+        // Kasa ödemeleri
+        suppPayments.forEach(p => {
           const currency = p.currency || 'TRY'
-          const amount = parseFloat(p.amount)
-          if (!balancesByCurrency[currency]) {
-            balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
-          }
-          balancesByCurrency[currency].payment += amount
+          if (!balancesByCurrency[currency]) balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
+          balancesByCurrency[currency].payment += parseFloat(p.amount)
         })
 
-        // Kalan bakiyeleri hesapla (cari bakiye = fatura kalan borcu - kasa ödemeleri)
         Object.keys(balancesByCurrency).forEach(currency => {
-          balancesByCurrency[currency].remaining =
-            balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
-
-          // Pozitif bakiye = biz tedarikçiye borçluyuz (borç)
-          // Negatif bakiye = tedarikçi bize borçlu (alacak - fazla ödeme yaptık)
+          balancesByCurrency[currency].remaining = balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
           if (balancesByCurrency[currency].remaining > 0) {
             payableByCurrency[currency] = (payableByCurrency[currency] || 0) + balancesByCurrency[currency].remaining
           } else if (balancesByCurrency[currency].remaining < 0) {
@@ -348,15 +311,9 @@ export default function AccountingPageV2() {
           }
         })
 
-        // Eğer bu tedarikçinin herhangi bir bakiyesi varsa (pozitif veya negatif) listeye ekle
         const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
         if (hasRemaining) {
-          supplierBalances.push({
-            supplier_id: supplier.id,
-            supplier_name: supplier.contact_name,
-            balancesByCurrency,
-            transaction_date: supplierPayables[0]?.transaction_date
-          })
+          supplierBalances.push({ supplier_id: supplier.id, supplier_name: supplier.contact_name, balancesByCurrency, transaction_date: suppPayables[0]?.transaction_date })
         }
       })
 

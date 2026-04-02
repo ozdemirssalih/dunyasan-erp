@@ -243,7 +243,8 @@ export default function AccountingPageV2() {
 
         customerReceivables.forEach(r => {
           const currency = r.currency || 'TRY'
-          const amount = parseFloat(r.amount)
+          const amount = parseFloat(r.amount) - parseFloat(r.paid_amount || 0)
+          if (amount <= 0) return // Tamamen tahsil edilmişse atla
           if (!balancesByCurrency[currency]) {
             balancesByCurrency[currency] = { receivable: 0, payment: 0, remaining: 0 }
           }
@@ -316,7 +317,8 @@ export default function AccountingPageV2() {
 
         supplierPayables.forEach(p => {
           const currency = p.currency || 'TRY'
-          const amount = parseFloat(p.amount)
+          const amount = parseFloat(p.amount) - parseFloat(p.paid_amount || 0)
+          if (amount <= 0) return // Tamamen ödenmişse atla
           if (!balancesByCurrency[currency]) {
             balancesByCurrency[currency] = { payable: 0, payment: 0, remaining: 0 }
           }
@@ -332,7 +334,7 @@ export default function AccountingPageV2() {
           balancesByCurrency[currency].payment += amount
         })
 
-        // Kalan bakiyeleri hesapla
+        // Kalan bakiyeleri hesapla (cari bakiye = fatura kalan borcu - kasa ödemeleri)
         Object.keys(balancesByCurrency).forEach(currency => {
           balancesByCurrency[currency].remaining =
             balancesByCurrency[currency].payable - balancesByCurrency[currency].payment
@@ -345,14 +347,6 @@ export default function AccountingPageV2() {
             receivableByCurrency[currency] = (receivableByCurrency[currency] || 0) + Math.abs(balancesByCurrency[currency].remaining)
           }
         })
-
-        // Debug log - HESAPLAMA SONUCU
-        if (supplierPayables.length > 0 || supplierPayments.length > 0) {
-          console.log(`💰 ${supplier.contact_name} - HESAPLAMA:`, {
-            balancesByCurrency,
-            toplam_kalan: Object.values(balancesByCurrency).reduce((sum, b) => sum + b.remaining, 0)
-          })
-        }
 
         // Eğer bu tedarikçinin herhangi bir bakiyesi varsa (pozitif veya negatif) listeye ekle
         const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)

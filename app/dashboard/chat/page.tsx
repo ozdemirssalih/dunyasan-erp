@@ -510,45 +510,45 @@ export default function ChatPage() {
         .select('*, profile:profiles(*, role:roles(name))')
         .in('room_id', roomIds)
 
-      // Get last messages for each room
+      // Batch load last messages + unread counts for ALL rooms in parallel
+      const [lastMsgsRes, allMyReadsRes] = await Promise.all([
+        // Get recent messages for all rooms at once (last 1 per room via sorting)
+        supabase
+          .from('chat_messages')
+          .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
+          .in('room_id', roomIds)
+          .eq('is_deleted', false)
+          .order('created_at', { ascending: false }),
+        // Get all my reads at once
+        supabase
+          .from('chat_message_reads')
+          .select('message_id')
+          .eq('user_id', currentUserId)
+      ])
+
+      // Build last message per room (first msg per room_id from sorted result)
+      const lastMsgByRoom = new Map<string, any>()
+      for (const msg of lastMsgsRes.data ?? []) {
+        if (!lastMsgByRoom.has(msg.room_id)) lastMsgByRoom.set(msg.room_id, msg)
+      }
+
+      // Build read set for unread calculation
+      const myReadSet = new Set((allMyReadsRes.data ?? []).map(r => r.message_id))
+
+      // Count unread per room from the fetched messages
+      const unreadByRoom = new Map<string, number>()
+      for (const msg of lastMsgsRes.data ?? []) {
+        if (msg.sender_id !== currentUserId && !myReadSet.has(msg.id)) {
+          unreadByRoom.set(msg.room_id, (unreadByRoom.get(msg.room_id) ?? 0) + 1)
+        }
+      }
+
       const roomMetas: RoomWithMeta[] = []
 
       for (const room of roomData) {
         const roomParticipants = (allParticipants || []).filter(p => p.room_id === room.id)
-
-        // Get last message
-        const { data: lastMsgArr } = await supabase
-          .from('chat_messages')
-          .select('*, sender:profiles!chat_messages_sender_id_fkey(*, role:roles(name))')
-          .eq('room_id', room.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-
-        const lastMsg = lastMsgArr?.[0] || undefined
-
-        // Get unread count: messages not sent by me that I haven't read yet
-        let unreadCount = 0
-        if (lastMsg) {
-          // Get all message IDs in this room not by me
-          const { data: otherMsgs } = await supabase
-            .from('chat_messages')
-            .select('id')
-            .eq('room_id', room.id)
-            .neq('sender_id', currentUserId)
-            .eq('is_deleted', false)
-
-          if (otherMsgs && otherMsgs.length > 0) {
-            // Get which ones I've read
-            const { data: myReads } = await supabase
-              .from('chat_message_reads')
-              .select('message_id')
-              .eq('user_id', currentUserId)
-              .in('message_id', otherMsgs.map(m => m.id))
-
-            const readSet = new Set(myReads?.map(r => r.message_id) || [])
-            unreadCount = otherMsgs.filter(m => !readSet.has(m.id)).length
-          }
-        }
+        const lastMsg = lastMsgByRoom.get(room.id)
+        const unreadCount = unreadByRoom.get(room.id) ?? 0
 
         // For DM rooms, find the other user
         let otherUser: Profile | undefined

@@ -34,44 +34,27 @@ export default function CurrentAccountsPage() {
         .eq('is_active', true)
         .order('contact_name')
 
-      // Tüm cari ve kasa verilerini batch olarak çek
-      const [allCariRes, allCashRes] = await Promise.all([
-        supabase.from('current_account_transactions').select('amount, paid_amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid),
-        supabase.from('cash_transactions').select('amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid)
-      ])
+      // Tüm cari verilerini batch olarak çek
+      const { data: allCari } = await supabase
+        .from('current_account_transactions')
+        .select('amount, paid_amount, transaction_type, customer_id, supplier_id, contact_id')
+        .eq('company_id', cid)
 
-      const allCari = allCariRes.data || []
-      const allCash = allCashRes.data || []
-
-      // Her contact için bakiye hesapla
+      // Her contact için bakiye hesapla (paid_amount zaten ödemeyi içeriyor, cash_transactions ayrıca düşülmez)
       const contactsWithBalance = (contactsData || []).map((contact) => {
         const isContact = (r: any) => r.customer_id === contact.id || r.supplier_id === contact.id || r.contact_id === contact.id
 
-        // Fatura bazlı: alacak ve borç
-        const receivables = allCari.filter(r => isContact(r) && r.transaction_type === 'receivable')
-        const payables = allCari.filter(r => isContact(r) && r.transaction_type === 'payable')
+        const receivables = (allCari || []).filter(r => isContact(r) && r.transaction_type === 'receivable')
+        const payables = (allCari || []).filter(r => isContact(r) && r.transaction_type === 'payable')
 
+        // Kalan alacak = fatura tutarı - ödenen kısım (paid_amount zaten kasa ödemesini içeriyor)
         const totalReceivable = receivables.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0)
+        // Kalan borç = fatura tutarı - ödenen kısım
         const totalPayable = payables.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0)
+        // Pozitif bakiye = bize borçlu, negatif = biz borçluyuz (fazla ödeme = alacaklı)
+        const balance = totalReceivable - totalPayable
 
-        // Kasa bazlı: gelen ve giden ödemeler
-        const cashIncome = allCash.filter(r => isContact(r) && r.transaction_type === 'income').reduce((s, r) => s + parseFloat(r.amount || 0), 0)
-        const cashExpense = allCash.filter(r => isContact(r) && r.transaction_type === 'expense').reduce((s, r) => s + parseFloat(r.amount || 0), 0)
-
-        // Bakiye = (alacak - borç) + (gelen ödeme - giden ödeme) değil!
-        // Doğru mantık:
-        // Alacak (receivable) = bize borçlu → fatura tutarı
-        // Gelen ödeme (income) = bize ödedi → borcu azaltır
-        // Borç (payable) = biz borçluyuz → fatura tutarı
-        // Giden ödeme (expense) = biz ödedik → borcumuzu azaltır
-        // Bakiye = (alacak fatura - gelen ödeme) - (borç fatura - giden ödeme)
-        const netReceivable = totalReceivable - cashIncome  // Müşterinin bize kalan borcu
-        const netPayable = totalPayable - cashExpense       // Bizim kalan borcumuz
-        const balance = netReceivable - netPayable           // Pozitif = bize borçlu, negatif = biz borçluyuz
-
-        const txCount = receivables.length + payables.length + allCash.filter(r => isContact(r)).length
-
-        return { ...contact, balance, totalReceivable: Math.max(netReceivable, 0), totalPayable: Math.max(netPayable, 0), transactionCount: txCount }
+        return { ...contact, balance, totalReceivable, totalPayable, transactionCount: receivables.length + payables.length }
       })
 
       setContacts(contactsWithBalance)

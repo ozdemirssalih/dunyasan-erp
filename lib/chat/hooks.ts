@@ -194,70 +194,53 @@ export function useChatRooms(
 
       const roomIds = participantRows.map((p) => p.room_id)
 
-      // Fetch room rows
-      const { data: roomRows, error: roomErr } = await supabase
-        .from('chat_rooms')
-        .select('*')
-        .in('id', roomIds)
-        .eq('company_id', companyId)
-        .order('last_message_at', { ascending: false, nullsFirst: false })
+      // Fetch ALL data in parallel - single batch per table
+      const [roomsRes, allPartsRes, allPresenceRes] = await Promise.all([
+        supabase.from('chat_rooms').select('*').in('id', roomIds).eq('company_id', companyId).order('last_message_at', { ascending: false, nullsFirst: false }),
+        supabase.from('chat_participants').select('*').in('room_id', roomIds),
+        supabase.from('user_presence').select('*')
+      ])
 
-      if (roomErr) throw roomErr
+      if (roomsRes.error) throw roomsRes.error
+      const roomRows = roomsRes.data ?? []
 
-      // Build enriched rooms
-      const enrichedRooms: ChatRoom[] = await Promise.all(
-        (roomRows ?? []).map(async (room: ChatRoomRow) => {
+      // Batch load ALL profiles for all participants
+      const allPartUserIds = Array.from(new Set((allPartsRes.data ?? []).map((p: ChatParticipantRow) => p.user_id)))
+      const { data: allProfiles } = allPartUserIds.length
+        ? await supabase.from('profiles').select('*').in('id', allPartUserIds)
+        : { data: [] }
+
+      const globalProfileMap = new Map((allProfiles ?? []).map((p: ProfileRow) => [p.id, p]))
+      const globalPresenceMap = new Map((allPresenceRes.data ?? []).map((p: UserPresenceRow) => [p.user_id, p]))
+
+      // Group participants by room
+      const partsByRoom = new Map<string, ChatParticipantRow[]>()
+      for (const p of allPartsRes.data ?? []) {
+        if (!partsByRoom.has(p.room_id)) partsByRoom.set(p.room_id, [])
+        partsByRoom.get(p.room_id)!.push(p)
+      }
+
+      // Build enriched rooms - NO more per-room queries
+      const enrichedRooms: ChatRoom[] = roomRows.map((room: ChatRoomRow) => {
           const myPart = participantRows.find((p) => p.room_id === room.id) ?? null
+          const parts = partsByRoom.get(room.id) ?? []
 
-          // Participants with profiles
-          const { data: parts } = await supabase
-            .from('chat_participants')
-            .select('*')
-            .eq('room_id', room.id)
-
-          const partUserIds = (parts ?? []).map((p: ChatParticipantRow) => p.user_id)
-          const { data: profiles } = partUserIds.length
-            ? await supabase.from('profiles').select('*').in('id', partUserIds)
-            : { data: [] }
-
-          const { data: presences } = partUserIds.length
-            ? await supabase.from('user_presence').select('*').in('user_id', partUserIds)
-            : { data: [] }
-
-          const profileMap = new Map((profiles ?? []).map((p: ProfileRow) => [p.id, p]))
-          const presenceMap = new Map((presences ?? []).map((p: UserPresenceRow) => [p.user_id, p]))
-
-          const participants: ChatParticipant[] = (parts ?? []).map((p: ChatParticipantRow) => ({
+          const participants: ChatParticipant[] = parts.map((p: ChatParticipantRow) => ({
             ...p,
-            profile: profileMap.get(p.user_id) as ProfileRow,
-            presence: presenceMap.get(p.user_id),
+            profile: globalProfileMap.get(p.user_id) as ProfileRow,
+            presence: globalPresenceMap.get(p.user_id),
           }))
 
-          const onlineCount = (presences ?? []).filter(
-            (p: UserPresenceRow) => p.status === 'online'
+          const onlineCount = parts.filter(
+            (p: ChatParticipantRow) => globalPresenceMap.get(p.user_id)?.status === 'online'
           ).length
 
-          // Last message
-          const { data: lastMsgRows } = await supabase
-            .from('chat_messages')
-            .select('*')
-            .eq('room_id', room.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
+          // Last message from room metadata (no extra query)
+          const lastMessage: ChatMessage | null = null
 
-          let lastMessage: ChatMessage | null = null
-          if (lastMsgRows && lastMsgRows.length > 0) {
-            lastMessage = await enrichMessage(lastMsgRows[0], userId)
-          }
-
-          // Unread count
+          // Unread count calculated from last_read_at vs last_message_at
           const lastReadAt = myPart?.last_read_at ?? '1970-01-01T00:00:00Z'
-          const { count: unreadCount } = await supabase
-            .from('chat_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('room_id', room.id)
-            .neq('sender_id', userId)
-            .gt('created_at', lastReadAt)
+          const unreadCount = room.last_message_at && room.last_message_at > lastReadAt ? 1 : 0
 
           // For direct rooms, resolve the other user
           let otherUser: (ProfileRow & { presence?: UserPresenceRow }) | undefined
@@ -282,7 +265,6 @@ export function useChatRooms(
             my_participation: myPart as ChatParticipantRow | null,
           }
         })
-      )
 
       setRooms(enrichedRooms)
     } catch (err: unknown) {

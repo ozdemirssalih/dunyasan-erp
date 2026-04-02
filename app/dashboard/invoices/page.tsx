@@ -1071,16 +1071,6 @@ export default function InvoicesPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">İndirim</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={invoiceForm.discount_amount}
-                      onChange={(e) => setInvoiceForm({...invoiceForm, discount_amount: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                    />
-                  </div>
                 </div>
 
 

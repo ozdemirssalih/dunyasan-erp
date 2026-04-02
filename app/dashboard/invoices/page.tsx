@@ -180,7 +180,7 @@ export default function InvoicesPage() {
           supplier_id: transTypeEdit === 'payable' ? editContactId : null,
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
-          description: `Fatura: ${invoiceForm.invoice_number}`,
+          description: invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`,
         }
         await supabase.from('current_account_transactions')
           .update(updateCari)
@@ -223,7 +223,7 @@ export default function InvoicesPage() {
           currency: 'TRY',
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
-          description: `Fatura: ${invoiceForm.invoice_number}`,
+          description: invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`,
           reference_number: invoiceForm.invoice_number
         }
 

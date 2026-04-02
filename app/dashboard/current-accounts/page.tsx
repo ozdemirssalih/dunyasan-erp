@@ -120,7 +120,6 @@ export default function CurrentAccountsPage() {
       transaction_type: t.transaction_type,
       transaction_date: t.transaction_date,
       description: t.description,
-      notes: t.notes || t.description,
       reference_number: t.reference_number,
       paid_amount: null,
       status: null,
@@ -245,11 +244,8 @@ export default function CurrentAccountsPage() {
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-8 rounded-full ${isIncome ? 'bg-blue-500' : isCash ? 'bg-orange-500' : t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                           <div>
-                            <p className="font-semibold text-gray-800">{t.description || t.notes || t.reference_number || '-'}</p>
-                            {t.notes && t.description && t.notes !== t.description && (
-                              <p className="text-xs text-gray-500 mt-0.5">{t.notes}</p>
-                            )}
-                            {!isCash && t.description && t.reference_number && (
+                            <p className="font-semibold text-gray-800">{t.description || t.reference_number || '-'}</p>
+                            {t.description && t.reference_number && t.description !== t.reference_number && (
                               <p className="text-xs text-gray-400">{t.reference_number}</p>
                             )}
                             <div className="flex flex-wrap gap-1 mt-0.5">

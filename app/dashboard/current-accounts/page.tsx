@@ -34,27 +34,57 @@ export default function CurrentAccountsPage() {
         .eq('is_active', true)
         .order('contact_name')
 
-      // Tüm cari verilerini batch olarak çek
-      const { data: allCari } = await supabase
-        .from('current_account_transactions')
-        .select('amount, paid_amount, transaction_type, customer_id, supplier_id, contact_id')
-        .eq('company_id', cid)
+      // Tüm cari ve kasa verilerini batch olarak çek
+      const [allCariRes, allCashRes] = await Promise.all([
+        supabase.from('current_account_transactions').select('amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid),
+        supabase.from('cash_transactions').select('amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid)
+      ])
 
-      // Her contact için bakiye hesapla (paid_amount zaten ödemeyi içeriyor, cash_transactions ayrıca düşülmez)
+      const allCari = allCariRes.data || []
+      const allCash = allCashRes.data || []
+
+      // Her contact için bakiye hesapla
+      // Mantık: Fatura TOPLAM tutarları vs Kasa TOPLAM ödemeleri karşılaştırılır
+      // paid_amount KULLANILMAZ çünkü çift düşmeye neden olur
       const contactsWithBalance = (contactsData || []).map((contact) => {
         const isContact = (r: any) => r.customer_id === contact.id || r.supplier_id === contact.id || r.contact_id === contact.id
 
-        const receivables = (allCari || []).filter(r => isContact(r) && r.transaction_type === 'receivable')
-        const payables = (allCari || []).filter(r => isContact(r) && r.transaction_type === 'payable')
+        // Fatura tutarları (ham amount, paid_amount kullanılmaz)
+        const totalReceivableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'receivable')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+        const totalPayableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'payable')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
 
-        // Kalan alacak = fatura tutarı - ödenen kısım (paid_amount zaten kasa ödemesini içeriyor)
-        const totalReceivable = receivables.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0)
-        // Kalan borç = fatura tutarı - ödenen kısım
-        const totalPayable = payables.reduce((s, r) => s + (parseFloat(r.amount || 0) - parseFloat(r.paid_amount || 0)), 0)
-        // Pozitif bakiye = bize borçlu, negatif = biz borçluyuz (fazla ödeme = alacaklı)
-        const balance = totalReceivable - totalPayable
+        // Kasa ödemeleri
+        const totalCashIncome = allCash.filter(r => isContact(r) && r.transaction_type === 'income')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+        const totalCashExpense = allCash.filter(r => isContact(r) && r.transaction_type === 'expense')
+          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
 
-        return { ...contact, balance, totalReceivable, totalPayable, transactionCount: receivables.length + payables.length }
+        // Net alacak = fatura alacağı - gelen tahsilat (kalan alacak, negatifse fazla tahsilat)
+        const netReceivable = totalReceivableInvoice - totalCashIncome
+        // Net borç = fatura borcu - giden ödeme (kalan borç, negatifse fazla ödeme yaptık = alacaklıyız)
+        const netPayable = totalPayableInvoice - totalCashExpense
+
+        // Bakiye: pozitif = bize borçlu, negatif = biz borçluyuz
+        // netReceivable pozitif = müşteri bize borçlu, netPayable pozitif = biz tedarikçiye borçluyuz
+        const balance = netReceivable - netPayable
+
+        const totalReceivable = Math.max(netReceivable, 0)
+        const totalPayable = Math.max(netPayable, 0)
+        // Fazla ödeme durumları
+        const excessReceivable = netPayable < 0 ? Math.abs(netPayable) : 0  // Biz fazla ödedik = alacaklıyız
+        const excessPayable = netReceivable < 0 ? Math.abs(netReceivable) : 0  // Fazla tahsilat = biz borçluyuz
+
+        const txCount = allCari.filter(r => isContact(r)).length + allCash.filter(r => isContact(r)).length
+
+        return {
+          ...contact,
+          balance: balance,
+          totalReceivable: totalReceivable + excessReceivable,
+          totalPayable: totalPayable + excessPayable,
+          transactionCount: txCount
+        }
       })
 
       setContacts(contactsWithBalance)

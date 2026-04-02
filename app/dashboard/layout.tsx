@@ -72,13 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     updateTime()
     const interval = setInterval(updateTime, 1000)
 
-    // 10 dakikada bir otomatik logout
-    const logoutInterval = setInterval(async () => {
-      await supabase.auth.signOut()
-      router.push('/login')
-    }, 10 * 60 * 1000)
-
-    return () => { clearInterval(interval); clearInterval(logoutInterval) }
+    return () => clearInterval(interval)
   }, [])
 
   const handleLogout = async () => {

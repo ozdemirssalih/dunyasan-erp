@@ -210,7 +210,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Toplam üretim kaydı:', productionData?.length || 0)
 
       const totalProduction = productionData?.reduce((sum, p) => sum + (p.actual_production || 0), 0) || 0
       const totalDefects = productionData?.reduce((sum, p) => sum + (p.defect_count || 0), 0) || 0
@@ -249,7 +248,6 @@ export default function ManagementDashboard() {
         .eq('company_id', companyId)
 
       if (machError) console.error('Tezgah verileri hatası:', machError)
-      console.log('✅ Toplam tezgah:', machinesData?.length || 0)
 
       const activeMachines = machinesData?.filter(m => m.status === 'active').length || 0
 
@@ -266,7 +264,6 @@ export default function ManagementDashboard() {
         const stock = item.current_stock || 0
         return stock > 0 ? sum + stock : sum
       }, 0) || 0
-      console.log('✅ KK deposundaki toplam adet:', totalQcQuantity, 'adet')
 
       const pendingQC = totalQcQuantity
 
@@ -288,7 +285,6 @@ export default function ManagementDashboard() {
         .eq('company_id', companyId)
 
       if (stockError) console.error('Stok verileri hatası:', stockError)
-      console.log('✅ Toplam stok kalemi:', stockData?.length || 0)
 
       const lowStock = stockData?.filter(s => s.current_stock <= s.min_stock).length || 0
 
@@ -299,7 +295,6 @@ export default function ManagementDashboard() {
         .eq('company_id', companyId)
 
       if (empError) console.error('Çalışan verileri hatası:', empError)
-      console.log('✅ Toplam çalışan:', employeesData?.length || 0)
 
       const totalEmployees = employeesData?.length || 0
 
@@ -311,7 +306,6 @@ export default function ManagementDashboard() {
         .in('status', ['active', 'in_progress'])
 
       if (projError) console.error('Proje verileri hatası:', projError)
-      console.log('✅ Aktif proje:', projectsData?.length || 0)
 
       const activeProjects = projectsData?.length || 0
 
@@ -358,7 +352,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Tezgah listesi yüklendi:', data?.length || 0)
 
       if (data && data.length > 0) {
         // Her tezgah için ortalama verimlilik ve toplam üretim hesapla
@@ -390,7 +383,6 @@ export default function ManagementDashboard() {
         )
 
         setMachines(machinesWithData)
-        console.log('📊 Tezgah performansları hesaplandı')
       }
     } catch (error) {
       console.error('❌ loadMachines hatası:', error)
@@ -412,7 +404,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Son 14 gün üretim:', data?.length || 0, 'kayıt')
 
       if (data && data.length > 0) {
         const grouped = data.reduce((acc: any, curr) => {
@@ -435,7 +426,6 @@ export default function ManagementDashboard() {
         }))
 
         setDailyProduction(chartData)
-        console.log('📊 Günlük üretim grafiği hazır:', chartData.length, 'gün')
       }
     } catch (error) {
       console.error('❌ loadDailyProduction hatası:', error)
@@ -458,7 +448,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Proje dağılımı için veri:', data?.length || 0, 'kayıt')
 
       if (data && data.length > 0) {
         const distribution = data.reduce((acc: any, curr: any) => {
@@ -475,7 +464,6 @@ export default function ManagementDashboard() {
           .slice(0, 8)
 
         setProductDistribution(chartData)
-        console.log('📊 Proje dağılımı hazır:', chartData.length, 'proje')
       }
     } catch (error) {
       console.error('❌ loadProductDistribution hatası:', error)
@@ -499,7 +487,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Fire analizi için veri:', data?.length || 0, 'kayıt')
 
       if (data && data.length > 0) {
         const defects: any = {}
@@ -525,7 +512,6 @@ export default function ManagementDashboard() {
           .slice(0, 6)
 
         setProjectDefects(chartData)
-        console.log('📊 Fire analizi hazır:', chartData.length, 'proje')
       }
     } catch (error) {
       console.error('❌ loadProjectDefects hatası:', error)
@@ -545,7 +531,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Tezgah karşılaştırma için:', machinesData?.length || 0, 'tezgah')
 
       if (machinesData && machinesData.length > 0) {
         const comparison = await Promise.all(
@@ -574,7 +559,6 @@ export default function ManagementDashboard() {
         )
 
         setMachineComparison(comparison.sort((a, b) => b.production - a.production))
-        console.log('📊 Tezgah karşılaştırması hazır')
       }
     } catch (error) {
       console.error('❌ loadMachineComparison hatası:', error)
@@ -601,9 +585,7 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Toplam stok kalemi:', data?.length || 0)
       if (data && data.length > 0) {
-        console.log('📋 Stok kolonları:', Object.keys(data[0]))
       }
 
       if (data && data.length > 0) {
@@ -620,11 +602,9 @@ export default function ManagementDashboard() {
           .slice(0, 10)
 
         setCriticalStock(criticalItems)
-        console.log('📊 Kritik stok:', criticalItems.length, 'ürün')
       } else {
         // Veri yoksa boş array set et
         setCriticalStock([])
-        console.log('📊 Kritik stok: Henüz stok kaydı yok')
       }
     } catch (error) {
       console.error('❌ loadCriticalStock hatası:', error)
@@ -650,7 +630,6 @@ export default function ManagementDashboard() {
         return
       }
 
-      console.log('✅ Top projeler için veri:', data?.length || 0, 'kayıt')
 
       if (data && data.length > 0) {
         const projects: any = {}
@@ -677,7 +656,6 @@ export default function ManagementDashboard() {
           .slice(0, 10)
 
         setTopProjects(topList)
-        console.log('📊 Top 10 proje hazır')
       }
     } catch (error) {
       console.error('❌ loadTopProjects hatası:', error)
@@ -814,7 +792,6 @@ export default function ManagementDashboard() {
 
       activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       setRecentActivities(activities.slice(0, 15))
-      console.log('📊 Son işlemler hazır:', activities.length, 'işlem')
     } catch (error) {
       console.error('❌ loadRecentActivities hatası:', error)
     }

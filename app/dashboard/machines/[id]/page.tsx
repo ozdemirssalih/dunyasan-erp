@@ -102,9 +102,6 @@ export default function MachineDetailPage() {
         .eq('machine_id', machineId)
         .order('production_date', { ascending: false })
 
-      console.log('🔍 Machine ID:', machineId)
-      console.log('📊 Daily Production Data:', dailyProductionData)
-      console.log('❌ Daily Production Error:', dailyError)
 
       setDailyProductions(dailyProductionData || [])
 
@@ -129,7 +126,6 @@ export default function MachineDetailPage() {
         ? dailyProductionData.reduce((sum, d) => sum + (d.efficiency_rate || 0), 0) / dailyProductionData.length
         : 0
 
-      console.log('📈 Stats:', { totalProduced, totalScrap, avgEfficiency })
 
       setStats({ totalProduced, totalScrap, efficiency: avgEfficiency })
 

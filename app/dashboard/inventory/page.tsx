@@ -139,7 +139,6 @@ export default function InventoryPage() {
         .select('id, company_name')
         .eq('company_id', cid)
 
-      console.log('🏢 Tedarikçiler:', suppliersData?.length || 0, 'adet')
       const supplierMap = new Map(suppliersData?.map(s => [s.id, s.company_name]) || [])
       // State'e kaydet (dropdown için)
       setSuppliers(suppliersData || [])
@@ -160,10 +159,7 @@ export default function InventoryPage() {
         })
       }
 
-      console.log('✅ Depo verileri:', whData?.length || 0, 'kayıt')
       if (whData && whData.length > 0) {
-        console.log('📋 İlk depo kaydı:', whData[0])
-        console.log('📋 Depo kolonları:', Object.keys(whData[0]))
       }
 
       const whItems: UnifiedItem[] = (whData || []).map((item: any) => {
@@ -196,17 +192,13 @@ export default function InventoryPage() {
         }
       })
 
-      console.log('📦 Depo kalemlerine dönüştürüldü:', whItems.length)
 
       // 2. inventory tablosu (supplier join'siz - hata veriyorsa)
       const { data: invData, error: invError } = await supabase
         .from('inventory').select('*').eq('company_id', cid)
 
       if (invError) console.error('❌ Stok verileri hatası:', invError)
-      console.log('✅ Stok (inventory) verileri:', invData?.length || 0, 'kayıt')
       if (invData && invData.length > 0) {
-        console.log('📋 İlk stok kaydı:', invData[0])
-        console.log('📋 Stok kolonları:', Object.keys(invData[0]))
       }
 
       const invItems: UnifiedItem[] = (invData || []).map((item: any) => ({
@@ -242,10 +234,7 @@ export default function InventoryPage() {
         .eq('company_id', cid)
 
       if (prodError) console.error('❌ Üretim verileri hatası:', prodError)
-      console.log('✅ Üretim (production_inventory) verileri:', prodData?.length || 0, 'kayıt')
       if (prodData && prodData.length > 0) {
-        console.log('📋 İlk üretim kaydı:', prodData[0])
-        console.log('📋 Üretim kolonları:', Object.keys(prodData[0]))
       }
 
       const prodItems: UnifiedItem[] = (prodData || []).map((item: any) => ({
@@ -274,10 +263,7 @@ export default function InventoryPage() {
         .order('tool_code')
 
       if (toolError) console.error('❌ Takımhane verileri hatası:', toolError)
-      console.log('✅ Takımhane (tools) verileri:', toolsData?.length || 0, 'kayıt')
       if (toolsData && toolsData.length > 0) {
-        console.log('📋 İlk takımhane kaydı:', toolsData[0])
-        console.log('📋 Takımhane kolonları:', Object.keys(toolsData[0]))
       }
 
       const toolItems: UnifiedItem[] = (toolsData || []).map((item: any) => ({

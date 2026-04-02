@@ -161,7 +161,6 @@ export default function PurchaseOrdersPage() {
         .eq('is_active', true)
         .order('company_name')
 
-      console.log('✅ Loaded suppliers:', suppliersData?.length || 0)
       setSuppliers(suppliersData || [])
 
       // Load materials

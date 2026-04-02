@@ -511,7 +511,6 @@ export default function AccountingPageV2() {
           return alert('Cari kayıt eklenirken hata oluştu: ' + insertError.message)
         }
 
-        console.log('✅ Cari kayıt başarıyla eklendi:', insertedData)
 
       } else if (formMode === 'payment') {
         // ÖDEME KAYDI (Kasa işlemi)
@@ -558,7 +557,6 @@ export default function AccountingPageV2() {
           return alert('Kasa işlemi eklenirken hata oluştu: ' + cashInsertError.message)
         }
 
-        console.log('✅ Kasa işlemi başarıyla eklendi:', cashInsertedData)
 
         // Seçilen kasanın bakiyesini güncelle
         if (transactionForm.cash_account_id) {
@@ -571,7 +569,6 @@ export default function AccountingPageV2() {
             await supabase.from('cash_accounts')
               .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
               .eq('id', transactionForm.cash_account_id)
-            console.log('✅ Kasa bakiyesi güncellendi:', selectedAccount.account_name, newBalance)
           }
         }
 
@@ -613,7 +610,6 @@ export default function AccountingPageV2() {
               remainingAmount -= payThis
             }
           }
-          console.log(`✅ ${isTahsilat ? 'Tahsilat' : 'Ödeme'} carideki ${targetType} kayıtlara dağıtıldı`)
         } catch (catErr) {
           console.error('Cari güncelleme hatası:', catErr)
         }
@@ -837,7 +833,6 @@ export default function AccountingPageV2() {
           return
         }
 
-        console.log('✅ Çek tahsil/ödeme kaydı kasa işlemlerine eklendi')
       }
 
       alert('Çek durumu güncellendi!')

@@ -52,7 +52,6 @@ export default function ProjectDetailPage() {
   })
 
   useEffect(() => {
-    console.log('🟢 PROJECT DETAIL PAGE - Loading project:', projectId)
     loadData()
   }, [projectId])
 
@@ -88,7 +87,6 @@ export default function ProjectDetailPage() {
         return
       }
 
-      console.log('✅ Project loaded:', projectData?.project_name)
       setProject(projectData)
       setCustomer(projectData?.customer_company)
 
@@ -99,7 +97,6 @@ export default function ProjectDetailPage() {
         .eq('project_id', projectId)
         .order('display_order')
 
-      console.log('✅ Process machines loaded:', processMachinesData?.length || 0)
       setProcessMachines(processMachinesData || [])
 
       // Load daily production data (last 30 days)
@@ -110,7 +107,6 @@ export default function ProjectDetailPage() {
         .order('production_date', { ascending: false })
         .limit(30)
 
-      console.log('✅ Daily production loaded:', dailyProductionData?.length || 0)
 
       // Her kayıt için employee_ids varsa personel bilgilerini yükle
       if (dailyProductionData && dailyProductionData.length > 0) {
@@ -143,7 +139,6 @@ export default function ProjectDetailPage() {
         .eq('project_id', projectId)
         .order('production_date', { ascending: false })
 
-      console.log('✅ Productions loaded:', productionsData?.length || 0)
       setProductions(productionsData || [])
 
       // Load warehouse items (tüm depo - malzeme eklemek için)
@@ -153,7 +148,6 @@ export default function ProjectDetailPage() {
         .eq('company_id', finalCompanyId)
         .order('name', { ascending: true })
 
-      console.log('✅ Warehouse items loaded:', warehouseData?.length || 0)
       setWarehouseItems(warehouseData || [])
 
       // Load project materials (sadece bu projeye atanmış malzemeler)
@@ -162,7 +156,6 @@ export default function ProjectDetailPage() {
         .select('*, warehouse_item:warehouse_items(*)')
         .eq('project_id', projectId)
 
-      console.log('✅ Project materials loaded:', projectMaterialsData?.length || 0)
       setProjectMaterials(projectMaterialsData || [])
 
       // Load available customers for modal
@@ -196,7 +189,6 @@ export default function ProjectDetailPage() {
         }
       })
 
-      console.log('✅ Available machines loaded:', machinesWithAssignment?.length || 0)
       setAvailableMachines(machinesWithAssignment || [])
 
       // Load project tools
@@ -205,7 +197,6 @@ export default function ProjectDetailPage() {
         .select('*, tool:tools(id, tool_code, tool_name, unit_price), calculated_unit_cost, last_calculation_date')
         .eq('project_id', projectId)
 
-      console.log('✅ Project tools loaded:', projectToolsData?.length || 0)
       setProjectTools(projectToolsData || [])
 
       // Load available tools

@@ -90,7 +90,6 @@ export default function CompanyChat() {
 
       setTimeout(() => audioContext.close(), 300)
     } catch (err) {
-      console.log('Ses hatası:', err)
     }
   }
 

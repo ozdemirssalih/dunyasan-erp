@@ -16,7 +16,26 @@ if (!supabaseAnonKey || supabaseAnonKey === 'undefined' || supabaseAnonKey.trim(
   throw new Error('❌ NEXT_PUBLIC_SUPABASE_ANON_KEY tanımlanmamış! Vercel Environment Variables kontrol edin.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 40,
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    headers: {
+      'x-client-info': 'dunyasan-erp',
+    },
+  },
+})
 
 // Database Types
 export type Database = {

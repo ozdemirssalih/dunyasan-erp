@@ -169,7 +169,6 @@ export default function WarehousePage() {
 
     // Her 5 dakikada bir otomatik yenile (sessizce, loading gösterme)
     const interval = setInterval(() => {
-      console.log('🔄 [AUTO-REFRESH] Depo verileri sessizce yenileniyor...')
       loadData(true) // silent mode
     }, 5 * 60 * 1000) // 5 dakika
 
@@ -278,7 +277,6 @@ export default function WarehousePage() {
   }
 
   const loadItems = async (companyId: string) => {
-    console.log('🔍 [WAREHOUSE] loadItems çağrıldı, companyId:', companyId)
 
     const { data, error } = await supabase
       .from('warehouse_items')
@@ -287,14 +285,12 @@ export default function WarehousePage() {
       .eq('is_active', true)
       .order('code')
 
-    console.log('📦 [WAREHOUSE] warehouse_items sorgu sonucu:', { data, error, count: data?.length })
 
     const itemsData = data?.map((item: any) => ({
       ...item,
       category: item.category || 'Bilinmiyor'  // ← Artık category direkt TEXT olarak geliyor
     })) || []
 
-    console.log('✅ [WAREHOUSE] Items state güncelleniyor:', itemsData.length, 'kayıt')
     setItems(itemsData)
   }
 

@@ -183,7 +183,6 @@ export default function ProductionPage() {
 
     // Her 5 dakikada bir otomatik yenile (sessizce, loading gösterme)
     const interval = setInterval(() => {
-      console.log('🔄 [AUTO-REFRESH] Veriler sessizce yenileniyor...')
       loadData(true) // silent mode
     }, 5 * 60 * 1000) // 5 dakika
 
@@ -214,7 +213,6 @@ export default function ProductionPage() {
 
       // Eğer profilde company_id yoksa, Dünyasan şirketini kullan
       if (!finalCompanyId) {
-        console.log('No company_id in profile, fetching Dünyasan company...')
 
         const { data: company } = await supabase
           .from('companies')
@@ -225,7 +223,6 @@ export default function ProductionPage() {
 
         if (company?.id) {
           finalCompanyId = company.id
-          console.log('Using Dünyasan company ID:', finalCompanyId)
 
           // Profili güncelle
           await supabase
@@ -233,7 +230,6 @@ export default function ProductionPage() {
             .update({ company_id: finalCompanyId })
             .eq('id', user.id)
 
-          console.log('Profile updated with company_id')
         } else {
           // Hiç şirket yoksa, ilk şirketi kullan
           const { data: firstCompany } = await supabase
@@ -244,7 +240,6 @@ export default function ProductionPage() {
 
           if (firstCompany?.id) {
             finalCompanyId = firstCompany.id
-            console.log('Using first company ID:', finalCompanyId)
 
             await supabase
               .from('profiles')
@@ -285,7 +280,6 @@ export default function ProductionPage() {
   }
 
   const loadProductionInventory = async (companyId: string) => {
-    console.log('🔍 [PRODUCTION] loadProductionInventory çağrıldı, companyId:', companyId)
 
     // ÖNCE join olmadan tüm kayıtları çek - kaç tane var?
     const { data: rawData, error: rawError } = await supabase
@@ -299,7 +293,6 @@ export default function ProductionPage() {
       hammadde: rawData?.filter((r: any) => r.item_type === 'raw_material').length,
       bitmiş: rawData?.filter((r: any) => r.item_type === 'finished_product').length
     })
-    console.log('📦 [RAW DATA] İlk 3 kayıt:', rawData?.slice(0, 3))
 
     // Şimdi join ile çek (category artık TEXT kolonu)
     const { data, error } = await supabase
@@ -318,8 +311,6 @@ export default function ProductionPage() {
       return
     }
 
-    console.log('🏭 [WITH JOIN] production_inventory sonucu:', { count: data?.length })
-    console.log('📦 [WITH JOIN] İlk 3 kayıt:', data?.slice(0, 3))
 
     const inventoryData = data?.map((inv: any) => ({
       id: inv.id,
@@ -332,9 +323,6 @@ export default function ProductionPage() {
       item_type: inv.item_type || 'raw_material'
     })) || []
 
-    console.log('✅ [PRODUCTION] ProductionInventory state:', inventoryData.length, 'kayıt')
-    console.log('📊 [PRODUCTION] Hammadde:', inventoryData.filter(i => i.item_type === 'raw_material').length)
-    console.log('📊 [PRODUCTION] Bitmiş ürün:', inventoryData.filter(i => i.item_type === 'finished_product').length)
 
     setProductionInventory(inventoryData)
   }
@@ -421,7 +409,6 @@ export default function ProductionPage() {
   }
 
   const loadWarehouseItems = async (companyId: string) => {
-    console.log('🔍 [PRODUCTION] loadWarehouseItems çağrıldı, companyId:', companyId)
 
     const { data, error } = await supabase
       .from('warehouse_items')
@@ -430,8 +417,6 @@ export default function ProductionPage() {
       .eq('is_active', true)
       .order('name')
 
-    console.log('📦 [PRODUCTION] warehouse_items sorgu sonucu:', { data, error, count: data?.length })
-    console.log('✅ [PRODUCTION] WarehouseItems state güncelleniyor:', data?.length || 0, 'kayıt')
 
     setWarehouseItems(data || [])
   }
@@ -463,7 +448,6 @@ export default function ProductionPage() {
   }
 
   const loadStats = async (companyId: string) => {
-    console.log('📊 [PRODUCTION] loadStats çağrıldı')
 
     // SADECE KESİN BİLİNEN VERİLER
     // Oran bilgisi olmadan tezgahlardaki hesaplanamaz!

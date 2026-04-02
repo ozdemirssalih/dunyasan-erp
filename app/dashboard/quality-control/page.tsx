@@ -60,7 +60,6 @@ export default function QualityControlPage() {
 
     // Her 5 dakikada bir otomatik yenile (sessizce, loading gösterme)
     const interval = setInterval(() => {
-      console.log('🔄 [AUTO-REFRESH] Kalite kontrol verileri sessizce yenileniyor...')
       loadData(true) // silent mode
     }, 5 * 60 * 1000) // 5 dakika
 
@@ -200,7 +199,6 @@ export default function QualityControlPage() {
   }
 
   const loadStats = async (companyId: string) => {
-    console.log('📊 [QC] loadStats çağrıldı')
 
     // Bekleyen testler (ÜRÜN SAYISI, test sayısı değil)
     const { data: pendingTestsData } = await supabase
@@ -241,7 +239,6 @@ export default function QualityControlPage() {
 
     const totalInQC = qcStock?.reduce((sum, item) => sum + item.current_stock, 0) || 0
 
-    console.log('📊 [QC] İstatistikler:', { pendingTests, passedToday, failedToday, totalInQC })
 
     setStats({
       pendingTests: pendingTests || 0,
@@ -483,18 +480,15 @@ export default function QualityControlPage() {
         .eq('status', 'pending') // Sadece pending olanları güncelle
         .select()
 
-      console.log('✅ Transfer güncellendi:', updatedTransfer)
 
       if (updateTransferError) throw updateTransferError
 
       // Eğer hiçbir satır güncellenmediysede (başka biri önce onaylamış), işlemi durdur
       if (!updatedTransfer || updatedTransfer.length === 0) {
-        console.log('❌ Transfer güncellenemedi - zaten işlenmiş olabilir')
         alert('⚠️ Bu transfer zaten işlenmiş veya bulunamadı!')
         return
       }
 
-      console.log('🎉 Transfer onaylandı! Trigger otomatik olarak kaliteye ekleyecek.')
 
       // 3. Üretim çıktılarının durumunu güncelle (Bekliyor → KK'da)
       const { error: outputsUpdateError } = await supabase
@@ -507,7 +501,6 @@ export default function QualityControlPage() {
         console.error('⚠️ Üretim çıktıları güncellenemedi:', outputsUpdateError)
         // Kritik değil, devam et
       } else {
-        console.log('✅ Üretim çıktıları "KK\'da" olarak güncellendi')
       }
 
       // NOT: Kaliteye ekleme işlemi database trigger tarafından yapılıyor

@@ -254,7 +254,6 @@ export default function ProjectsPage() {
 
       // Eğer profilde company_id yoksa, Dünyasan şirketini kullan
       if (!finalCompanyId) {
-        console.log('No company_id in profile, fetching Dünyasan company...')
 
         const { data: company } = await supabase
           .from('companies')
@@ -265,7 +264,6 @@ export default function ProjectsPage() {
 
         if (company?.id) {
           finalCompanyId = company.id
-          console.log('Using Dünyasan company ID:', finalCompanyId)
 
           // Profili güncelle
           await supabase
@@ -273,7 +271,6 @@ export default function ProjectsPage() {
             .update({ company_id: finalCompanyId })
             .eq('id', user.id)
 
-          console.log('Profile updated with company_id')
         } else {
           // Hiç şirket yoksa, ilk şirketi kullan
           const { data: firstCompany } = await supabase
@@ -284,7 +281,6 @@ export default function ProjectsPage() {
 
           if (firstCompany?.id) {
             finalCompanyId = firstCompany.id
-            console.log('Using first company ID:', finalCompanyId)
 
             await supabase
               .from('profiles')

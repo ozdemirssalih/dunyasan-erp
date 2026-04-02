@@ -634,7 +634,6 @@ export default function SettingsPage() {
 
     setIsSubmittingCompany(true)
     try {
-      console.log('Updating company:', company)
 
       const { data, error } = await supabase
         .from('companies')
@@ -653,7 +652,6 @@ export default function SettingsPage() {
         throw error
       }
 
-      console.log('Company updated successfully:', data)
       alert('✅ Şirket bilgileri güncellendi!')
       loadData() // Reload to reflect changes
     } catch (error: any) {

@@ -6,7 +6,6 @@ import { ArrowLeft } from 'lucide-react'
 export default function TestStaticPage() {
   const router = useRouter()
 
-  console.log('🔵 STATIC TEST PAGE LOADED')
 
   return (
     <div className="p-8">

@@ -38,16 +38,26 @@ const PRESENCE_HEARTBEAT_MS = 30_000
 // Helper: enrich a raw message row into a ChatMessage
 // ============================================================
 
+// Profile cache to avoid repeated queries
+const profileCache = new Map<string, ProfileRow>()
+
+async function getProfile(userId: string): Promise<ProfileRow | null> {
+  if (profileCache.has(userId)) return profileCache.get(userId)!
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, company_id, full_name, role, avatar_url, phone, email')
+    .eq('id', userId)
+    .single()
+  if (data) profileCache.set(userId, data)
+  return data ?? null
+}
+
 async function enrichMessage(
   msg: ChatMessageRow,
   currentUserId: string
 ): Promise<ChatMessage> {
-  // Fetch sender profile
-  const { data: sender } = await supabase
-    .from('profiles')
-    .select('id, company_id, full_name, role, avatar_url, phone, email')
-    .eq('id', msg.sender_id)
-    .single()
+  // Fetch sender from cache
+  const sender = await getProfile(msg.sender_id)
 
   // Fetch reply-to message + its sender if applicable
   let reply_to_message: ChatMessageRow | null = null
@@ -60,79 +70,117 @@ async function enrichMessage(
       .single()
     if (replyMsg) {
       reply_to_message = replyMsg
-      const { data: replySender } = await supabase
-        .from('profiles')
-        .select('id, company_id, full_name, role, avatar_url, phone, email')
-        .eq('id', replyMsg.sender_id)
-        .single()
-      reply_to_sender = replySender ?? null
+      reply_to_sender = await getProfile(replyMsg.sender_id)
     }
   }
-
-  // Fetch reactions grouped by emoji
-  const { data: reactionRows } = await supabase
-    .from('chat_message_reactions')
-    .select('emoji, user_id')
-    .eq('message_id', msg.id)
-
-  const reactionMap = new Map<string, { user_ids: string[] }>()
-  for (const r of reactionRows ?? []) {
-    const existing = reactionMap.get(r.emoji)
-    if (existing) {
-      existing.user_ids.push(r.user_id)
-    } else {
-      reactionMap.set(r.emoji, { user_ids: [r.user_id] })
-    }
-  }
-
-  // Resolve reaction user profiles
-  const allReactionUserIds = Array.from(new Set((reactionRows ?? []).map((r: any) => r.user_id)))
-  const { data: reactionProfiles } = allReactionUserIds.length
-    ? await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
-        .in('id', allReactionUserIds)
-    : { data: [] }
-
-  const profileLookup = new Map(
-    (reactionProfiles ?? []).map((p) => [p.id, p])
-  )
-
-  const reactions: ReactionGroup[] = []
-  for (const [emoji, { user_ids }] of Array.from(reactionMap)) {
-    reactions.push({
-      emoji,
-      count: user_ids.length,
-      users: user_ids
-        .map((uid: string) => profileLookup.get(uid))
-        .filter(Boolean) as Pick<ProfileRow, 'id' | 'full_name' | 'avatar_url'>[],
-      reacted_by_me: user_ids.includes(currentUserId),
-    })
-  }
-
-  // Fetch read-by users
-  const { data: readRows } = await supabase
-    .from('chat_message_reads')
-    .select('user_id')
-    .eq('message_id', msg.id)
-
-  const readUserIds = (readRows ?? []).map((r) => r.user_id)
-  const { data: readProfiles } = readUserIds.length
-    ? await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url')
-        .in('id', readUserIds)
-    : { data: [] }
 
   return {
     ...msg,
     sender: sender ?? null,
     reply_to_message,
     reply_to_sender,
-    reactions,
-    read_by: (readProfiles ?? []) as Pick<ProfileRow, 'id' | 'full_name' | 'avatar_url'>[],
-    read_count: readUserIds.length,
+    reactions: [],
+    read_by: [],
+    read_count: 0,
   }
+}
+
+// Batch enrich: load reactions + reads for all messages in 2 queries instead of N*2
+async function enrichMessages(
+  msgs: ChatMessageRow[],
+  currentUserId: string
+): Promise<ChatMessage[]> {
+  if (msgs.length === 0) return []
+
+  const msgIds = msgs.map(m => m.id)
+  const senderIds = Array.from(new Set(msgs.map(m => m.sender_id)))
+
+  // Batch load all sender profiles
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, company_id, full_name, role, avatar_url, phone, email')
+    .in('id', senderIds)
+  for (const p of profiles ?? []) profileCache.set(p.id, p)
+
+  // Batch load all reactions
+  const { data: allReactions } = await supabase
+    .from('chat_message_reactions')
+    .select('message_id, emoji, user_id')
+    .in('message_id', msgIds)
+
+  // Batch load all reads
+  const { data: allReads } = await supabase
+    .from('chat_message_reads')
+    .select('message_id, user_id')
+    .in('message_id', msgIds)
+
+  // Load reaction user profiles
+  const reactionUserIds = Array.from(new Set((allReactions ?? []).map(r => r.user_id)))
+  const { data: reactionProfiles } = reactionUserIds.length
+    ? await supabase.from('profiles').select('id, full_name, avatar_url').in('id', reactionUserIds)
+    : { data: [] }
+  const rpLookup = new Map((reactionProfiles ?? []).map(p => [p.id, p]))
+
+  // Load read user profiles
+  const readUserIds = Array.from(new Set((allReads ?? []).map(r => r.user_id)))
+  const { data: readProfiles } = readUserIds.length
+    ? await supabase.from('profiles').select('id, full_name, avatar_url').in('id', readUserIds)
+    : { data: [] }
+  const rdLookup = new Map((readProfiles ?? []).map(p => [p.id, p]))
+
+  // Build per-message reaction and read maps
+  const reactionsByMsg = new Map<string, typeof allReactions>()
+  for (const r of allReactions ?? []) {
+    if (!reactionsByMsg.has(r.message_id)) reactionsByMsg.set(r.message_id, [])
+    reactionsByMsg.get(r.message_id)!.push(r)
+  }
+  const readsByMsg = new Map<string, string[]>()
+  for (const r of allReads ?? []) {
+    if (!readsByMsg.has(r.message_id)) readsByMsg.set(r.message_id, [])
+    readsByMsg.get(r.message_id)!.push(r.user_id)
+  }
+
+  // Reply-to messages
+  const replyIds = msgs.filter(m => m.reply_to).map(m => m.reply_to!)
+  const { data: replyMsgs } = replyIds.length
+    ? await supabase.from('chat_messages').select('*').in('id', replyIds)
+    : { data: [] }
+  const replyMap = new Map((replyMsgs ?? []).map(m => [m.id, m]))
+
+  return msgs.map(msg => {
+    const sender = profileCache.get(msg.sender_id) ?? null
+    const msgReactions = reactionsByMsg.get(msg.id) ?? []
+    const reactionMap = new Map<string, string[]>()
+    for (const r of msgReactions) {
+      if (!reactionMap.has(r.emoji)) reactionMap.set(r.emoji, [])
+      reactionMap.get(r.emoji)!.push(r.user_id)
+    }
+    const reactions: ReactionGroup[] = Array.from(reactionMap).map(([emoji, uids]) => ({
+      emoji,
+      count: uids.length,
+      users: uids.map(uid => rpLookup.get(uid)).filter(Boolean) as Pick<ProfileRow, 'id' | 'full_name' | 'avatar_url'>[],
+      reacted_by_me: uids.includes(currentUserId),
+    }))
+
+    const readUids = readsByMsg.get(msg.id) ?? []
+
+    let reply_to_message: ChatMessageRow | null = null
+    let reply_to_sender: ProfileRow | null = null
+    if (msg.reply_to && replyMap.has(msg.reply_to)) {
+      reply_to_message = replyMap.get(msg.reply_to)!
+      reply_to_sender = profileCache.get(reply_to_message!.sender_id) ?? null
+    }
+
+    return {
+      ...msg,
+      sender,
+      reply_to_message,
+      reply_to_sender,
+      reactions,
+      read_by: readUids.map(uid => rdLookup.get(uid)).filter(Boolean) as Pick<ProfileRow, 'id' | 'full_name' | 'avatar_url'>[],
+      read_count: readUids.length,
+    }
+  })
 }
 
 // ============================================================
@@ -466,12 +514,10 @@ export function useChatMessages(
 
       if (msgErr) throw msgErr
 
-      const enriched = await Promise.all(
-        (rows ?? []).map((m: ChatMessageRow) => enrichMessage(m, userId))
-      )
+      const enriched = await enrichMessages((rows ?? []).reverse(), userId)
 
-      // Reverse so oldest is first (chat order)
-      setMessages(enriched.reverse())
+      // Already in chat order (oldest first)
+      setMessages(enriched)
       setHasMore((rows ?? []).length >= MESSAGES_PER_PAGE)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Mesajlar yuklenirken hata olustu'
@@ -499,11 +545,9 @@ export function useChatMessages(
 
       if (msgErr) throw msgErr
 
-      const enriched = await Promise.all(
-        (rows ?? []).map((m: ChatMessageRow) => enrichMessage(m, userId))
-      )
+      const enriched = await enrichMessages((rows ?? []).reverse(), userId)
 
-      setMessages((prev) => [...enriched.reverse(), ...prev])
+      setMessages((prev) => [...enriched, ...prev])
       setHasMore((rows ?? []).length >= MESSAGES_PER_PAGE)
     } catch (err) {
       console.error('loadMore error:', err)

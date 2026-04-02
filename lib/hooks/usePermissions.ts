@@ -38,50 +38,65 @@ export interface UserRole {
   is_system_role: boolean
 }
 
+// Cache permissions across hook instances
+let cachedRole: UserRole | null = null
+let cachePromise: Promise<void> | null = null
+
 export function usePermissions() {
-  const [role, setRole] = useState<UserRole | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [role, setRole] = useState<UserRole | null>(cachedRole)
+  const [loading, setLoading] = useState(!cachedRole)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(cachedRole?.name === 'Super Admin')
 
   useEffect(() => {
+    if (cachedRole) {
+      setRole(cachedRole)
+      setIsSuperAdmin(cachedRole.name === 'Super Admin')
+      setLoading(false)
+      return
+    }
     loadPermissions()
   }, [])
 
   const loadPermissions = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // Prevent duplicate requests
+      if (cachePromise) {
+        await cachePromise
+        if (cachedRole) {
+          setRole(cachedRole)
+          setIsSuperAdmin(cachedRole.name === 'Super Admin')
+        }
         setLoading(false)
         return
       }
 
-      // Get user's profile with role
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role_id')
-        .eq('id', user.id)
-        .single()
+      cachePromise = (async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-      if (!profile) {
-        setLoading(false)
-        return
-      }
+        // Single query: profile + role in one go
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role_id, roles(*)')
+          .eq('id', user.id)
+          .single()
 
-      // Get role details
-      const { data: roleData } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', profile.role_id)
-        .single()
+        if (profile?.roles) {
+          cachedRole = profile.roles as any as UserRole
+        }
+      })()
 
-      if (roleData) {
-        setRole(roleData)
-        setIsSuperAdmin(roleData.name === 'Super Admin')
+      await cachePromise
+
+      if (cachedRole) {
+        setRole(cachedRole)
+        setIsSuperAdmin(cachedRole.name === 'Super Admin')
       }
     } catch (error) {
       console.error('Error loading permissions:', error)
     } finally {
       setLoading(false)
+      cachePromise = null
     }
   }
 

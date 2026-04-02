@@ -25,27 +25,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     // Check authentication - only once ever using ref
     const checkAuth = async () => {
-      if (hasCheckedAuth.current) {
-        console.log('⏭️ Auth already checked, skipping...')
-        return
-      }
-
-      console.log('🔐 Checking auth in layout...')
+      if (hasCheckedAuth.current) return
       hasCheckedAuth.current = true
       setAuthLoading(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        console.log('❌ No user, redirecting to login')
         setAuthLoading(false)
         router.push('/login')
         return
       }
 
-      console.log('✅ User authenticated:', user.email)
       setUser(user)
 
-      // Get user profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -128,7 +120,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // If no user after auth check, they'll be redirected to login
   // But render the layout anyway to avoid blocking child pages
-  console.log('🎨 Rendering layout - User:', user?.email || 'none')
 
   // Embed mode: sadece children goster (iframe icin)
   if (isEmbed) {

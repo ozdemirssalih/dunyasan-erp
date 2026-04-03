@@ -53,12 +53,13 @@ export default function CustomersPage() {
       setCompanyId(fetchedCompanyId)
 
       const { data } = await supabase
-        .from('customer_companies')
-        .select('*')
+        .from('contacts')
+        .select('id, contact_name, phone, email, address, tax_number, tax_office, created_at')
         .eq('company_id', fetchedCompanyId)
-        .order('customer_name', { ascending: true })
+        .eq('is_active', true)
+        .order('contact_name', { ascending: true })
 
-      setCustomers(data || [])
+      setCustomers((data || []).map(c => ({ ...c, customer_name: c.contact_name })))
     } catch (error) {
       console.error('Error loading customers:', error)
     } finally {
@@ -74,16 +75,16 @@ export default function CustomersPage() {
 
     try {
       const { error } = await supabase
-        .from('customer_companies')
+        .from('contacts')
         .insert({
           company_id: companyId,
-          customer_name: formData.customer_name,
-          contact_person: formData.contact_person || null,
+          contact_name: formData.customer_name,
           phone: formData.phone || null,
           email: formData.email || null,
           address: formData.address || null,
           tax_number: formData.tax_number || null,
-          tax_office: formData.tax_office || null
+          tax_office: formData.tax_office || null,
+          is_active: true
         })
 
       if (error) {
@@ -118,8 +119,8 @@ export default function CustomersPage() {
 
     try {
       const { error } = await supabase
-        .from('customer_companies')
-        .delete()
+        .from('contacts')
+        .update({ is_active: false })
         .eq('id', customerId)
 
       if (error) {

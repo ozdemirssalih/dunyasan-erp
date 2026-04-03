@@ -63,12 +63,13 @@ export default function SuppliersPage() {
       setCompanyId(fetchedCompanyId)
 
       const { data } = await supabase
-        .from('suppliers')
-        .select('*')
+        .from('contacts')
+        .select('id, contact_name, phone, email, address, tax_number, tax_office, is_active, created_at')
         .eq('company_id', fetchedCompanyId)
-        .order('company_name', { ascending: true })
+        .eq('is_active', true)
+        .order('contact_name', { ascending: true })
 
-      setSuppliers(data || [])
+      setSuppliers((data || []).map(c => ({ ...c, company_name: c.contact_name })))
     } catch (error) {
       console.error('Error loading suppliers:', error)
     } finally {
@@ -106,18 +107,14 @@ export default function SuppliersPage() {
       if (editingSupplier) {
         // Update
         const { error } = await supabase
-          .from('suppliers')
+          .from('contacts')
           .update({
-            company_name: formData.company_name,
-            contact_person: formData.contact_person || null,
+            contact_name: formData.company_name,
             phone: formData.phone || null,
             email: formData.email || null,
             tax_number: formData.tax_number || null,
             address: formData.address || null,
-            category: formData.category || null,
-            notes: formData.notes || null,
             is_active: formData.is_active,
-            updated_at: new Date().toISOString()
           })
           .eq('id', editingSupplier.id)
 
@@ -126,18 +123,15 @@ export default function SuppliersPage() {
       } else {
         // Create
         const { error } = await supabase
-          .from('suppliers')
+          .from('contacts')
           .insert({
             company_id: companyId,
-            company_name: formData.company_name,
-            contact_person: formData.contact_person || null,
+            contact_name: formData.company_name,
             phone: formData.phone || null,
             email: formData.email || null,
             tax_number: formData.tax_number || null,
             address: formData.address || null,
-            category: formData.category || null,
-            notes: formData.notes || null,
-            is_active: formData.is_active
+            is_active: true
           })
 
         if (error) throw error

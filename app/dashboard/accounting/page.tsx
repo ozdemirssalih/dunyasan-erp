@@ -365,22 +365,15 @@ export default function AccountingPageV2() {
         let customer_name = null
         let supplier_name = null
 
-        if (check.customer_id) {
-          const { data: customerData } = await supabase
-            .from('customer_companies')
-            .select('customer_name')
-            .eq('id', check.customer_id)
+        const contactId = check.customer_id || check.supplier_id || check.contact_id
+        if (contactId) {
+          const { data: contactData } = await supabase
+            .from('contacts')
+            .select('contact_name')
+            .eq('id', contactId)
             .single()
-          customer_name = customerData?.customer_name
-        }
-
-        if (check.supplier_id) {
-          const { data: supplierData } = await supabase
-            .from('suppliers')
-            .select('company_name')
-            .eq('id', check.supplier_id)
-            .single()
-          supplier_name = supplierData?.company_name
+          customer_name = contactData?.contact_name
+          supplier_name = contactData?.contact_name
         }
 
         return {
@@ -579,7 +572,7 @@ export default function AccountingPageV2() {
   const loadAccountTransactions = async (accountId: string) => {
     const { data } = await supabase
       .from('cash_transactions')
-      .select('*, customer:customer_companies(customer_name), supplier:suppliers(company_name)')
+      .select('*, contact:contacts(contact_name)')
       .eq('company_id', companyId)
       .eq('cash_account_id', accountId)
       .order('transaction_date', { ascending: false })

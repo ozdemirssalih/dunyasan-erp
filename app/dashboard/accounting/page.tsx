@@ -311,8 +311,8 @@ export default function AccountingPageV2() {
           }
         })
 
-        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
-        if (hasRemaining) {
+        const hasDebt = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        if (hasDebt) {
           supplierBalances.push({ supplier_id: supplier.id, supplier_name: supplier.contact_name, balancesByCurrency, transaction_date: suppPayables[0]?.transaction_date })
         }
       })

@@ -260,9 +260,15 @@ export default function AccountingPageV2() {
           }
         })
 
-        const hasRemaining = Object.values(balancesByCurrency).some(b => b.remaining !== 0)
-        if (hasRemaining) {
-          customerBalances.push({ customer_id: customer.id, customer_name: customer.contact_name, balancesByCurrency, transaction_date: custReceivables[0]?.transaction_date })
+        // Sadece pozitif remaining = müşteri bize borçlu = alacak
+        const hasReceivable = Object.values(balancesByCurrency).some(b => b.remaining > 0)
+        if (hasReceivable) {
+          // Negatif bakiyeleri (fazla ödeme aldık = biz borçluyuz) buraya koyma
+          const filteredBalances: Record<string, any> = {}
+          Object.entries(balancesByCurrency).forEach(([currency, b]) => {
+            if (b.remaining > 0) filteredBalances[currency] = b
+          })
+          customerBalances.push({ customer_id: customer.id, customer_name: customer.contact_name, balancesByCurrency: filteredBalances, transaction_date: custReceivables[0]?.transaction_date })
         }
       })
 
@@ -314,6 +320,34 @@ export default function AccountingPageV2() {
         const hasDebt = Object.values(balancesByCurrency).some(b => b.remaining > 0)
         if (hasDebt) {
           supplierBalances.push({ supplier_id: supplier.id, supplier_name: supplier.contact_name, balancesByCurrency, transaction_date: suppPayables[0]?.transaction_date })
+        }
+      })
+
+      // Fazla ödeme aldığımız müşterileri de borç listesine ekle
+      allContacts?.forEach(customer => {
+        const custReceivables2 = receivables?.filter(r => isContactMatch(r, customer.id)) || []
+        const custPayments2 = cashTxns?.filter(t => t.transaction_type === 'income' && isContactMatch(t, customer.id)) || []
+        const bal: Record<string, { payable: number, payment: number, remaining: number }> = {}
+        custReceivables2.forEach(r => {
+          const c = r.currency || 'TRY'
+          if (!bal[c]) bal[c] = { payable: 0, payment: 0, remaining: 0 }
+          bal[c].payable += parseFloat(r.amount)
+        })
+        custPayments2.forEach(p => {
+          const c = p.currency || 'TRY'
+          if (!bal[c]) bal[c] = { payable: 0, payment: 0, remaining: 0 }
+          bal[c].payment += parseFloat(p.amount)
+        })
+        const overPaid: Record<string, any> = {}
+        Object.entries(bal).forEach(([c, b]) => {
+          const rem = b.payable - b.payment // negatif = fazla ödeme aldık
+          if (rem < 0) {
+            overPaid[c] = { payable: Math.abs(rem), payment: 0, remaining: Math.abs(rem) }
+            payableByCurrency[c] = (payableByCurrency[c] || 0) + Math.abs(rem)
+          }
+        })
+        if (Object.keys(overPaid).length > 0) {
+          supplierBalances.push({ supplier_id: customer.id, supplier_name: customer.contact_name + ' (Fazla Ödeme)', balancesByCurrency: overPaid, transaction_date: custReceivables2[0]?.transaction_date })
         }
       })
 

@@ -13,7 +13,7 @@ export default function CurrentAccountsPage() {
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
-  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '' })
+  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -218,15 +218,9 @@ export default function CurrentAccountsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
                 <input value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="Adres" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
-                  <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
-                  <input value={newForm.tax_office} onChange={e => setNewForm({...newForm, tax_office: e.target.value})} placeholder="Vergi dairesi" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
+                <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
               </div>
               <button
                 onClick={async () => {
@@ -235,12 +229,12 @@ export default function CurrentAccountsPage() {
                     company_id: companyId, contact_name: newForm.contact_name,
                     phone: newForm.phone || null, email: newForm.email || null,
                     address: newForm.address || null, tax_number: newForm.tax_number || null,
-                    tax_office: newForm.tax_office || null, is_active: true
+                    is_active: true
                   })
                   if (error) return alert('Hata: ' + error.message)
                   alert('Cari hesap eklendi!')
                   setShowNewModal(false)
-                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '' })
+                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '' })
                   loadData()
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"

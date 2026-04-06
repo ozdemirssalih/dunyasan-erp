@@ -62,14 +62,15 @@ export default function SuppliersPage() {
 
       setCompanyId(fetchedCompanyId)
 
-      const { data } = await supabase
-        .from('contacts')
-        .select('id, contact_name, phone, email, address, tax_number, tax_office, is_active, created_at')
-        .eq('company_id', fetchedCompanyId)
-        .eq('is_active', true)
-        .order('contact_name', { ascending: true })
+      // contacts + eski suppliers tablosundan birleştir
+      const [contactsRes, oldSuppliersRes] = await Promise.all([
+        supabase.from('contacts').select('id, contact_name, phone, email, address, tax_number, tax_office, is_active, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true),
+        supabase.from('suppliers').select('id, company_name, contact_person, phone, email, address, tax_number, category, notes, is_active, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true)
+      ])
 
-      setSuppliers((data || []).map(c => ({ ...c, company_name: c.contact_name })))
+      const fromContacts = (contactsRes.data || []).map(c => ({ ...c, company_name: c.contact_name }))
+      const fromOld = (oldSuppliersRes.data || []).filter(o => !fromContacts.some(c => c.company_name === o.company_name))
+      setSuppliers([...fromContacts, ...fromOld])
     } catch (error) {
       console.error('Error loading suppliers:', error)
     } finally {

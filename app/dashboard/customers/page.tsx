@@ -52,14 +52,15 @@ export default function CustomersPage() {
 
       setCompanyId(fetchedCompanyId)
 
-      const { data } = await supabase
-        .from('contacts')
-        .select('id, contact_name, phone, email, address, tax_number, tax_office, created_at')
-        .eq('company_id', fetchedCompanyId)
-        .eq('is_active', true)
-        .order('contact_name', { ascending: true })
+      // contacts + eski customer_companies tablosundan birleştir
+      const [contactsRes, oldCustomersRes] = await Promise.all([
+        supabase.from('contacts').select('id, contact_name, phone, email, address, tax_number, tax_office, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true),
+        supabase.from('customer_companies').select('id, customer_name, contact_person, phone, email, address, tax_number, tax_office, created_at').eq('company_id', fetchedCompanyId)
+      ])
 
-      setCustomers((data || []).map(c => ({ ...c, customer_name: c.contact_name })))
+      const fromContacts = (contactsRes.data || []).map(c => ({ ...c, customer_name: c.contact_name }))
+      const fromOld = (oldCustomersRes.data || []).filter(o => !fromContacts.some(c => c.customer_name === o.customer_name))
+      setCustomers([...fromContacts, ...fromOld])
     } catch (error) {
       console.error('Error loading customers:', error)
     } finally {

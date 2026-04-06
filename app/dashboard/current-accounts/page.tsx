@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search, Plus, X } from 'lucide-react'
 
 export default function CurrentAccountsPage() {
   const [contacts, setContacts] = useState<any[]>([])
@@ -12,6 +12,8 @@ export default function CurrentAccountsPage() {
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'positive' | 'negative'>('all')
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
+  const [showNewModal, setShowNewModal] = useState(false)
+  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -179,10 +181,76 @@ export default function CurrentAccountsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-gray-800">Cari Hesaplar</h2>
-        <p className="text-gray-600">{contacts.length} cari hesap</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-800">Cari Hesaplar</h2>
+          <p className="text-gray-600">{contacts.length} cari hesap</p>
+        </div>
+        <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+          <Plus className="w-4 h-4" /> Yeni Cari
+        </button>
       </div>
+
+      {/* Yeni Cari Modal */}
+      {showNewModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNewModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Yeni Cari Hesap</h3>
+              <button onClick={() => setShowNewModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Firma / Kişi Adı *</label>
+                <input value={newForm.contact_name} onChange={e => setNewForm({...newForm, contact_name: e.target.value})} placeholder="Firma veya kişi adı" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                  <input value={newForm.phone} onChange={e => setNewForm({...newForm, phone: e.target.value})} placeholder="0532..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-posta</label>
+                  <input value={newForm.email} onChange={e => setNewForm({...newForm, email: e.target.value})} placeholder="info@..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
+                <input value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="Adres" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
+                  <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
+                  <input value={newForm.tax_office} onChange={e => setNewForm({...newForm, tax_office: e.target.value})} placeholder="Vergi dairesi" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!newForm.contact_name || !companyId) return alert('Firma/kişi adı zorunludur!')
+                  const { error } = await supabase.from('contacts').insert({
+                    company_id: companyId, contact_name: newForm.contact_name,
+                    phone: newForm.phone || null, email: newForm.email || null,
+                    address: newForm.address || null, tax_number: newForm.tax_number || null,
+                    tax_office: newForm.tax_office || null, is_active: true
+                  })
+                  if (error) return alert('Hata: ' + error.message)
+                  alert('Cari hesap eklendi!')
+                  setShowNewModal(false)
+                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '' })
+                  loadData()
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Özet Kartlar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

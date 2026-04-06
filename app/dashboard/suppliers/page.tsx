@@ -62,15 +62,14 @@ export default function SuppliersPage() {
 
       setCompanyId(fetchedCompanyId)
 
-      // contacts + eski suppliers tablosundan birleştir
-      const [contactsRes, oldSuppliersRes] = await Promise.all([
-        supabase.from('contacts').select('id, contact_name, phone, email, address, tax_number, tax_office, is_active, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true),
-        supabase.from('suppliers').select('id, company_name, contact_person, phone, email, address, tax_number, category, notes, is_active, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true)
-      ])
+      const { data } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('company_id', fetchedCompanyId)
+        .eq('is_active', true)
+        .order('company_name', { ascending: true })
 
-      const fromContacts = (contactsRes.data || []).map(c => ({ ...c, company_name: c.contact_name }))
-      const fromOld = (oldSuppliersRes.data || []).filter(o => !fromContacts.some(c => c.company_name === o.company_name))
-      setSuppliers([...fromContacts, ...fromOld])
+      setSuppliers(data || [])
     } catch (error) {
       console.error('Error loading suppliers:', error)
     } finally {
@@ -108,13 +107,16 @@ export default function SuppliersPage() {
       if (editingSupplier) {
         // Update
         const { error } = await supabase
-          .from('contacts')
+          .from('suppliers')
           .update({
-            contact_name: formData.company_name,
+            company_name: formData.company_name,
+            contact_person: formData.contact_person || null,
             phone: formData.phone || null,
             email: formData.email || null,
             tax_number: formData.tax_number || null,
             address: formData.address || null,
+            category: formData.category || null,
+            notes: formData.notes || null,
             is_active: formData.is_active,
           })
           .eq('id', editingSupplier.id)
@@ -124,14 +126,17 @@ export default function SuppliersPage() {
       } else {
         // Create
         const { error } = await supabase
-          .from('contacts')
+          .from('suppliers')
           .insert({
             company_id: companyId,
-            contact_name: formData.company_name,
+            company_name: formData.company_name,
+            contact_person: formData.contact_person || null,
             phone: formData.phone || null,
             email: formData.email || null,
             tax_number: formData.tax_number || null,
             address: formData.address || null,
+            category: formData.category || null,
+            notes: formData.notes || null,
             is_active: true
           })
 

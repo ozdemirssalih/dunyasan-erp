@@ -52,15 +52,13 @@ export default function CustomersPage() {
 
       setCompanyId(fetchedCompanyId)
 
-      // contacts + eski customer_companies tablosundan birleştir
-      const [contactsRes, oldCustomersRes] = await Promise.all([
-        supabase.from('contacts').select('id, contact_name, phone, email, address, tax_number, tax_office, created_at').eq('company_id', fetchedCompanyId).eq('is_active', true),
-        supabase.from('customer_companies').select('id, customer_name, contact_person, phone, email, address, tax_number, tax_office, created_at').eq('company_id', fetchedCompanyId)
-      ])
+      const { data } = await supabase
+        .from('customer_companies')
+        .select('*')
+        .eq('company_id', fetchedCompanyId)
+        .order('customer_name', { ascending: true })
 
-      const fromContacts = (contactsRes.data || []).map(c => ({ ...c, customer_name: c.contact_name }))
-      const fromOld = (oldCustomersRes.data || []).filter(o => !fromContacts.some(c => c.customer_name === o.customer_name))
-      setCustomers([...fromContacts, ...fromOld])
+      setCustomers(data || [])
     } catch (error) {
       console.error('Error loading customers:', error)
     } finally {
@@ -76,16 +74,16 @@ export default function CustomersPage() {
 
     try {
       const { error } = await supabase
-        .from('contacts')
+        .from('customer_companies')
         .insert({
           company_id: companyId,
-          contact_name: formData.customer_name,
+          customer_name: formData.customer_name,
+          contact_person: formData.contact_person || null,
           phone: formData.phone || null,
           email: formData.email || null,
           address: formData.address || null,
           tax_number: formData.tax_number || null,
-          tax_office: formData.tax_office || null,
-          is_active: true
+          tax_office: formData.tax_office || null
         })
 
       if (error) {
@@ -120,8 +118,8 @@ export default function CustomersPage() {
 
     try {
       const { error } = await supabase
-        .from('contacts')
-        .update({ is_active: false })
+        .from('customer_companies')
+        .delete()
         .eq('id', customerId)
 
       if (error) {

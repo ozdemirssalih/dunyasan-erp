@@ -238,18 +238,14 @@ export default function WarehousePage() {
 
       // Categories artık WAREHOUSE_CATEGORIES sabit listesinden gelecek (warehouse_categories tablosundan çekilmiyor)
 
-      // Load contacts (birleşik cari hesap listesi)
-      const { data: contactsData } = await supabase
-        .from('contacts')
-        .select('id, contact_name')
-        .eq('company_id', finalCompanyId)
-        .eq('is_active', true)
-        .order('contact_name')
+      // Load suppliers ve customers ayrı ayrı
+      const [suppRes, custRes] = await Promise.all([
+        supabase.from('suppliers').select('id, company_name').eq('company_id', finalCompanyId).eq('is_active', true).order('company_name'),
+        supabase.from('customer_companies').select('id, customer_name').eq('company_id', finalCompanyId).order('customer_name')
+      ])
 
-      setSuppliers((contactsData || []).map(c => ({ id: c.id, company_name: c.contact_name })))
-
-      // Load customers (contacts tablosundan)
-      setCustomers((contactsData || []).map(c => ({ id: c.id, customer_name: c.contact_name })))
+      setSuppliers(suppRes.data || [])
+      setCustomers(custRes.data || [])
 
       // Load ALL data in parallel
       await Promise.all([

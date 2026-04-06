@@ -876,17 +876,6 @@ export default function ManagementDashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <Activity className="w-12 h-12 opacity-80" />
-            <Zap className="w-6 h-6" />
-          </div>
-          <div className="text-4xl font-bold mb-2">%{stats.efficiency.toFixed(1)}</div>
-          <div className="text-sm text-purple-100 font-semibold">Ortalama Verimlilik</div>
-          <div className="mt-3 pt-3 border-t border-purple-400 text-xs text-purple-100">
-            {stats.efficiency >= 80 ? 'Mükemmel performans' : stats.efficiency >= 60 ? 'İyi performans' : 'İyileştirme gerekli'}
-          </div>
-        </div>
 
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
@@ -924,29 +913,6 @@ export default function ManagementDashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <Users className="w-12 h-12 opacity-80" />
-            <Activity className="w-6 h-6" />
-          </div>
-          <div className="text-4xl font-bold mb-2">{stats.totalEmployees}</div>
-          <div className="text-sm text-cyan-100 font-semibold">Toplam Çalışan</div>
-          <div className="mt-3 pt-3 border-t border-cyan-400 text-xs text-cyan-100">
-            Aktif personel sayısı
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <FileText className="w-12 h-12 opacity-80" />
-            <Target className="w-6 h-6" />
-          </div>
-          <div className="text-4xl font-bold mb-2">{stats.activeProjects}</div>
-          <div className="text-sm text-pink-100 font-semibold">Aktif Proje</div>
-          <div className="mt-3 pt-3 border-t border-pink-400 text-xs text-pink-100">
-            Devam eden projeler
-          </div>
-        </div>
 
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
           <div className="flex items-center justify-between mb-4">
@@ -1082,78 +1048,7 @@ export default function ManagementDashboard() {
         </div>
       </div>
 
-      {/* Machine Comparison Bar Chart */}
-      <div className="bg-white rounded-xl shadow-xl p-6">
-        <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-          <BarChart3 className="w-7 h-7 text-purple-600" />
-          Tezgah Bazlı Üretim Karşılaştırması (Son 30 Gün)
-        </h3>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={machineComparison}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="machine" stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <YAxis yAxisId="left" stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <YAxis yAxisId="right" orientation="right" stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#fff', border: '2px solid #ddd', borderRadius: '12px', padding: '12px' }}
-            />
-            <Legend wrapperStyle={{ paddingTop: '20px' }} />
-            <Bar yAxisId="left" dataKey="production" fill="#3b82f6" name="Üretim (adet)" radius={[8, 8, 0, 0]} />
-            <Bar yAxisId="right" dataKey="efficiency" fill="#10b981" name="Verimlilik (%)" radius={[8, 8, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Top Projects Table and Machine Status */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Top 10 Projects */}
-        <div className="bg-white rounded-xl shadow-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-              <Award className="w-7 h-7 text-amber-600" />
-              Top 10 Projeler
-            </h3>
-            <button
-              onClick={() => router.push('/dashboard/projects')}
-              className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all"
-            >
-              Tümünü Gör <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-gray-200">
-                  <th className="text-left p-3 text-sm font-bold text-gray-700">#</th>
-                  <th className="text-left p-3 text-sm font-bold text-gray-700">Proje</th>
-                  <th className="text-right p-3 text-sm font-bold text-gray-700">Üretim</th>
-                  <th className="text-right p-3 text-sm font-bold text-gray-700">Fire</th>
-                  <th className="text-right p-3 text-sm font-bold text-gray-700">Verimlilik</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProjects.map((project, index) => (
-                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="p-3 font-bold text-gray-500">#{index + 1}</td>
-                    <td className="p-3 font-semibold text-gray-900">{project.project_name}</td>
-                    <td className="p-3 text-right font-semibold text-blue-600">{project.total_production.toLocaleString()}</td>
-                    <td className="p-3 text-right font-semibold text-red-600">{project.total_defects.toLocaleString()}</td>
-                    <td className="p-3 text-right">
-                      <span className={`font-bold ${
-                        project.efficiency >= 80 ? 'text-green-600' :
-                        project.efficiency >= 60 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        %{project.efficiency.toFixed(1)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Machine Status Grid */}
+      {/* Machine Status Grid */}
         <div className="bg-white rounded-xl shadow-xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
@@ -1218,7 +1113,6 @@ export default function ManagementDashboard() {
             ))}
           </div>
         </div>
-      </div>
 
       {/* Critical Stock and Recent Activities */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

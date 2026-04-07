@@ -606,7 +606,7 @@ export default function AccountingPageV2() {
   const loadAccountTransactions = async (accountId: string) => {
     const { data } = await supabase
       .from('cash_transactions')
-      .select('*, contact:contacts(contact_name)')
+      .select('*')
       .eq('company_id', companyId)
       .eq('cash_account_id', accountId)
       .order('transaction_date', { ascending: false })
@@ -3149,7 +3149,7 @@ export default function AccountingPageV2() {
                               <div>
                                 <p className="font-semibold text-gray-800">{t.description || '-'}</p>
                                 <p className="text-xs text-gray-500">
-                                  {t.customer?.customer_name || t.supplier?.company_name || '-'} • {t.payment_method === 'cash' ? 'Nakit' : t.payment_method === 'transfer' ? 'Havale' : t.payment_method === 'check' ? 'Çek' : t.payment_method} • {t.reference_number || '-'}
+                                  {t.contact_name || t.description || '-'} • {t.payment_method === 'cash' ? 'Nakit' : t.payment_method === 'transfer' ? 'Havale' : t.payment_method === 'check' ? 'Çek' : t.payment_method || '-'} • {t.reference_number || '-'}
                                 </p>
                               </div>
                             </div>

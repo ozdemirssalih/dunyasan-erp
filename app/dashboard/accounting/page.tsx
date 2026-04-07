@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import {
-  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown, FileCheck, Edit2, Trash2
+  Wallet, TrendingUp, TrendingDown, Clock, Plus, X, Save, Calendar, History, Upload, FileDown, FileCheck, Edit2, Trash2, ArrowRight
 } from 'lucide-react'
 
 type TransactionType = 'receivable' | 'payable' | 'payment'
@@ -58,6 +58,8 @@ export default function AccountingPageV2() {
   const [selectedAccount, setSelectedAccount] = useState<any>(null)
   const [accountTransactions, setAccountTransactions] = useState<any[]>([])
   const [accountBalanceInput, setAccountBalanceInput] = useState('')
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '', description: '' })
 
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
@@ -618,6 +620,59 @@ export default function AccountingPageV2() {
     setSelectedAccount(acc)
     setAccountBalanceInput(acc.current_balance.toString())
     await loadAccountTransactions(acc.id)
+  }
+
+  const handleTransfer = async () => {
+    if (!transferForm.from_account_id || !transferForm.to_account_id || !transferForm.amount || !companyId) {
+      return alert('Gönderen kasa, alan kasa ve tutar zorunludur!')
+    }
+    if (transferForm.from_account_id === transferForm.to_account_id) {
+      return alert('Gönderen ve alan kasa aynı olamaz!')
+    }
+    const amount = parseFloat(transferForm.amount)
+    if (amount <= 0) return alert('Tutar 0\'dan büyük olmalı!')
+
+    setIsSubmitting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const fromAcc = cashAccounts.find(a => a.id === transferForm.from_account_id)
+      const toAcc = cashAccounts.find(a => a.id === transferForm.to_account_id)
+      const desc = transferForm.description || `Transfer: ${fromAcc?.account_name} → ${toAcc?.account_name}`
+      const now = new Date().toISOString()
+
+      // Gönderen kasadan çıkış
+      await supabase.from('cash_transactions').insert({
+        company_id: companyId, transaction_type: 'expense', amount,
+        currency: fromAcc?.currency || 'TRY', payment_method: 'transfer',
+        transaction_date: now, description: desc,
+        reference_number: `TRF-${Date.now()}`,
+        cash_account_id: transferForm.from_account_id,
+        created_by: user?.id
+      })
+
+      // Alan kasaya giriş
+      await supabase.from('cash_transactions').insert({
+        company_id: companyId, transaction_type: 'income', amount,
+        currency: toAcc?.currency || 'TRY', payment_method: 'transfer',
+        transaction_date: now, description: desc,
+        reference_number: `TRF-${Date.now()}`,
+        cash_account_id: transferForm.to_account_id,
+        created_by: user?.id
+      })
+
+      // Kasa bakiyelerini güncelle
+      await supabase.from('cash_accounts').update({ current_balance: (fromAcc?.current_balance || 0) - amount }).eq('id', transferForm.from_account_id)
+      await supabase.from('cash_accounts').update({ current_balance: (toAcc?.current_balance || 0) + amount }).eq('id', transferForm.to_account_id)
+
+      alert('Transfer başarılı!')
+      setShowTransferModal(false)
+      setTransferForm({ from_account_id: '', to_account_id: '', amount: '', description: '' })
+      loadData()
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const resetForm = () => {
@@ -3054,9 +3109,14 @@ export default function AccountingPageV2() {
                 ) : 'Kasa / Hesap Yönetimi'}
               </h2>
               {!selectedAccount && (
-                <button onClick={() => setShowAccountModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Yeni Kasa Ekle
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowTransferModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                    <ArrowRight className="w-4 h-4" /> Kasalar Arası Transfer
+                  </button>
+                  <button onClick={() => setShowAccountModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Yeni Kasa Ekle
+                  </button>
+                </div>
               )}
             </div>
 
@@ -3167,6 +3227,46 @@ export default function AccountingPageV2() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Kasalar Arası Transfer Modal */}
+        {showTransferModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Kasalar Arası Transfer</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gönderen Kasa *</label>
+                  <select value={transferForm.from_account_id} onChange={e => setTransferForm({...transferForm, from_account_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900">
+                    <option value="">Seçin...</option>
+                    {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.account_name} ({new Intl.NumberFormat('tr-TR', {minimumFractionDigits: 2}).format(a.current_balance)} {a.currency})</option>)}
+                  </select>
+                </div>
+                <div className="flex justify-center"><ArrowRight className="w-5 h-5 text-purple-500 rotate-90" /></div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alan Kasa *</label>
+                  <select value={transferForm.to_account_id} onChange={e => setTransferForm({...transferForm, to_account_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900">
+                    <option value="">Seçin...</option>
+                    {cashAccounts.filter(a => a.id !== transferForm.from_account_id).map(a => <option key={a.id} value={a.id}>{a.account_name} ({new Intl.NumberFormat('tr-TR', {minimumFractionDigits: 2}).format(a.current_balance)} {a.currency})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tutar *</label>
+                  <input type="number" step="0.01" value={transferForm.amount} onChange={e => setTransferForm({...transferForm, amount: e.target.value})} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
+                  <input value={transferForm.description} onChange={e => setTransferForm({...transferForm, description: e.target.value})} placeholder="Transfer açıklaması" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowTransferModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg font-semibold">İptal</button>
+                  <button onClick={handleTransfer} disabled={isSubmitting} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50">
+                    {isSubmitting ? 'İşleniyor...' : 'Transfer Yap'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

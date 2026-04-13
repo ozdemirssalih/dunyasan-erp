@@ -55,8 +55,8 @@ interface MaintenanceRecord {
 
 // ── Sabit Konfigürasyonlar ───────────────────────────────────
 const TOOL_TYPES = ['Kesici Takım', 'Ölçüm Aleti', 'Kumpas', 'Mikrometre', 'Matkap', 'Freze', 'Parmak Freze', 'Pafta', 'Diğer']
-const LOCATION_LETTERS = ['A', 'B', 'C', 'D', 'E']
-const LOCATION_NUMBERS = ['1', '2', '3', '4']
+const LOCATION_LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
+const LOCATION_NUMBERS = Array.from({ length: 30 }, (_, i) => String(i + 1))
 
 const STATUS: Record<ToolStatus, { label: string; bg: string; text: string; dot: string; border: string }> = {
   available:   { label: 'Müsait',   bg: 'bg-green-50',   text: 'text-green-700',  dot: 'bg-green-500',  border: 'border-green-200' },

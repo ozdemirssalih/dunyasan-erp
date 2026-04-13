@@ -44,11 +44,33 @@ const emptyForm = {
   aciklama: ''
 }
 
+interface ProductItem {
+  id: string
+  code: string
+  name: string
+  category: string
+  unit: string
+  quantity: number
+  unit_price: number | null
+  source: 'warehouse' | 'inventory'
+}
+
+interface Supplier {
+  id: string
+  company_name: string
+  contact_person: string | null
+  phone: string | null
+}
+
 export default function PurchasingPage() {
   const [records, setRecords] = useState<PurchasingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<string>('')
+
+  // Dropdown data
+  const [products, setProducts] = useState<ProductItem[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
 
   // Modal states
   const [showModal, setShowModal] = useState(false)
@@ -85,14 +107,58 @@ export default function PurchasingPage() {
       setCompanyId(fetchedCompanyId)
       setCurrentUser(profile?.full_name || '')
 
-      const { data, error } = await supabase
-        .from('purchasing_tracking')
-        .select('*')
-        .eq('company_id', fetchedCompanyId)
-        .order('created_at', { ascending: false })
+      // Paralel veri yükleme
+      const [recordsRes, whRes, invRes, suppRes] = await Promise.all([
+        supabase
+          .from('purchasing_tracking')
+          .select('*')
+          .eq('company_id', fetchedCompanyId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('warehouse_items')
+          .select('*')
+          .eq('company_id', fetchedCompanyId)
+          .eq('is_active', true),
+        supabase
+          .from('inventory')
+          .select('*')
+          .eq('company_id', fetchedCompanyId),
+        supabase
+          .from('suppliers')
+          .select('id, company_name, contact_person, phone')
+          .eq('company_id', fetchedCompanyId)
+          .eq('is_active', true)
+          .order('company_name'),
+      ])
 
-      if (error) throw error
-      setRecords(data || [])
+      if (recordsRes.error) throw recordsRes.error
+      setRecords(recordsRes.data || [])
+
+      // Ürünleri birleştir
+      const whProducts: ProductItem[] = (whRes.data || []).map((item: any) => ({
+        id: `wh-${item.id}`,
+        code: item.code || item.item_code || item.product_code || '',
+        name: item.name || item.item_name || item.product_name || 'İsimsiz',
+        category: item.category_name || item.category || 'Depo',
+        unit: item.unit || item.measurement_unit || 'adet',
+        quantity: item.current_stock || item.quantity || 0,
+        unit_price: item.unit_price || item.price || null,
+        source: 'warehouse' as const,
+      }))
+
+      const invProducts: ProductItem[] = (invRes.data || []).map((item: any) => ({
+        id: `inv-${item.id}`,
+        code: item.product_code || item.code || item.item_code || '',
+        name: item.product_name || item.name || item.item_name || 'İsimsiz',
+        category: item.category || 'Stok',
+        unit: item.unit || item.measurement_unit || 'adet',
+        quantity: item.quantity || item.current_stock || 0,
+        unit_price: item.unit_cost || item.unit_price || null,
+        source: 'inventory' as const,
+      }))
+
+      setProducts([...whProducts, ...invProducts])
+      setSuppliers(suppRes.data || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -660,7 +726,7 @@ export default function PurchasingPage() {
 
               {/* Modal Body */}
               <div className="p-6 space-y-6">
-                {/* Row 1: Date, Company, Responsible */}
+                {/* Row 1: Date, Supplier, Responsible */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -675,14 +741,27 @@ export default function PurchasingPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Firma Adı <span className="text-red-500">*</span>
+                      Firma Adı (Tedarikçi) <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={formData.firma_adi}
                       onChange={(e) => setFormData({ ...formData, firma_adi: e.target.value })}
-                      placeholder="Firma adını girin"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Tedarikçi Seçin</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.company_name}>{s.company_name}</option>
+                      ))}
+                    </select>
+                    {formData.firma_adi && !suppliers.some(s => s.company_name === formData.firma_adi) && (
+                      <p className="text-xs text-blue-600 mt-1">Manuel giriş: {formData.firma_adi}</p>
+                    )}
+                    <input
+                      type="text"
+                      value={suppliers.some(s => s.company_name === formData.firma_adi) ? '' : formData.firma_adi}
+                      onChange={(e) => setFormData({ ...formData, firma_adi: e.target.value })}
+                      placeholder="veya manuel firma adı girin"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mt-1 text-sm"
                     />
                   </div>
                   <div>
@@ -697,18 +776,63 @@ export default function PurchasingPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Codes & Numbers */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Row 2: Product Selection + Codes & Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ürün Seçin (Stok & Hammadde)</label>
+                    <select
+                      onChange={(e) => {
+                        const selected = products.find(p => p.id === e.target.value)
+                        if (selected) {
+                          setFormData({
+                            ...formData,
+                            parca_kodu: selected.code,
+                            siparis_detayi: `${selected.name} (${selected.category})`,
+                            fiyat: selected.unit_price?.toString() || formData.fiyat,
+                          })
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Ürün seçin (opsiyonel)</option>
+                      {products.length > 0 && (
+                        <>
+                          {products.filter(p => p.source === 'warehouse').length > 0 && (
+                            <optgroup label="Depo Ürünleri">
+                              {products.filter(p => p.source === 'warehouse').map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.code ? `[${p.code}] ` : ''}{p.name} — Stok: {p.quantity} {p.unit}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {products.filter(p => p.source === 'inventory').length > 0 && (
+                            <optgroup label="Stok & Hammadde">
+                              {products.filter(p => p.source === 'inventory').map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.code ? `[${p.code}] ` : ''}{p.name} — Stok: {p.quantity} {p.unit}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      )}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Parça Kodu</label>
                     <input
                       type="text"
                       value={formData.parca_kodu}
                       onChange={(e) => setFormData({ ...formData, parca_kodu: e.target.value })}
-                      placeholder="Parça kodu"
+                      placeholder="Ürün seçince otomatik dolar veya manuel girin"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
+                </div>
+
+                {/* Row 3: PO Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Sipariş (PO) Numarası</label>
                     <input

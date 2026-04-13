@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
-import { Package, Wrench, Truck, Plus, Edit, Trash2, Search, X } from 'lucide-react'
+import { Package, Wrench, Truck, Plus, Edit, Trash2, Search, X, ShoppingCart } from 'lucide-react'
 
 // ── Tipler ───────────────────────────────────────────────────
 type Tab = 'inventory' | 'maintenance'
@@ -121,10 +121,26 @@ export default function ToolroomPage() {
     maintenance_type: '', performed_by: '', cost: '', notes: '', status_after: 'available' as ToolStatus,
   })
 
+  // 5. Satın Alma Talebi
+  const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false)
+  const [purchaseRequestTool, setPurchaseRequestTool] = useState<Tool | null>(null)
+  const [purchaseRequestForm, setPurchaseRequestForm] = useState({
+    firma_adi: '',
+    miktar: '',
+    fiyat: '',
+    po_numarasi: '',
+    malzeme_talep_no: '',
+    satinalma_teklif_no: '',
+    siparis_detayi: '',
+    aciklama: '',
+    aciliyet: 'normal' as 'dusuk' | 'normal' | 'yuksek' | 'acil',
+  })
+
   // Submitting states
   const [isSubmittingTool, setIsSubmittingTool] = useState(false)
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false)
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false)
+  const [isSubmittingPurchaseRequest, setIsSubmittingPurchaseRequest] = useState(false)
 
   // ── Lifecycle ────────────────────────────────────────────
   useEffect(() => { loadAll() }, [])
@@ -366,6 +382,117 @@ export default function ToolroomPage() {
     } finally {
       setIsSubmittingMaintenance(false)
       setMaintenanceLoading(false)
+    }
+  }
+
+  // ── Satın Alma Talebi ────────────────────────────────────
+  const openPurchaseRequestModal = async (tool: Tool) => {
+    setPurchaseRequestTool(tool)
+
+    // Son PO numarasını bul ve sıradakini oluştur
+    let nextNumber = 1
+    try {
+      if (companyId) {
+        const { data } = await supabase
+          .from('purchasing_tracking')
+          .select('po_numarasi')
+          .eq('company_id', companyId)
+          .like('po_numarasi', 'DNYS-%')
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (data && data.length > 0 && data[0].po_numarasi) {
+          const match = data[0].po_numarasi.match(/DNYS-(\d+)/)
+          if (match) {
+            nextNumber = parseInt(match[1]) + 1
+          }
+        }
+      }
+    } catch (err) {
+      console.error('PO numarası alınamadı:', err)
+    }
+
+    const poNo = `DNYS-${nextNumber}`
+    const talepNo = `${poNo}-TLP`
+    const teklifNo = `${poNo}-TLF`
+
+    setPurchaseRequestForm({
+      firma_adi: tool.supplier?.company_name || '',
+      miktar: '',
+      fiyat: '',
+      po_numarasi: poNo,
+      malzeme_talep_no: talepNo,
+      satinalma_teklif_no: teklifNo,
+      siparis_detayi: `${tool.tool_name}${tool.tool_type ? ' (' + tool.tool_type + ')' : ''}${tool.model ? ' - Model: ' + tool.model : ''}`,
+      aciklama: '',
+      aciliyet: tool.quantity < tool.min_quantity ? 'yuksek' : 'normal',
+    })
+    setShowPurchaseRequestModal(true)
+  }
+
+  const handleSubmitPurchaseRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isSubmittingPurchaseRequest) return
+    if (!companyId || !purchaseRequestTool) return
+
+    if (!purchaseRequestForm.firma_adi.trim()) {
+      alert('Lütfen firma adını girin!')
+      return
+    }
+    if (!purchaseRequestForm.miktar || parseFloat(purchaseRequestForm.miktar) <= 0) {
+      alert('Lütfen geçerli bir miktar girin!')
+      return
+    }
+
+    setIsSubmittingPurchaseRequest(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+
+      const aciliyetLabels: Record<string, string> = {
+        dusuk: 'Düşük Öncelik',
+        normal: 'Normal',
+        yuksek: 'Yüksek Öncelik',
+        acil: 'ACİL',
+      }
+      const aciliyetText = aciliyetLabels[purchaseRequestForm.aciliyet] || 'Normal'
+
+      const aciklamaFull = [
+        `[Takımhane Talebi - ${aciliyetText}]`,
+        purchaseRequestForm.aciklama,
+        `Mevcut Stok: ${purchaseRequestTool.quantity} / Min: ${purchaseRequestTool.min_quantity}`,
+        purchaseRequestTool.location ? `Lokasyon: ${purchaseRequestTool.location}` : null,
+      ].filter(Boolean).join(' | ')
+
+      const { error } = await supabase.from('purchasing_tracking').insert({
+        company_id: companyId,
+        siparis_tarihi: new Date().toISOString().split('T')[0],
+        firma_adi: purchaseRequestForm.firma_adi.trim(),
+        satinalma_sorumlusu: profile?.full_name || null,
+        parca_kodu: purchaseRequestTool.tool_code,
+        po_numarasi: purchaseRequestForm.po_numarasi.trim() || null,
+        malzeme_talep_no: purchaseRequestForm.malzeme_talep_no.trim() || null,
+        satinalma_teklif_no: purchaseRequestForm.satinalma_teklif_no.trim() || null,
+        fiyat: purchaseRequestForm.fiyat ? parseFloat(purchaseRequestForm.fiyat) : null,
+        siparis_detayi: purchaseRequestForm.siparis_detayi.trim() || null,
+        miktar: parseFloat(purchaseRequestForm.miktar),
+        aciklama: aciklamaFull,
+        satinalma_onay: false,
+        satinalma_red: false,
+        created_by: user.id,
+      })
+
+      if (error) throw error
+
+      alert('Satın alma talebi başarıyla gönderildi! Satınalma Takip sayfasından takip edebilirsiniz.')
+      setShowPurchaseRequestModal(false)
+    } catch (err: any) {
+      console.error('Satın alma talebi hatası:', err)
+      alert('Talep gönderilirken hata oluştu: ' + (err.message || ''))
+    } finally {
+      setIsSubmittingPurchaseRequest(false)
     }
   }
 
@@ -654,6 +781,17 @@ export default function ToolroomPage() {
                                       className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <Truck className="w-4 h-4" />
+                                    </button>
+                                  )}
+
+                                  {/* Satın Alma Talebi */}
+                                  {canEdit('toolroom') && (
+                                    <button
+                                      onClick={() => openPurchaseRequestModal(tool)}
+                                      title="Satın Alma Talebi"
+                                      className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                    >
+                                      <ShoppingCart className="w-4 h-4" />
                                     </button>
                                   )}
 
@@ -1012,6 +1150,260 @@ export default function ToolroomPage() {
                 <button type="submit" disabled={isSubmittingMaintenance}
                   className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmittingMaintenance ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ─────── SATIN ALMA TALEBİ MODAL ─────── */}
+      {showPurchaseRequestModal && purchaseRequestTool && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 rounded-t-2xl z-10">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <ShoppingCart className="w-6 h-6" />
+                Satın Alma Talebi Oluştur
+              </h3>
+              <p className="text-purple-100 text-sm mt-1">
+                Takımhane'den satınalma takip sistemine talep gönder
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitPurchaseRequest} className="p-6 space-y-5">
+
+              {/* Takım Bilgi Kartı */}
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
+                <h4 className="text-sm font-bold text-purple-800 mb-3 uppercase tracking-wide">Takım Bilgileri</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Takım Kodu</span>
+                    <span className="font-mono font-bold text-gray-900">{purchaseRequestTool.tool_code}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Takım Adı</span>
+                    <span className="font-semibold text-gray-900">{purchaseRequestTool.tool_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Tür</span>
+                    <span className="font-semibold text-gray-900">{purchaseRequestTool.tool_type || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Model</span>
+                    <span className="font-semibold text-gray-900">{purchaseRequestTool.model || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Lokasyon</span>
+                    <span className="font-semibold text-gray-900">{purchaseRequestTool.location || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-0.5">Mevcut Stok</span>
+                    <span className={`font-bold text-lg ${purchaseRequestTool.quantity < purchaseRequestTool.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
+                      {purchaseRequestTool.quantity}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-1">/ min: {purchaseRequestTool.min_quantity}</span>
+                    {purchaseRequestTool.quantity < purchaseRequestTool.min_quantity && (
+                      <span className="block text-xs text-red-600 font-semibold mt-0.5">Kritik stok seviyesi!</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Aciliyet Durumu */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Aciliyet Durumu</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    { key: 'dusuk', label: 'Düşük', color: 'bg-gray-100 text-gray-700 border-gray-300', active: 'bg-gray-600 text-white border-gray-600' },
+                    { key: 'normal', label: 'Normal', color: 'bg-blue-50 text-blue-700 border-blue-300', active: 'bg-blue-600 text-white border-blue-600' },
+                    { key: 'yuksek', label: 'Yüksek', color: 'bg-orange-50 text-orange-700 border-orange-300', active: 'bg-orange-600 text-white border-orange-600' },
+                    { key: 'acil', label: 'ACİL', color: 'bg-red-50 text-red-700 border-red-300', active: 'bg-red-600 text-white border-red-600' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setPurchaseRequestForm({ ...purchaseRequestForm, aciliyet: opt.key })}
+                      className={`px-3 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                        purchaseRequestForm.aciliyet === opt.key ? opt.active : opt.color
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Firma Adı + Miktar + Fiyat */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Tedarikçi / Firma Adı <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={purchaseRequestForm.firma_adi}
+                    onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, firma_adi: e.target.value })}
+                    placeholder="Firma adı"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                  {purchaseRequestTool.supplier?.company_name && purchaseRequestForm.firma_adi !== purchaseRequestTool.supplier.company_name && (
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseRequestForm({ ...purchaseRequestForm, firma_adi: purchaseRequestTool.supplier!.company_name })}
+                      className="text-xs text-purple-600 hover:text-purple-800 mt-1"
+                    >
+                      Mevcut tedarikçiyi kullan: {purchaseRequestTool.supplier.company_name}
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Talep Miktarı <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="0.01"
+                    value={purchaseRequestForm.miktar}
+                    onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, miktar: e.target.value })}
+                    placeholder="Adet"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tahmini Birim Fiyat (₺)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={purchaseRequestForm.fiyat}
+                    onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, fiyat: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                  {purchaseRequestForm.fiyat && purchaseRequestForm.miktar && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Toplam: <span className="font-semibold text-gray-800">
+                        {(parseFloat(purchaseRequestForm.fiyat) * parseFloat(purchaseRequestForm.miktar)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Numara Alanları */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Malzeme Talep No</label>
+                  <input
+                    type="text"
+                    value={purchaseRequestForm.malzeme_talep_no}
+                    onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, malzeme_talep_no: e.target.value })}
+                    placeholder="DNYS-588-TLP"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Sipariş (PO) Numarası</label>
+                  <input
+                    type="text"
+                    value={purchaseRequestForm.po_numarasi}
+                    onChange={e => {
+                      const po = e.target.value
+                      setPurchaseRequestForm({
+                        ...purchaseRequestForm,
+                        po_numarasi: po,
+                        malzeme_talep_no: po ? `${po}-TLP` : '',
+                        satinalma_teklif_no: po ? `${po}-TLF` : '',
+                      })
+                    }}
+                    placeholder="DNYS-588"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Satınalma Teklif No</label>
+                  <input
+                    type="text"
+                    value={purchaseRequestForm.satinalma_teklif_no}
+                    onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, satinalma_teklif_no: e.target.value })}
+                    placeholder="DNYS-588-TLF"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              {/* Sipariş Detayı */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Sipariş Detayı</label>
+                <textarea
+                  value={purchaseRequestForm.siparis_detayi}
+                  onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, siparis_detayi: e.target.value })}
+                  rows={2}
+                  placeholder="Takım detayları, özel gereksinimler..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                />
+              </div>
+
+              {/* Açıklama */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ek Açıklama / Not</label>
+                <textarea
+                  value={purchaseRequestForm.aciklama}
+                  onChange={e => setPurchaseRequestForm({ ...purchaseRequestForm, aciklama: e.target.value })}
+                  rows={3}
+                  placeholder="Talep nedeni, neden bu firmadan alınmalı, alternatif ürün var mı, vb."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                />
+              </div>
+
+              {/* Özet */}
+              {purchaseRequestForm.miktar && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-gray-700 mb-2">Talep Özeti</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500 text-xs block">Parça</span>
+                      <span className="font-mono font-semibold">{purchaseRequestTool.tool_code}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-xs block">Firma</span>
+                      <span className="font-semibold">{purchaseRequestForm.firma_adi || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-xs block">Miktar</span>
+                      <span className="font-bold text-purple-700">{purchaseRequestForm.miktar} adet</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-xs block">Tahmini Tutar</span>
+                      <span className="font-bold text-green-700">
+                        {purchaseRequestForm.fiyat
+                          ? `${(parseFloat(purchaseRequestForm.fiyat) * parseFloat(purchaseRequestForm.miktar)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺`
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Butonlar */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPurchaseRequestModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPurchaseRequest}
+                  className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  {isSubmittingPurchaseRequest ? 'Gönderiliyor...' : 'Satın Alma Talebi Gönder'}
                 </button>
               </div>
             </form>

@@ -469,9 +469,9 @@ export default function QuotationsPage() {
     try {
       const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, logging: false })
       const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('l', 'mm', 'a4')
-      const imgWidth = 297
-      const pageHeight = 210
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgWidth = 210
+      const pageHeight = 297
       const imgHeight = (canvas.height * imgWidth) / canvas.width
 
       let heightLeft = imgHeight
@@ -957,8 +957,8 @@ export default function QuotationsPage() {
             </div>
 
             {/* PDF Çıktı Alanı */}
-            <div className="bg-white rounded-xl shadow-lg p-2">
-              <div ref={printRef} style={{ padding: '30px 40px', fontFamily: "'Segoe UI', sans-serif", fontSize: '11px', color: '#1a1a2e', background: '#fff' }}>
+            <div className="bg-white rounded-xl shadow-lg p-2 max-w-4xl mx-auto">
+              <div ref={printRef} style={{ padding: '30px 35px', fontFamily: "'Segoe UI', sans-serif", fontSize: '11px', color: '#1a1a2e', background: '#fff', maxWidth: '800px', margin: '0 auto' }}>
                 {/* PDF Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #003366', paddingBottom: '16px', marginBottom: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

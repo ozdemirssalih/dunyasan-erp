@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DÜNYASAN - Proforma Fiyat Teklifi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 11px;
+      color: #1a1a2e;
+      background: #f0f2f5;
+      padding: 20px;
+    }
+
+    .page {
+      background: #fff;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 30px 35px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      border-radius: 4px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 3px solid #003366;
+      padding-bottom: 18px;
+      margin-bottom: 20px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .logo {
+      width: 180px;
+      height: auto;
+    }
+
+    .company-info {
+      font-size: 10px;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    .company-info .name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #003366;
+      margin-bottom: 2px;
+    }
+
+    .header-right {
+      text-align: right;
+    }
+
+    .doc-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #003366;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .doc-subtitle {
+      font-size: 11px;
+      color: #666;
+      font-style: italic;
+    }
+
+    /* ── INFO BOXES ── */
+    .info-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .info-box {
+      border: 1px solid #dde1e7;
+      border-radius: 6px;
+      padding: 14px 18px;
+      background: #fafbfc;
+    }
+
+    .info-box h3 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #003366;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e6eb;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 4px 10px;
+      font-size: 10.5px;
+    }
+
+    .info-grid .label {
+      font-weight: 600;
+      color: #555;
+    }
+
+    .info-grid .value {
+      color: #1a1a2e;
+    }
+
+    .info-grid .value.editable {
+      border-bottom: 1px dashed #bbb;
+      min-width: 120px;
+      display: inline-block;
+      padding-bottom: 1px;
+    }
+
+    /* ── TABLE ── */
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      border: 1px solid #dde1e7;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    thead th {
+      background: #003366;
+      color: #fff;
+      padding: 8px 6px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    thead th:first-child { border-radius: 5px 0 0 0; }
+    thead th:last-child { border-radius: 0 5px 0 0; }
+
+    thead th.right { text-align: right; }
+    thead th.center { text-align: center; }
+
+    tbody td {
+      padding: 5px 6px;
+      border-bottom: 1px solid #eef0f3;
+      vertical-align: middle;
+    }
+
+    tbody tr:nth-child(even) { background: #f8f9fb; }
+    tbody tr:hover { background: #eef3ff; }
+
+    td.sira {
+      text-align: center;
+      font-weight: 600;
+      color: #666;
+      width: 35px;
+    }
+
+    td.code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-weight: 600;
+      color: #003366;
+      white-space: nowrap;
+    }
+
+    td.part-name {
+      font-weight: 600;
+      color: #1a1a2e;
+      text-transform: uppercase;
+      font-size: 9.5px;
+    }
+
+    td.material {
+      font-size: 9px;
+      color: #555;
+      max-width: 220px;
+      word-break: break-word;
+    }
+
+    td.qty {
+      text-align: center;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    td.price {
+      text-align: right;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    td.price.unit { color: #2c5f8a; }
+    td.price.total { color: #003366; font-weight: 700; }
+
+    /* ── TOTALS ── */
+    .totals-section {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+
+    .totals-box {
+      width: 350px;
+      border: 2px solid #003366;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .totals-box .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 16px;
+      font-size: 11px;
+      border-bottom: 1px solid #e2e6eb;
+    }
+
+    .totals-box .row:last-child { border-bottom: none; }
+
+    .totals-box .row .label { font-weight: 600; color: #444; }
+    .totals-box .row .value { font-family: 'Consolas', monospace; font-weight: 700; color: #003366; }
+
+    .totals-box .row.grand {
+      background: #003366;
+      padding: 10px 16px;
+    }
+
+    .totals-box .row.grand .label { color: #fff; font-size: 12px; }
+    .totals-box .row.grand .value { color: #fff; font-size: 14px; }
+
+    /* ── TERMS ── */
+    .terms {
+      border: 1px solid #dde1e7;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      background: #fafbfc;
+    }
+
+    .terms h3 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #003366;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .terms ul {
+      list-style: none;
+      font-size: 10px;
+      color: #444;
+      line-height: 1.8;
+    }
+
+    .terms ul li::before {
+      content: '•';
+      color: #003366;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 25px;
+      padding-top: 20px;
+      border-top: 2px solid #003366;
+    }
+
+    .signature-box {
+      text-align: center;
+    }
+
+    .signature-box .title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #003366;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+    }
+
+    .signature-box .line {
+      border-top: 1px solid #999;
+      width: 200px;
+      margin: 0 auto 4px;
+    }
+
+    .signature-box .sub {
+      font-size: 9px;
+      color: #888;
+    }
+
+    .footer-note {
+      text-align: center;
+      font-size: 9px;
+      color: #999;
+      margin-top: 15px;
+      font-style: italic;
+    }
+
+    /* ── PRINT ── */
+    @media print {
+      body { background: none; padding: 0; }
+      .page { box-shadow: none; padding: 0; max-width: none; }
+      .no-print { display: none !important; }
+      tbody tr:hover { background: inherit; }
+    }
+
+    /* ── PRINT BUTTON ── */
+    .print-bar {
+      max-width: 1200px;
+      margin: 0 auto 15px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-print {
+      background: #003366;
+      color: #fff;
+    }
+
+    .btn-print:hover { background: #004488; }
+  </style>
+</head>
+<body>
+
+  <div class="print-bar no-print">
+    <button class="btn btn-print" onclick="window.print()">
+      🖨️ Yazdır / PDF İndir
+    </button>
+  </div>
+
+  <div class="page">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-left">
+        <img src="dunyalogopng.png" alt="Dünyasan Logo" class="logo">
+        <div class="company-info">
+          <div class="name">DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
+          Fabrikalar Mh. Kırıkkale Silah İhtisas OSB<br>
+          2. Sk. No: 18/1 KIRIKKALE / TÜRKİYE<br>
+          Tel: 0318 606 00 06 &nbsp;|&nbsp; +90 530 389 00 71<br>
+          E-posta: satinalma@dunyasan.com<br>
+          Vergi D.: Irmak V.D. &nbsp;|&nbsp; VKN: 123 110 3150
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="doc-title">PROFORMA FİYAT TEKLİFİ</div>
+        <div class="doc-subtitle">Proforma Price Quotation</div>
+      </div>
+    </div>
+
+    <!-- INFO BOXES -->
+    <div class="info-row">
+      <div class="info-box">
+        <h3>Müşteri Bilgileri / Customer Details</h3>
+        <div class="info-grid">
+          <span class="label">Firma Adı:</span>
+          <span class="value editable" contenteditable="true">&nbsp;</span>
+          <span class="label">Yetkili Kişi:</span>
+          <span class="value editable" contenteditable="true">&nbsp;</span>
+          <span class="label">Adres:</span>
+          <span class="value editable" contenteditable="true">&nbsp;</span>
+          <span class="label">Telefon:</span>
+          <span class="value editable" contenteditable="true">&nbsp;</span>
+          <span class="label">E-posta:</span>
+          <span class="value editable" contenteditable="true">&nbsp;</span>
+        </div>
+      </div>
+      <div class="info-box">
+        <h3>Teklif Bilgileri / Quotation Details</h3>
+        <div class="info-grid">
+          <span class="label">Teklif No:</span>
+          <span class="value editable" contenteditable="true">DNYS-PQ-001</span>
+          <span class="label">Teklif Tarihi:</span>
+          <span class="value" id="doc-date"></span>
+          <span class="label">Geçerlilik Süresi:</span>
+          <span class="value editable" contenteditable="true">30 gün</span>
+          <span class="label">Teslim Süresi:</span>
+          <span class="value editable" contenteditable="true">Siparişten itibaren 8-12 hafta</span>
+          <span class="label">Para Birimi:</span>
+          <span class="value">EUR (€)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCTS TABLE -->
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th class="center">Sıra</th>
+            <th>Parça Kodu</th>
+            <th>Parça Adı</th>
+            <th>Malzeme</th>
+            <th class="center">1 SS Toplam Kullanım</th>
+            <th class="right">Hedef Fiyat</th>
+            <th class="right">1 Uçaklık Maliyet</th>
+          </tr>
+        </thead>
+        <tbody id="product-body">
+        </tbody>
+      </table>
+    </div>
+
+    <!-- TOTALS -->
+    <div class="totals-section">
+      <div class="totals-box">
+        <div class="row">
+          <span class="label">Toplam Parça Sayısı:</span>
+          <span class="value" id="total-parts">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Toplam Kullanım Adedi:</span>
+          <span class="value" id="total-qty">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Ara Toplam (Net):</span>
+          <span class="value" id="subtotal">—</span>
+        </div>
+        <div class="row grand">
+          <span class="label">GENEL TOPLAM</span>
+          <span class="value" id="grand-total">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TERMS -->
+    <div class="terms">
+      <h3>Şartlar ve Koşullar / Terms & Conditions</h3>
+      <ul>
+        <li>Fiyatlar EXW (Ex Works) teslim şekline göredir.</li>
+        <li>Fiyatlara KDV dahil değildir.</li>
+        <li>Bu teklif, teklif tarihinden itibaren 30 gün geçerlidir.</li>
+        <li>Ödeme koşulları sipariş onayında belirlenecektir.</li>
+        <li>Teslimat süreleri sipariş onayından itibaren geçerlidir.</li>
+        <li>Malzeme sertifikaları parçalarla birlikte teslim edilecektir.</li>
+        <li>Tüm parçalar teknik çizimlere ve spesifikasyonlara uygun üretilecektir.</li>
+      </ul>
+    </div>
+
+    <!-- SIGNATURES -->
+    <div class="footer">
+      <div class="signature-box">
+        <div class="title">Teklifi Hazırlayan</div>
+        <div class="line"></div>
+        <div class="sub">DÜNYASAN SAVUNMA A.Ş.</div>
+      </div>
+      <div class="signature-box">
+        <div class="title">Müşteri Onayı</div>
+        <div class="line"></div>
+        <div class="sub">Kaşe / İmza / Tarih</div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Bu belge DÜNYASAN SAVUNMA ANONİM ŞİRKETİ tarafından hazırlanmıştır. Gizli ve özeldir.
+    </div>
+
+  </div>
+
+  <script>
+    // Tarih
+    document.getElementById('doc-date').textContent = new Date().toLocaleDateString('tr-TR', {
+      day: '2-digit', month: 'long', year: 'numeric'
+    });
+
+    // Ürün verileri
+    const products = [
+      { code: "A1008-44", name: "CYLINDER", material: "Aisi_4340_Ams6414", qty: 2, unit: 2705.38, total: 5410.76 },
+      { code: "H1046-36", name: "HOOK", material: "S132_Per_Bs-s132", qty: 5, unit: 1150.98, total: 5754.91 },
+      { code: "H1046-4", name: "LEVER", material: "15-5ph_Ams5659_H925", qty: 5, unit: 841.29, total: 4206.46 },
+      { code: "A1117-1", name: "CYLINDER", material: "AMS-QQ-A-200/11 Al_7075_T7351_Per_Ams-qq-a-225/9", qty: 2, unit: 2074.62, total: 4149.24 },
+      { code: "D1010-3", name: "SECONDARY UPPER DRAG BRACE", material: "Ti-6al-4v_Per_Ams4928", qty: 2, unit: 1943.09, total: 3886.17 },
+      { code: "V1031-1", name: "MANIFOLD", material: "2024_T351_Amsqq-a-225-/6", qty: 1, unit: 3056.58, total: 3056.58 },
+      { code: "V1076-1", name: "BODY", material: "2024_T351_Amsqq-a-225-/6", qty: 2, unit: 1716.26, total: 3432.53 },
+      { code: "B1002-9", name: "BODY, SHUTTLE VALVE", material: "Al_7075_T7351_Per_Ams-qq-a-250/12", qty: 1, unit: 392.58, total: 392.58 },
+      { code: "B1001-9", name: "BODY, SHUTTLE VALVE", material: "Al_7075_T7351_Per_Ams-qq-a-250/12", qty: 1, unit: 342.01, total: 342.01 },
+      { code: "B1028-15", name: "CONNECTION", material: "15-5ph_Per_Ams5659-H1025", qty: 1, unit: 361.68, total: 361.68 },
+      { code: "B1027-15", name: "CONNECTION", material: "15-5ph_Per_Ams5659-H1025", qty: 1, unit: 361.11, total: 361.11 },
+      { code: "D1065-4", name: "LOWER CARDAN", material: "Steel_300m_Ams_6257", qty: 2, unit: 1055.04, total: 2110.07 },
+      { code: "D1065-2", name: "UPPER CARDAN", material: "Steel_300m_Ams_6257", qty: 2, unit: 1159.10, total: 2318.19 },
+      { code: "A1115-1", name: "CYLINDER", material: "Ph13-8mo_Ams5629_H1000", qty: 2, unit: 1170.16, total: 2340.31 },
+      { code: "A1008-8", name: "VALVE BODY", material: "Aluminum_7050_T7451_Ams4050", qty: 2, unit: 945.48, total: 1890.96 },
+      { code: "M1187-3", name: "CRANK", material: "Aluminum_7050_T7451_Ams4050", qty: 2, unit: 969.05, total: 1938.11 },
+      { code: "A1116-9", name: "END CAP", material: "Ph13-8mo_Ams5629_H1000", qty: 1, unit: 1604.15, total: 1604.15 },
+      { code: "M1187-2", name: "CAM", material: "Steel BS S82 S S82:1976", qty: 2, unit: 801.34, total: 1602.68 },
+      { code: "A1008-55", name: "SPRING BODY", material: "Inox 15-5ph_Per_Ams5659", qty: 2, unit: 747.07, total: 1494.14 },
+      { code: "A1055-3", name: "VALVE BODY EXTENSION", material: "Al_7075_T7351_Per_Ams-qq-a-250/12", qty: 2, unit: 722.98, total: 1445.96 },
+      { code: "V1000-2", name: "SLEEVE", material: "Aisi_440c_Per_Ams-qq-s-763", qty: 2, unit: 701.31, total: 1402.62 },
+      { code: "V1002-32", name: "HOUSING", material: "ALL.2024_T351_Amsqq-a-225-/6", qty: 1, unit: 1402.68, total: 1402.68 },
+      { code: "A1116-1", name: "CYLINDER", material: "Ph13-8mo_Ams5629_H1000", qty: 1, unit: 1191.90, total: 1191.90 },
+      { code: "D1065-1", name: "PRIMARY UPPER DRAG BRACE", material: "Aluminum_7050_T7451_Ams4050", qty: 2, unit: 565.71, total: 1131.41 },
+      { code: "V1075-1", name: "BODY", material: "2024_T351_Per_Ams-qq-a-250/4", qty: 1, unit: 1101.04, total: 1101.04 },
+      { code: "H1001-15", name: "HYDRAULIC HOUSING", material: "All.2024_T351_Per_Ams-qq-a-250/4", qty: 5, unit: 247.35, total: 1236.75 },
+      { code: "D1065-9", name: "PRIMARY LOWER DRAG BRACE", material: "Aluminum_7050_T7451_Ams4050", qty: 2, unit: 456.51, total: 913.01 },
+      { code: "A1115-5", name: "PISTON ROD", material: "Ph13-8mo_Ams5629_H1000", qty: 2, unit: 477.11, total: 954.22 },
+      { code: "D1065-15", name: "CARDAN NUT", material: "Aisi_4340_Ams6414", qty: 4, unit: 210.24, total: 840.97 },
+      { code: "D1065-6", name: "UPPER CARDAN BOLT", material: "Steel_300m_Ams_6257", qty: 2, unit: 445.48, total: 890.96 },
+      { code: "V1002-33", name: "SLEEVE", material: "Inox Steel 440c_Per_Ams-qq-s-763", qty: 1, unit: 847.38, total: 847.38 },
+      { code: "V1005-50", name: "PORT PLUG", material: "Inox 15-5ph_Per_Ams5659", qty: 4, unit: 172.99, total: 691.94 },
+      { code: "A1008-51", name: "SCREW", material: "Aisi_4340_Ams6414", qty: 8, unit: 91.12, total: 728.96 },
+      { code: "A1008-21", name: "SENSOR SUPPORT", material: "Al_7075_T73511_Per_Ams-qq-a-200/11", qty: 2, unit: 355.32, total: 710.64 },
+      { code: "A1008-46", name: "ROD-END", material: "Aisi_4340_Ams6414", qty: 2, unit: 360.72, total: 721.44 },
+      { code: "H1046-1", name: "BODY HALF", material: "Al_7075_T7351_Per_Ams-qq-a-250/12", qty: 5, unit: 127.75, total: 638.77 },
+      { code: "A1008-47", name: "ROD", material: "Steel 4340_Ams6414", qty: 2, unit: 315.01, total: 630.02 },
+      { code: "D1065-16", name: "ANTIROTATION NUT", material: "15-5ph_Per_Ams5659-H1025", qty: 8, unit: 82.96, total: 663.68 },
+      { code: "A1116-12", name: "HYDRAULIC HOUSING", material: "Ti-6al-4v_Per_Ams4928", qty: 1, unit: 655.87, total: 655.87 },
+      { code: "A1116-13", name: "HYDRAULIC HOUSING", material: "Ti-6al-4v_Per_Ams4928", qty: 1, unit: 655.87, total: 655.87 },
+      { code: "M1187-1", name: "TORQUE TUBE", material: "Al_7075-T73511 AMS-QQ-A-200/11", qty: 2, unit: 313.63, total: 627.25 },
+      { code: "A1008-11", name: "LEVER", material: "Steel 4340_Ams6414", qty: 2, unit: 313.19, total: 626.39 },
+      { code: "A1055-2", name: "VALVE BODY RETRACTION", material: "Al_7075_T73511_Per_Ams-qq-a-200/11", qty: 2, unit: 313.08, total: 626.17 },
+      { code: "A1117-2", name: "HYDRAULIC FITTING", material: "15-5ph_Ams5659", qty: 2, unit: 261.81, total: 523.62 },
+      { code: "A1116-15", name: "SEGMENT", material: "Beryllium_Copper_Astmb196", qty: 4, unit: 133.32, total: 533.29 },
+      { code: "A1009-27", name: "ROD", material: "Steel 17-4PH (R≥ 1172MPa) acc. to AMS 5643", qty: 2, unit: 297.36, total: 594.72 },
+      { code: "H1046-2", name: "BODY HALF", material: "Al_7075_T7351_Per_Ams-qq-a-250/2", qty: 5, unit: 87.84, total: 439.18 },
+      { code: "A1008-54", name: "SPOOL", material: "INOX STEEL 15-5ph_Ams5659", qty: 2, unit: 210.07, total: 420.13 },
+      { code: "A1010-56", name: "LEVER", material: "STEEL 4340 AMS6414 R>1379MPa", qty: 2, unit: 211.23, total: 422.45 },
+      { code: "A1116-3", name: "PISTON ROD", material: "PH13-8Mo AMS5659 H1000", qty: 1, unit: 354.08, total: 354.08 },
+      { code: "A1116-4", name: "ROD END", material: "PH13-8Mo AMS5659 H1000", qty: 1, unit: 371.32, total: 371.32 },
+      { code: "V1002-41", name: "SPOOL", material: "Aisi_440c_Per_Ams-qq-s-763", qty: 1, unit: 342.52, total: 342.52 },
+      { code: "A1008-9", name: "NUT", material: "Aisi_4340_Ams6414", qty: 2, unit: 151.01, total: 302.03 },
+      { code: "V1001-3", name: "PISTON", material: "STEEL 4340_Ams6414", qty: 1, unit: 253.76, total: 253.76 },
+      { code: "M1104-1", name: "BOX", material: "Al 7075-T7351 AMS-QQ-A-250/12", qty: 1, unit: 236.94, total: 236.94 },
+      { code: "M1104-4", name: "SLEEVE", material: "Al 7075-T7351_AMS-QQ-A-225/9", qty: 1, unit: 110.17, total: 110.17 },
+      { code: "A1116-8", name: "BEARING GLAND", material: "Bronze CuAl11Ni5Fe5_AMS 4590", qty: 1, unit: 108.28, total: 108.28 },
+      { code: "D1010-28", name: "PIN", material: "Steel_300m_Ams_6257", qty: 2, unit: 281.83, total: 563.67 },
+      { code: "M1187-8", name: "SPRING PIN END", material: "15-5ph_Per_Ams5659-H1025", qty: 4, unit: 130.30, total: 521.20 },
+      { code: "A1008-15", name: "TARGET", material: "15-5ph_Per_Ams5659", qty: 4, unit: 128.10, total: 512.39 },
+      { code: "A1055-6", name: "THREADED PLUG", material: "15-5ph_Per_Ams5659-H1025", qty: 4, unit: 120.22, total: 480.88 },
+      { code: "G1117-1", name: "MAIN FITTING", material: "AL 7050-T74 per AMS4107", qty: 1, unit: 5200.00, total: 5200.00 },
+      { code: "G1041-7", name: "SLIDING ROD", material: "Steel 300M per AMS 6257", qty: 1, unit: 4400.00, total: 4400.00 },
+      { code: "G1117-21", name: "FORK", material: "AL 7050-T74 per AMS 4107", qty: 1, unit: 2427.59, total: 2427.59 },
+      { code: "G1041-19", name: "UPPER TORQUE LINK", material: "AL 7050 per AMS 4050", qty: 1, unit: 2194.83, total: 2194.83 },
+      { code: "G1041-18", name: "LOWER TORQUE LINK", material: "AL 7050 per AMS 4050", qty: 1, unit: 2194.83, total: 2194.83 },
+      { code: "G1117-40", name: "STEERING CYLINDER", material: "Steel 4340 per AMS 6414", qty: 2, unit: 841.72, total: 1683.45 },
+      { code: "G1117-4", name: "TURNING TUBE", material: "Steel S82", qty: 1, unit: 1052.07, total: 1052.07 },
+      { code: "G1117-31", name: "WHEEL AXLE", material: "Steel 300M per AMS 6257", qty: 1, unit: 932.76, total: 932.76 },
+      { code: "G1117-131", name: "GEARWHEEL", material: "STEEL 15-5PH per AMS 5659", qty: 1, unit: 955.17, total: 955.17 },
+      { code: "G1117-3", name: "LOWER CAM", material: "Bronze C63020 per AMS 4590", qty: 1, unit: 367.93, total: 367.93 },
+      { code: "G1054-22", name: "BODY", material: "STEEL 15-5PH per AMS 5659", qty: 2, unit: 171.03, total: 342.07 },
+      { code: "G1041-41", name: "LINK", material: "AL 7050-T7451 per AMS 4050", qty: 1, unit: 274.48, total: 274.48 },
+      { code: "G1041-91", name: "ECCENTRIC SHAFT", material: "Steel 4340 per AMS 6414", qty: 1, unit: 274.48, total: 274.48 },
+      { code: "G1041-11", name: "STOPPER", material: "AL 7050-T74511 per AMS 4342", qty: 1, unit: 278.97, total: 278.97 },
+      { code: "G1117-5", name: "SLEEVE", material: "Bronze C63020 per AMS 4590", qty: 1, unit: 268.62, total: 268.62 },
+      { code: "G1041-30", name: "SLEEVE", material: "STEEL 15-5PH per AMS 5659", qty: 1, unit: 248.62, total: 248.62 },
+      { code: "G1041-72", name: "RACK", material: "Steel 16NCD13 per AIR9160C", qty: 1, unit: 268.62, total: 268.62 },
+      { code: "G1041-44", name: "TORQUE LINK BUSHING", material: "Bronze C63020 per AMS 4590", qty: 2, unit: 134.31, total: 268.62 },
+      { code: "G1117-2", name: "PINTLE PIN", material: "STEEL 300M per AMS 6257", qty: 2, unit: 108.79, total: 217.59 },
+      { code: "G1041-48", name: "UPPER TORQUE LINK PIN", material: "Steel 4340 per AMS 6414", qty: 1, unit: 216.90, total: 216.90 },
+      { code: "V1079-1", name: "BCM MANIFOLD", material: "AL 2024-T351 AMS-QQ-A-225/6", qty: 2, unit: 1243.10, total: 2486.21 },
+      { code: "V1032-2", name: "SOLENOID VALVE BODY", material: "AL 7050-T7451 AMS4050", qty: 2, unit: 915.17, total: 1830.34 },
+      { code: "V1024-50", name: "BODY", material: "Aluminum Alloy 2024-T351 per AMS-QQ-A-225/6", qty: 1, unit: 1701.72, total: 1701.72 },
+      { code: "V1024-49", name: "ACTUATOR CASE", material: "AL 7050 T7451 per AMS 4050", qty: 1, unit: 222.76, total: 222.76 },
+      { code: "V1024-42", name: "COVER, SWITCHES", material: "7075-T7351 per AMS 4124", qty: 1, unit: 120.31, total: 120.31 },
+      { code: "V1024-29", name: "SEAT PARKING VALVE", material: "Al Ni Br per AMS 4590", qty: 1, unit: 106.79, total: 106.79 },
+      { code: "V1024-36", name: "SPOOL (IV)", material: "AISI 440C per AMS-5630", qty: 1, unit: 100.45, total: 100.45 },
+      { code: "V1024-37", name: "SLEEVE (IV)", material: "AISI 440C per AMS-5630", qty: 1, unit: 99.45, total: 99.45 },
+      { code: "V1024-17", name: "MOTOR COVER", material: "AL 7075 T7351 per AMS-QQ-A-225/9", qty: 1, unit: 96.10, total: 96.10 },
+      { code: "V1024-43", name: "CAM", material: "16NCD13 per AIR9160C", qty: 1, unit: 82.59, total: 82.59 },
+    ];
+
+    // Format Euro
+    const fmtEur = (n) => '€  ' + n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // Tabloyu doldur
+    const tbody = document.getElementById('product-body');
+    products.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="sira">${i + 1}</td>
+        <td class="code">${p.code}</td>
+        <td class="part-name">${p.name}</td>
+        <td class="material">${p.material}</td>
+        <td class="qty">${p.qty}</td>
+        <td class="price unit">${fmtEur(p.unit)}</td>
+        <td class="price total">${fmtEur(p.total)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Toplamlar
+    const totalParts = products.length;
+    const totalQty = products.reduce((s, p) => s + p.qty, 0);
+    const grandTotal = products.reduce((s, p) => s + p.total, 0);
+
+    document.getElementById('total-parts').textContent = totalParts;
+    document.getElementById('total-qty').textContent = totalQty;
+    document.getElementById('subtotal').textContent = fmtEur(grandTotal);
+    document.getElementById('grand-total').textContent = fmtEur(grandTotal);
+  </script>
+
+</body>
+</html>

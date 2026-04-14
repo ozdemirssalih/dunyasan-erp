@@ -147,6 +147,7 @@ export default function WarehousePage() {
     shipment_destination: '',
     reference_number: '',
     notes: '',
+    transaction_date: new Date().toISOString().split('T')[0],
   })
 
   const [requestForm, setRequestForm] = useState({
@@ -1036,6 +1037,7 @@ export default function WarehousePage() {
           reference_number: exitForm.reference_number,
           notes: exitForm.notes,
           created_by: currentUserId,
+          transaction_date: exitForm.transaction_date,
         })
         .select()
         .single()
@@ -1219,6 +1221,7 @@ export default function WarehousePage() {
       shipment_destination: '',
       reference_number: '',
       notes: '',
+      transaction_date: new Date().toISOString().split('T')[0],
     })
   }
 
@@ -1761,6 +1764,16 @@ export default function WarehousePage() {
                     type="text"
                     value={exitForm.reference_number}
                     onChange={(e) => setExitForm({ ...exitForm, reference_number: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Çıkış Tarihi</label>
+                  <input
+                    type="date"
+                    value={exitForm.transaction_date}
+                    onChange={(e) => setExitForm({ ...exitForm, transaction_date: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                   />
                 </div>

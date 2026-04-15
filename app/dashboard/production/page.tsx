@@ -769,14 +769,15 @@ export default function ProductionPage() {
 
       if (deductError) throw deductError
 
-      // 4. Eğer fire varsa fire kaydını oluştur (mamül olarak)
+      // 4. Eğer fire varsa fire kaydını oluştur ve HURDA olarak stoğa ekle
       if (outputForm.fire_quantity > 0) {
+        // 4a. Fire kaydını oluştur
         const { error: fireError } = await supabase
           .from('production_scrap_records')
           .insert({
             company_id: companyId,
             source_type: 'production',
-            item_id: outputForm.output_item_id, // Fire olan MAMÜL parçalar
+            item_id: outputForm.output_item_id,
             quantity: outputForm.fire_quantity,
             scrap_reason: outputForm.fire_reason,
             notes: `Üretim sırasında fire - ${outputForm.notes || ''}`,
@@ -784,9 +785,82 @@ export default function ProductionPage() {
           })
 
         if (fireError) console.error('Fire kaydı hatası:', fireError)
+
+        // 4b. Hurda ürünü üretim stoğuna ayrı kalem olarak ekle
+        // Ürün adını bul
+        const scrapItem = warehouseItems.find(w => w.id === outputForm.output_item_id)
+        const scrapItemName = scrapItem ? `${scrapItem.name} HURDA` : 'HURDA'
+        const scrapItemCode = scrapItem ? `${scrapItem.code}-HURDA` : 'HURDA'
+
+        // warehouse_items'da hurda ürün var mı kontrol et
+        const { data: existingScrapWh } = await supabase
+          .from('warehouse_items')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('code', scrapItemCode)
+          .maybeSingle()
+
+        let scrapWhId = existingScrapWh?.id
+
+        if (!scrapWhId) {
+          // Hurda ürünü warehouse_items'a ekle
+          const { data: newScrapWh, error: scrapWhError } = await supabase
+            .from('warehouse_items')
+            .insert({
+              company_id: companyId,
+              code: scrapItemCode,
+              name: scrapItemName,
+              category_name: 'Hurda',
+              unit: scrapItem?.unit || 'adet',
+              current_stock: 0,
+              min_stock: 0,
+              is_active: true,
+            })
+            .select()
+            .single()
+
+          if (scrapWhError) {
+            console.error('Hurda ürün oluşturma hatası:', scrapWhError)
+          } else {
+            scrapWhId = newScrapWh.id
+          }
+        }
+
+        if (scrapWhId) {
+          // production_inventory'de hurda stoğunu güncelle
+          const { data: existingScrapStock } = await supabase
+            .from('production_inventory')
+            .select('current_stock')
+            .eq('company_id', companyId)
+            .eq('item_id', scrapWhId)
+            .eq('item_type', 'finished_product')
+            .maybeSingle()
+
+          if (existingScrapStock) {
+            await supabase
+              .from('production_inventory')
+              .update({
+                current_stock: existingScrapStock.current_stock + outputForm.fire_quantity,
+                updated_at: new Date().toISOString()
+              })
+              .eq('company_id', companyId)
+              .eq('item_id', scrapWhId)
+              .eq('item_type', 'finished_product')
+          } else {
+            await supabase
+              .from('production_inventory')
+              .insert({
+                company_id: companyId,
+                item_id: scrapWhId,
+                current_stock: outputForm.fire_quantity,
+                item_type: 'finished_product',
+                notes: `${scrapItemName} - Üretim firesi`
+              })
+          }
+        }
       }
 
-      // 5. Bitmiş ürünü stoğa ekle
+      // 5. Sağlam bitmiş ürünü stoğa ekle
       const { data: existingFinished } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -824,9 +898,10 @@ export default function ProductionPage() {
       // Başarı mesajı
       let successMsg = '✅ Üretim kaydı oluşturuldu!'
       successMsg += `\n\n✨ Üretim Sonucu:`
-      successMsg += `\n  • Mamül: ${outputForm.quantity} birim`
+      successMsg += `\n  • Sağlam: ${outputForm.quantity} birim → Üretim stoğuna eklendi`
       if (outputForm.fire_quantity > 0) {
-        successMsg += `\n  • Fire: ${outputForm.fire_quantity} birim`
+        const scrapItem = warehouseItems.find(w => w.id === outputForm.output_item_id)
+        successMsg += `\n  • Hurda: ${outputForm.fire_quantity} birim → "${scrapItem?.name || ''} HURDA" olarak stoğa eklendi`
       }
       successMsg += `\n  • Kalan hammadde: ${availableStock - usedQuantity} birim`
 
@@ -2383,7 +2458,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Üretilen Miktar <span className="text-red-500">*</span>
+                      Sağlam Miktar <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -2452,7 +2527,7 @@ export default function ProductionPage() {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      🔥 Fire Miktarı (adet)
+                      Hurda Miktarı (adet)
                     </label>
                     <input
                       type="number"
@@ -2538,7 +2613,7 @@ export default function ProductionPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Üretilen Miktar <span className="text-red-500">*</span>
+                      Sağlam Miktar <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"

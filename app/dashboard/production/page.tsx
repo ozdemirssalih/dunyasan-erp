@@ -984,18 +984,33 @@ export default function ProductionPage() {
       }
 
       // 2. Üretim kaydını sil
-      const { error: deleteError } = await supabase
+      const { error: deleteError, count } = await supabase
         .from('production_outputs')
         .delete()
         .eq('id', output.id)
+        .select()
 
-      if (deleteError) throw deleteError
+      if (deleteError) {
+        // RLS hatası durumunda stoğu geri al
+        if (currentStock) {
+          await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: currentStock.current_stock,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', output.output_item_id)
+            .eq('item_type', 'finished_product')
+        }
+        throw deleteError
+      }
 
       alert('Üretim kaydı silindi ve stok güncellendi!')
       loadData()
     } catch (error: any) {
       console.error('Error deleting output:', error)
-      alert('Hata: ' + error.message)
+      alert('Üretim kaydı silinemedi!\n\nHata: ' + error.message + '\n\nSQL dosyasını çalıştırın: FIX-PRODUCTION-OUTPUTS-RLS.sql')
     }
   }
 

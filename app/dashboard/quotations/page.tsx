@@ -962,115 +962,120 @@ export default function QuotationsPage() {
             <div className="bg-white rounded-xl shadow-lg p-2 max-w-4xl mx-auto">
               <div ref={printRef} style={{ padding: '30px 35px', fontFamily: "'Segoe UI', sans-serif", fontSize: '11px', color: '#1a1a2e', background: '#fff', maxWidth: '800px', margin: '0 auto' }}>
                 {/* PDF Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #003366', paddingBottom: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <img src="/dunyalogopng.png" alt="Logo" style={{ width: '160px' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #003366', paddingBottom: '18px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+                    <img src="/dunyalogopng.png" alt="Logo" style={{ width: '220px' }} />
                     <div style={{ fontSize: '10px', color: '#444', lineHeight: 1.6 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#003366', marginBottom: '2px' }}>DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#003366', marginBottom: '2px' }}>DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
                       Fabrikalar Mh. Kırıkkale Silah İhtisas OSB 2. Sk. No: 18/1 KIRIKKALE<br />
                       Tel: 0318 606 00 06 | +90 530 389 00 71<br />
                       satinalma@dunyasan.com | VKN: 123 110 3150
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#003366', letterSpacing: '1px' }}>FİYAT TEKLİFİ</div>
+                    <div style={{ fontSize: '22px', fontWeight: 900, color: '#003366', letterSpacing: '1px' }}>FİYAT TEKLİFİ</div>
                     <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>Price Quotation</div>
                   </div>
                 </div>
 
-                {/* Info Boxes */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '18px' }}>
-                  <div style={{ border: '1px solid #dde1e7', borderRadius: '6px', padding: '12px 16px', background: '#fafbfc' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '8px', paddingBottom: '5px', borderBottom: '1px solid #e2e6eb' }}>Müşteri Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.8 }}>
+                {/* Info Boxes — compact */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ border: '1.5px solid #003366', padding: '8px 12px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '5px', paddingBottom: '4px', borderBottom: '1.5px solid #003366', letterSpacing: '0.5px' }}>Müşteri Bilgileri</div>
+                    <table style={{ fontSize: '10px', lineHeight: 1.7 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Firma:</td><td>{previewQuotation.customer_name}</td></tr>
-                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Yetkili:</td><td>{previewQuotation.customer_contact}</td></tr>}
-                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Tel:</td><td>{previewQuotation.customer_phone}</td></tr>}
-                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>E-posta:</td><td>{previewQuotation.customer_email}</td></tr>}
-                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Adres:</td><td>{previewQuotation.customer_address}</td></tr>}
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px', whiteSpace: 'nowrap' }}>Firma:</td><td style={{ fontWeight: 700 }}>{previewQuotation.customer_name}</td></tr>
+                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Yetkili:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_contact}</td></tr>}
+                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Tel:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_phone}</td></tr>}
+                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>E-posta:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_email}</td></tr>}
+                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Adres:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_address}</td></tr>}
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ border: '1px solid #dde1e7', borderRadius: '6px', padding: '12px 16px', background: '#fafbfc' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '8px', paddingBottom: '5px', borderBottom: '1px solid #e2e6eb' }}>Teklif Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.8 }}>
+                  <div style={{ border: '1.5px solid #003366', padding: '8px 12px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '5px', paddingBottom: '4px', borderBottom: '1.5px solid #003366', letterSpacing: '0.5px' }}>Teklif Bilgileri</div>
+                    <table style={{ fontSize: '10px', lineHeight: 1.7 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Teklif No:</td><td style={{ fontWeight: 700 }}>{previewQuotation.quotation_number}</td></tr>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Tarih:</td><td>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Geçerlilik:</td><td>{previewQuotation.validity_days} gün</td></tr>
-                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Teslim:</td><td>{previewQuotation.delivery_time}</td></tr>}
-                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Ödeme:</td><td>{previewQuotation.payment_terms}</td></tr>}
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Para Birimi:</td><td>{previewQuotation.currency}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Teklif No:</td><td style={{ fontWeight: 800 }}>{previewQuotation.quotation_number}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Tarih:</td><td style={{ fontWeight: 600 }}>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Geçerlilik:</td><td style={{ fontWeight: 600 }}>{previewQuotation.validity_days} gün</td></tr>
+                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Teslim:</td><td style={{ fontWeight: 600 }}>{previewQuotation.delivery_time}</td></tr>}
+                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Ödeme:</td><td style={{ fontWeight: 600 }}>{previewQuotation.payment_terms}</td></tr>}
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Para Birimi:</td><td style={{ fontWeight: 600 }}>{previewQuotation.currency}</td></tr>
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                {/* Products Table */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '16px' }}>
-                  <thead>
-                    <tr style={{ background: '#003366', color: '#fff' }}>
-                      <th style={{ padding: '7px 6px', textAlign: 'center', fontSize: '9px', fontWeight: 600 }}>Sıra</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'left', fontSize: '9px', fontWeight: 600 }}>Parça Kodu</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'left', fontSize: '9px', fontWeight: 600 }}>Parça Adı</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'left', fontSize: '9px', fontWeight: 600 }}>Malzeme</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'center', fontSize: '9px', fontWeight: 600 }}>Miktar</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'center', fontSize: '9px', fontWeight: 600 }}>Birim</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'right', fontSize: '9px', fontWeight: 600 }}>Birim Fiyat</th>
-                      <th style={{ padding: '7px 6px', textAlign: 'right', fontSize: '9px', fontWeight: 600 }}>Toplam</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewItems.map((item: any, i: number) => {
-                      const sym = CURRENCIES.find(c => c.code === previewQuotation.currency)?.symbol || '€'
-                      return (
-                        <tr key={i} style={{ borderBottom: '1px solid #eef0f3', background: i % 2 === 0 ? '#fff' : '#f8f9fb' }}>
-                          <td style={{ padding: '5px 6px', textAlign: 'center', color: '#666', fontWeight: 600 }}>{item.sira}</td>
-                          <td style={{ padding: '5px 6px', fontFamily: 'Consolas, monospace', fontWeight: 600, color: '#003366' }}>{item.parca_kodu || '—'}</td>
-                          <td style={{ padding: '5px 6px', fontWeight: 600, textTransform: 'uppercase', fontSize: '9.5px' }}>{item.parca_adi}</td>
-                          <td style={{ padding: '5px 6px', fontSize: '9px', color: '#555', maxWidth: '200px', wordBreak: 'break-word' as const }}>{item.malzeme || '—'}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700 }}>{item.miktar}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'center', color: '#666' }}>{item.birim}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'Consolas, monospace', color: '#2c5f8a', fontWeight: 600 }}>
-                            {sym} {item.birim_fiyat?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>
-                            {sym} {item.toplam_fiyat?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                          </td>
+                {/* Products Table — Excel style with borders */}
+                {(() => {
+                  const sym = CURRENCIES.find(c => c.code === previewQuotation.currency)?.symbol || '€'
+                  const hasExtras = previewQuotation.discount_amount > 0 || previewQuotation.tax_amount > 0
+                  const border = '1.5px solid #003366'
+                  const borderLight = '1px solid #b0b8c4'
+                  const thStyle = { padding: '8px 6px', textAlign: 'center' as const, fontSize: '10px', fontWeight: 800, color: '#fff', border: '1px solid #1a4d80', textTransform: 'uppercase' as const, letterSpacing: '0.3px' }
+                  const tdStyle = { padding: '6px 6px', border: borderLight, fontSize: '10px' }
+                  return (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0', border }}>
+                      <thead>
+                        <tr style={{ background: '#003366' }}>
+                          <th style={{ ...thStyle, width: '35px' }}>Sıra</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>Parça Kodu</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>Parça Adı</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>Malzeme</th>
+                          <th style={{ ...thStyle, width: '50px' }}>Miktar</th>
+                          <th style={{ ...thStyle, width: '50px' }}>Birim</th>
+                          <th style={{ ...thStyle, textAlign: 'right', width: '90px' }}>Birim Fiyat</th>
+                          <th style={{ ...thStyle, textAlign: 'right', width: '90px' }}>Toplam</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-
-                {/* Totals */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-                  <div style={{ width: '320px', border: '2px solid #003366', borderRadius: '6px', overflow: 'hidden' }}>
-                    {(() => {
-                      const sym = CURRENCIES.find(c => c.code === previewQuotation.currency)?.symbol || '€'
-                      const hasExtras = previewQuotation.discount_amount > 0 || previewQuotation.tax_amount > 0
-                      const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '7px 14px', fontSize: '11px', borderBottom: '1px solid #e2e6eb' }
-                      return (
-                        <>
-                          {hasExtras && (
-                            <div style={rowStyle}><span style={{ fontWeight: 600, color: '#444' }}>Ara Toplam:</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
-                          )}
-                          {previewQuotation.discount_amount > 0 && (
-                            <div style={rowStyle}><span style={{ fontWeight: 600, color: '#c53030' }}>İndirim ({previewQuotation.discount_rate}%):</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#c53030' }}>-{sym} {previewQuotation.discount_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
-                          )}
-                          {previewQuotation.tax_amount > 0 && (
-                            <div style={rowStyle}><span style={{ fontWeight: 600, color: '#444' }}>KDV ({previewQuotation.tax_rate}%):</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{sym} {previewQuotation.tax_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
-                          )}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#003366' }}>
-                            <span style={{ fontWeight: 700, color: '#fff', fontSize: '12px' }}>TOPLAM</span>
-                            <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#fff', fontSize: '14px' }}>{sym} {previewQuotation.grand_total?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
-                          </div>
-                        </>
-                      )
-                    })()}
-                  </div>
-                </div>
+                      </thead>
+                      <tbody>
+                        {previewItems.map((item: any, i: number) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f4f6f9' }}>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#555' }}>{item.sira}</td>
+                            <td style={{ ...tdStyle, fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{item.parca_kodu || '—'}</td>
+                            <td style={{ ...tdStyle, fontWeight: 700, textTransform: 'uppercase' }}>{item.parca_adi}</td>
+                            <td style={{ ...tdStyle, fontSize: '9px', color: '#444', maxWidth: '180px', wordBreak: 'break-word' as const }}>{item.malzeme || '—'}</td>
+                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 800 }}>{item.miktar}</td>
+                            <td style={{ ...tdStyle, textAlign: 'center', color: '#555' }}>{item.birim}</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#2c5f8a' }}>
+                              {sym} {item.birim_fiyat?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, color: '#003366' }}>
+                              {sym} {item.toplam_fiyat?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      {/* Totals — merged into table */}
+                      <tfoot>
+                        {hasExtras && (
+                          <tr style={{ background: '#e8ecf1' }}>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px', borderTop: '2px solid #003366' }}>Ara Toplam:</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#003366', borderTop: '2px solid #003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )}
+                        {previewQuotation.discount_amount > 0 && (
+                          <tr style={{ background: '#fef2f2' }}>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px', color: '#c53030' }}>İndirim ({previewQuotation.discount_rate}%):</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#c53030' }}>-{sym} {previewQuotation.discount_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )}
+                        {previewQuotation.tax_amount > 0 && (
+                          <tr style={{ background: '#e8ecf1' }}>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px' }}>KDV ({previewQuotation.tax_rate}%):</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#003366' }}>{sym} {previewQuotation.tax_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )}
+                        <tr style={{ background: '#003366' }}>
+                          <td colSpan={7} style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 900, fontSize: '13px', color: '#fff', border: 'none' }}>TOPLAM</td>
+                          <td style={{ padding: '10px 6px', textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 900, fontSize: '14px', color: '#fff', border: 'none' }}>{sym} {previewQuotation.grand_total?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )
+                })()}
+                <div style={{ marginBottom: '16px' }}></div>
 
                 {/* Notes */}
                 {previewQuotation.notes && (

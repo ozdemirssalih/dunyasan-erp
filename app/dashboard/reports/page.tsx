@@ -27,14 +27,23 @@ export default function ReportsPage() {
   const [qc, setQc] = useState<any>({ passed: 0, failed: 0, returned: 0, scrap: 0, pending: 0 })
   const [emp, setEmp] = useState<any>({ total: 0, active: 0, top: [] })
 
+  // Proje filtresi
+  const [projects, setProjects] = useState<any[]>([])
+  const [selectedProject, setSelectedProject] = useState<string>('all')
+
   useEffect(() => { init() }, [])
-  useEffect(() => { if (cid) loadAll() }, [cid, df, dt])
+  useEffect(() => { if (cid) loadAll() }, [cid, df, dt, selectedProject])
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data: p } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
-    setCid(p?.company_id || null)
+    const companyId = p?.company_id || null
+    setCid(companyId)
+    if (companyId) {
+      const { data: projData } = await supabase.from('projects').select('id, project_name').eq('company_id', companyId).order('project_name')
+      setProjects(projData || [])
+    }
   }
 
   function changePeriod(p: Period) {
@@ -115,7 +124,9 @@ export default function ReportsPage() {
   }
 
   async function loadProd() {
-    const { data } = await supabase.from('machine_daily_production').select('actual_production, defect_count, efficiency_rate, production_date, project_id, machine_id, employee_id, employee_ids').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    let query = supabase.from('machine_daily_production').select('actual_production, defect_count, efficiency_rate, production_date, project_id, machine_id, employee_id, employee_ids').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    if (selectedProject !== 'all') query = query.eq('project_id', selectedProject)
+    const { data } = await query
     if (!data) return
     const total = data.reduce((s, r) => s + (r.actual_production || 0), 0)
     const defects = data.reduce((s, r) => s + (r.defect_count || 0), 0)
@@ -138,7 +149,9 @@ export default function ReportsPage() {
     const daily = Object.entries(dm).sort().map(([date, s]: any) => ({ date: new Date(date).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }), Üretim: s.t, Fire: s.d, Verimlilik: Math.round(s.e / s.c) }))
 
     // Üretim takip - üretilen parçalar
-    const { data: outputData } = await supabase.from('production_outputs').select('quantity, output_item_id, output_item:warehouse_items!production_outputs_output_item_id_fkey(name, code, unit, category)').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    let outputQuery = supabase.from('production_outputs').select('quantity, output_item_id, output_item:warehouse_items!production_outputs_output_item_id_fkey(name, code, unit, category)').eq('company_id', cid!).gte('production_date', df).lte('production_date', dt)
+    if (selectedProject !== 'all') outputQuery = outputQuery.eq('project_id', selectedProject)
+    const { data: outputData } = await outputQuery
     const partMap: Record<string, any> = {}
     outputData?.filter((r: any) => r.output_item?.category !== 'Hammadde').forEach((r: any) => { const key = r.output_item_id; if (!partMap[key]) partMap[key] = { name: r.output_item?.name || '?', code: r.output_item?.code || '', unit: r.output_item?.unit || 'adet', total: 0 }; partMap[key].total += r.quantity || 0 })
     const byPart = Object.values(partMap).sort((a: any, b: any) => b.total - a.total)
@@ -267,6 +280,31 @@ export default function ReportsPage() {
 
         {tab === 'production' && (
           <div className="space-y-6">
+            {/* Proje Filtresi */}
+            <div className="bg-white rounded-xl shadow-sm border p-4 flex items-center gap-4">
+              <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Proje Filtresi:</label>
+              <select
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
+              >
+                <option value="all">Tüm Projeler</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.project_name}</option>
+                ))}
+              </select>
+              {selectedProject !== 'all' && (
+                <button onClick={() => setSelectedProject('all')} className="px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium">
+                  Filtreyi Kaldır
+                </button>
+              )}
+              {selectedProject !== 'all' && (
+                <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1 rounded-full">
+                  {projects.find(p => p.id === selectedProject)?.project_name}
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-blue-600">{f(prod.byPart.reduce((s: number, p: any) => s + p.total, 0))}</p><p className="text-sm text-gray-500">Toplam Üretilen Parça</p></div>
               <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-red-600">{f(prod.defects)}</p><p className="text-sm text-gray-500">Fire ({prod.total > 0 ? `%${(prod.defects / prod.total * 100).toFixed(1)}` : '0'})</p></div>

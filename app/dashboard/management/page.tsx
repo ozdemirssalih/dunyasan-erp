@@ -727,30 +727,30 @@ export default function ManagementDashboard() {
         })
       }
 
-      // Depo işlemleri (daha fazla kayıt çek)
+      // Son Depo Hareketleri
       const { data: warehouseData, error: warehouseError } = await supabase
-        .from('warehouse_qc_requests')
-        .select('id, quantity, status, created_at')
+        .from('warehouse_transactions')
+        .select('id, type, quantity, created_at, transaction_date, item:warehouse_items(name, code, unit), notes, shipment_destination, supplier')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
-        .limit(10) // 5'ten 10'a çıkarıldı
+        .limit(10)
 
       if (warehouseError) {
         console.error('❌ Son depo işlemleri hatası:', warehouseError)
       }
 
       if (warehouseData) {
-        warehouseData.forEach(w => {
+        warehouseData.forEach((w: any) => {
+          const itemName = w.item?.name || 'Bilinmiyor'
+          const itemCode = w.item?.code || ''
+          const unit = w.item?.unit || 'adet'
+          const isEntry = w.type === 'entry'
           activities.push({
             id: w.id,
             type: 'warehouse',
-            description: `${w.quantity || 0} adet depo girişi - ${
-              w.status === 'approved' ? '✓ Onaylandı' :
-              w.status === 'pending' ? '⏳ Bekliyor' :
-              w.status === 'rejected' ? '✗ Reddedildi' : w.status
-            }`,
-            time: new Date(w.created_at).toLocaleString('tr-TR'),
-            status: w.status === 'approved' ? 'success' : w.status === 'pending' ? 'warning' : 'error'
+            description: `${isEntry ? '📥 Giriş' : '📤 Çıkış'}: ${itemCode ? `[${itemCode}] ` : ''}${itemName} — ${w.quantity} ${unit}${w.shipment_destination ? ` → ${w.shipment_destination}` : ''}${w.supplier ? ` ← ${w.supplier}` : ''}`,
+            time: new Date(w.transaction_date || w.created_at).toLocaleString('tr-TR'),
+            status: isEntry ? 'success' : 'warning'
           })
         })
       }

@@ -509,7 +509,7 @@ export default function PurchasingPage() {
           </div>
           <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500">
             <p className="text-sm text-gray-500">Toplam Tutar</p>
-            <p className="text-2xl font-bold text-purple-600">{totalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</p>
+            <p className="text-2xl font-bold text-purple-600">{totalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
 

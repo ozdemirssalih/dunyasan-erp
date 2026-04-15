@@ -962,46 +962,45 @@ export default function QuotationsPage() {
             <div className="bg-white rounded-xl shadow-lg p-2 mx-auto" style={{ maxWidth: '794px' }}>
               <div ref={printRef} style={{ padding: '20px 24px', fontFamily: "'Segoe UI', sans-serif", fontSize: '9px', color: '#1a1a2e', background: '#fff', width: '746px', margin: '0 auto' }}>
                 {/* PDF Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #003366', paddingBottom: '18px', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-                    <img src="/dunyalogopng.png" alt="Logo" style={{ width: '220px' }} />
-                    <div style={{ fontSize: '10px', color: '#444', lineHeight: 1.6 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#003366', marginBottom: '2px' }}>DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #003366', paddingBottom: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <img src="/dunyalogopng.png" alt="Logo" style={{ width: '160px' }} />
+                    <div style={{ fontSize: '8px', color: '#444', lineHeight: 1.4 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#003366', marginBottom: '1px' }}>DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
                       Fabrikalar Mh. Kırıkkale Silah İhtisas OSB 2. Sk. No: 18/1 KIRIKKALE<br />
-                      Tel: 0318 606 00 06 | +90 530 389 00 71<br />
-                      satinalma@dunyasan.com | VKN: 123 110 3150
+                      Tel: 0318 606 00 06 | +90 530 389 00 71 | satinalma@dunyasan.com
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '22px', fontWeight: 900, color: '#003366', letterSpacing: '1px' }}>FİYAT TEKLİFİ</div>
-                    <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>Price Quotation</div>
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: '#003366', letterSpacing: '1px' }}>FİYAT TEKLİFİ</div>
+                    <div style={{ fontSize: '8px', color: '#888', fontStyle: 'italic' }}>Price Quotation</div>
                   </div>
                 </div>
 
-                {/* Info Boxes — compact */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                  <div style={{ border: '1.5px solid #003366', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '5px', paddingBottom: '4px', borderBottom: '1.5px solid #003366', letterSpacing: '0.5px' }}>Müşteri Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.7 }}>
+                {/* Info Boxes — tight */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                  <div style={{ border: '1px solid #003366', padding: '4px 8px' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '2px', paddingBottom: '2px', borderBottom: '1px solid #003366' }}>Müşteri Bilgileri</div>
+                    <table style={{ fontSize: '8.5px', lineHeight: 1.5 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px', whiteSpace: 'nowrap' }}>Firma:</td><td style={{ fontWeight: 700 }}>{previewQuotation.customer_name}</td></tr>
-                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Yetkili:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_contact}</td></tr>}
-                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Tel:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_phone}</td></tr>}
-                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>E-posta:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_email}</td></tr>}
-                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Adres:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_address}</td></tr>}
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px', whiteSpace: 'nowrap' }}>Firma:</td><td style={{ fontWeight: 700 }}>{previewQuotation.customer_name}</td></tr>
+                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Yetkili:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_contact}</td></tr>}
+                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Tel:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_phone}</td></tr>}
+                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>E-posta:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_email}</td></tr>}
+                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Adres:</td><td style={{ fontWeight: 600 }}>{previewQuotation.customer_address}</td></tr>}
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ border: '1.5px solid #003366', padding: '8px 12px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '5px', paddingBottom: '4px', borderBottom: '1.5px solid #003366', letterSpacing: '0.5px' }}>Teklif Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.7 }}>
+                  <div style={{ border: '1px solid #003366', padding: '4px 8px' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#003366', textTransform: 'uppercase', marginBottom: '2px', paddingBottom: '2px', borderBottom: '1px solid #003366' }}>Teklif Bilgileri</div>
+                    <table style={{ fontSize: '8.5px', lineHeight: 1.5 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Teklif No:</td><td style={{ fontWeight: 800 }}>{previewQuotation.quotation_number}</td></tr>
-                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Tarih:</td><td style={{ fontWeight: 600 }}>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
-                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Geçerlilik:</td><td style={{ fontWeight: 600 }}>{previewQuotation.validity_days} gün</td></tr>
-                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Teslim:</td><td style={{ fontWeight: 600 }}>{previewQuotation.delivery_time}</td></tr>}
-                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Ödeme:</td><td style={{ fontWeight: 600 }}>{previewQuotation.payment_terms}</td></tr>}
-                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '8px' }}>Para Birimi:</td><td style={{ fontWeight: 600 }}>{previewQuotation.currency}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Teklif No:</td><td style={{ fontWeight: 800 }}>{previewQuotation.quotation_number}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Tarih:</td><td style={{ fontWeight: 600 }}>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Geçerlilik:</td><td style={{ fontWeight: 600 }}>{previewQuotation.validity_days} gün</td></tr>
+                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Teslim:</td><td style={{ fontWeight: 600 }}>{previewQuotation.delivery_time}</td></tr>}
+                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Ödeme:</td><td style={{ fontWeight: 600 }}>{previewQuotation.payment_terms}</td></tr>}
+                        <tr><td style={{ fontWeight: 700, color: '#1a1a2e', paddingRight: '6px' }}>Para Birimi:</td><td style={{ fontWeight: 600 }}>{previewQuotation.currency}</td></tr>
                       </tbody>
                     </table>
                   </div>
@@ -1013,8 +1012,8 @@ export default function QuotationsPage() {
                   const hasExtras = previewQuotation.discount_amount > 0 || previewQuotation.tax_amount > 0
                   const border = '1.5px solid #003366'
                   const borderLight = '1px solid #b0b8c4'
-                  const thStyle = { padding: '8px 6px', textAlign: 'center' as const, fontSize: '10px', fontWeight: 800, color: '#fff', border: '1px solid #1a4d80', textTransform: 'uppercase' as const, letterSpacing: '0.3px' }
-                  const tdStyle = { padding: '6px 6px', border: borderLight, fontSize: '10px' }
+                  const thStyle = { padding: '4px 4px', textAlign: 'center' as const, fontSize: '8.5px', fontWeight: 800, color: '#fff', border: '1px solid #1a4d80', textTransform: 'uppercase' as const, letterSpacing: '0.3px' }
+                  const tdStyle = { padding: '3px 4px', border: borderLight, fontSize: '8.5px' }
                   return (
                     <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0', border }}>
                       <thead>
@@ -1051,55 +1050,55 @@ export default function QuotationsPage() {
                       <tfoot>
                         {hasExtras && (
                           <tr style={{ background: '#e8ecf1' }}>
-                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px', borderTop: '2px solid #003366' }}>Ara Toplam:</td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#003366', borderTop: '2px solid #003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '9px', borderTop: '2px solid #003366' }}>Ara Toplam:</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '9px', color: '#003366', borderTop: '2px solid #003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         )}
                         {previewQuotation.discount_amount > 0 && (
                           <tr style={{ background: '#fef2f2' }}>
-                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px', color: '#c53030' }}>İndirim ({previewQuotation.discount_rate}%):</td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#c53030' }}>-{sym} {previewQuotation.discount_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '9px', color: '#c53030' }}>İndirim ({previewQuotation.discount_rate}%):</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '9px', color: '#c53030' }}>-{sym} {previewQuotation.discount_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         )}
                         {previewQuotation.tax_amount > 0 && (
                           <tr style={{ background: '#e8ecf1' }}>
-                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '11px' }}>KDV ({previewQuotation.tax_rate}%):</td>
-                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '11px', color: '#003366' }}>{sym} {previewQuotation.tax_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                            <td colSpan={7} style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, fontSize: '9px' }}>KDV ({previewQuotation.tax_rate}%):</td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 800, fontSize: '9px', color: '#003366' }}>{sym} {previewQuotation.tax_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         )}
                         <tr style={{ background: '#003366' }}>
-                          <td colSpan={7} style={{ padding: '10px 6px', textAlign: 'right', fontWeight: 900, fontSize: '13px', color: '#fff', border: 'none' }}>TOPLAM</td>
-                          <td style={{ padding: '10px 6px', textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 900, fontSize: '14px', color: '#fff', border: 'none' }}>{sym} {previewQuotation.grand_total?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+                          <td colSpan={7} style={{ padding: '5px 4px', textAlign: 'right', fontWeight: 900, fontSize: '10px', color: '#fff', border: 'none' }}>TOPLAM</td>
+                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'Consolas, monospace', fontWeight: 900, fontSize: '11px', color: '#fff', border: 'none' }}>{sym} {previewQuotation.grand_total?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
                         </tr>
                       </tfoot>
                     </table>
                   )
                 })()}
-                <div style={{ marginBottom: '16px' }}></div>
+                <div style={{ marginBottom: '8px' }}></div>
 
                 {/* Notes */}
                 {previewQuotation.notes && (
-                  <div style={{ border: '1px solid #dde1e7', borderRadius: '6px', padding: '12px 16px', marginBottom: '16px', background: '#fafbfc' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '6px' }}>Notlar</div>
-                    <p style={{ fontSize: '10px', color: '#444', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{previewQuotation.notes}</p>
+                  <div style={{ border: '1px solid #dde1e7', padding: '4px 8px', marginBottom: '8px', background: '#fafbfc' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '2px' }}>Notlar</div>
+                    <p style={{ fontSize: '8px', color: '#444', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{previewQuotation.notes}</p>
                   </div>
                 )}
 
                 {/* Signatures */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginTop: '30px', paddingTop: '20px', borderTop: '2px solid #003366' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '12px', paddingTop: '8px', borderTop: '2px solid #003366' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '40px' }}>Teklifi Hazırlayan</div>
-                    <div style={{ borderTop: '1px solid #999', width: '200px', margin: '0 auto 4px' }}></div>
-                    <div style={{ fontSize: '9px', color: '#888' }}>DÜNYASAN SAVUNMA A.Ş.</div>
+                    <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '25px' }}>Teklifi Hazırlayan</div>
+                    <div style={{ borderTop: '1px solid #999', width: '160px', margin: '0 auto 2px' }}></div>
+                    <div style={{ fontSize: '7px', color: '#888' }}>DÜNYASAN SAVUNMA A.Ş.</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '40px' }}>Müşteri Onayı</div>
-                    <div style={{ borderTop: '1px solid #999', width: '200px', margin: '0 auto 4px' }}></div>
-                    <div style={{ fontSize: '9px', color: '#888' }}>Kaşe / İmza / Tarih</div>
+                    <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '25px' }}>Müşteri Onayı</div>
+                    <div style={{ borderTop: '1px solid #999', width: '160px', margin: '0 auto 2px' }}></div>
+                    <div style={{ fontSize: '7px', color: '#888' }}>Kaşe / İmza / Tarih</div>
                   </div>
                 </div>
 
-                <div style={{ textAlign: 'center', fontSize: '8px', color: '#999', marginTop: '12px', fontStyle: 'italic' }}>
+                <div style={{ textAlign: 'center', fontSize: '7px', color: '#999', marginTop: '6px', fontStyle: 'italic' }}>
                   Bu belge DÜNYASAN SAVUNMA ANONİM ŞİRKETİ tarafından hazırlanmıştır. Gizli ve özeldir.
                 </div>
               </div>

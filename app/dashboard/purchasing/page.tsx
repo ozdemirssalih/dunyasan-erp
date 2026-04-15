@@ -16,6 +16,7 @@ interface PurchasingRecord {
   malzeme_talep_no: string | null
   satinalma_teklif_no: string | null
   fiyat: number | null
+  para_birimi: string | null
   siparis_detayi: string | null
   miktar: number | null
   sevk_irsaliye_no: string | null
@@ -26,6 +27,13 @@ interface PurchasingRecord {
   created_at: string
 }
 
+const CURRENCIES = [
+  { code: 'TRY', symbol: '₺', label: 'Türk Lirası (₺)' },
+  { code: 'EUR', symbol: '€', label: 'Euro (€)' },
+  { code: 'USD', symbol: '$', label: 'ABD Doları ($)' },
+  { code: 'GBP', symbol: '£', label: 'İngiliz Sterlini (£)' },
+]
+
 const emptyForm = {
   siparis_tarihi: new Date().toISOString().split('T')[0],
   firma_adi: '',
@@ -35,6 +43,7 @@ const emptyForm = {
   malzeme_talep_no: '',
   satinalma_teklif_no: '',
   fiyat: '',
+  para_birimi: 'TRY',
   siparis_detayi: '',
   miktar: '',
   sevk_irsaliye_no: '',
@@ -219,6 +228,7 @@ export default function PurchasingPage() {
         malzeme_talep_no: formData.malzeme_talep_no || null,
         satinalma_teklif_no: formData.satinalma_teklif_no || null,
         fiyat: formData.fiyat ? parseFloat(formData.fiyat) : null,
+        para_birimi: formData.para_birimi || 'TRY',
         siparis_detayi: formData.siparis_detayi || null,
         miktar: formData.miktar ? parseFloat(formData.miktar) : null,
         sevk_irsaliye_no: formData.sevk_irsaliye_no || null,
@@ -267,6 +277,7 @@ export default function PurchasingPage() {
       malzeme_talep_no: record.malzeme_talep_no || '',
       satinalma_teklif_no: record.satinalma_teklif_no || '',
       fiyat: record.fiyat?.toString() || '',
+      para_birimi: record.para_birimi || 'TRY',
       siparis_detayi: record.siparis_detayi || '',
       miktar: record.miktar?.toString() || '',
       sevk_irsaliye_no: record.sevk_irsaliye_no || '',
@@ -598,7 +609,7 @@ export default function PurchasingPage() {
                         <td className="px-3 py-3 text-sm text-gray-600">{record.malzeme_talep_no || '-'}</td>
                         <td className="px-3 py-3 text-sm text-gray-600">{record.satinalma_teklif_no || '-'}</td>
                         <td className="px-3 py-3 text-sm font-semibold text-gray-900">
-                          {record.fiyat != null ? `${record.fiyat.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺` : '-'}
+                          {record.fiyat != null ? `${(CURRENCIES.find(c => c.code === record.para_birimi)?.symbol || '₺')} ${record.fiyat.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '-'}
                         </td>
                         <td className="px-3 py-3 text-sm text-gray-600">{record.miktar ?? '-'}</td>
                         <td className="px-3 py-3">
@@ -873,10 +884,24 @@ export default function PurchasingPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Price, Quantity, Detail */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Row 3: Currency, Price, Quantity, Detail */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fiyat (₺)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Para Birimi</label>
+                    <select
+                      value={formData.para_birimi}
+                      onChange={(e) => setFormData({ ...formData, para_birimi: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {CURRENCIES.map(c => (
+                        <option key={c.code} value={c.code}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fiyat ({CURRENCIES.find(c => c.code === formData.para_birimi)?.symbol || '₺'})
+                    </label>
                     <input
                       type="number"
                       step="0.01"

@@ -61,7 +61,7 @@ interface ProductItem {
   unit: string
   quantity: number
   unit_price: number | null
-  source: 'warehouse' | 'inventory'
+  source: 'warehouse' | 'inventory' | 'tools'
 }
 
 interface Supplier {
@@ -117,7 +117,7 @@ export default function PurchasingPage() {
       setCurrentUser(profile?.full_name || '')
 
       // Paralel veri yükleme
-      const [recordsRes, whRes, invRes, suppRes] = await Promise.all([
+      const [recordsRes, whRes, invRes, suppRes, toolsRes] = await Promise.all([
         supabase
           .from('purchasing_tracking')
           .select('*')
@@ -138,6 +138,12 @@ export default function PurchasingPage() {
           .eq('company_id', fetchedCompanyId)
           .eq('is_active', true)
           .order('company_name'),
+        supabase
+          .from('tools')
+          .select('*')
+          .eq('company_id', fetchedCompanyId)
+          .eq('is_active', true)
+          .order('tool_code'),
       ])
 
       if (recordsRes.error) throw recordsRes.error
@@ -166,7 +172,18 @@ export default function PurchasingPage() {
         source: 'inventory' as const,
       }))
 
-      setProducts([...whProducts, ...invProducts])
+      const toolProducts: ProductItem[] = (toolsRes.data || []).map((item: any) => ({
+        id: `tool-${item.id}`,
+        code: item.tool_code || '',
+        name: item.tool_name || 'İsimsiz',
+        category: item.tool_type || 'Takım',
+        unit: 'adet',
+        quantity: item.quantity || 0,
+        unit_price: item.unit_price || null,
+        source: 'tools' as const,
+      }))
+
+      setProducts([...whProducts, ...invProducts, ...toolProducts])
       setSuppliers(suppRes.data || [])
     } catch (error) {
       console.error('Error loading data:', error)
@@ -790,7 +807,7 @@ export default function PurchasingPage() {
                 {/* Row 2: Product Selection + Codes & Numbers */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ürün Seçin (Stok & Hammadde)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ürün Seçin</label>
                     <select
                       onChange={(e) => {
                         const selected = products.find(p => p.id === e.target.value)
@@ -820,6 +837,15 @@ export default function PurchasingPage() {
                           {products.filter(p => p.source === 'inventory').length > 0 && (
                             <optgroup label="Stok & Hammadde">
                               {products.filter(p => p.source === 'inventory').map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.code ? `[${p.code}] ` : ''}{p.name} — Stok: {p.quantity} {p.unit}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {products.filter(p => p.source === 'tools').length > 0 && (
+                            <optgroup label="Takımhane">
+                              {products.filter(p => p.source === 'tools').map((p) => (
                                 <option key={p.id} value={p.id}>
                                   {p.code ? `[${p.code}] ` : ''}{p.name} — Stok: {p.quantity} {p.unit}
                                 </option>

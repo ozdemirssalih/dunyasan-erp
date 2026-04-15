@@ -959,8 +959,8 @@ export default function QuotationsPage() {
             </div>
 
             {/* PDF Çıktı Alanı */}
-            <div className="bg-white rounded-xl shadow-lg p-2 max-w-2xl mx-auto">
-              <div ref={printRef} style={{ padding: '24px 28px', fontFamily: "'Segoe UI', sans-serif", fontSize: '10px', color: '#1a1a2e', background: '#fff', maxWidth: '600px', margin: '0 auto' }}>
+            <div className="bg-white rounded-xl shadow-lg p-2 mx-auto" style={{ maxWidth: '794px' }}>
+              <div ref={printRef} style={{ padding: '28px 32px', fontFamily: "'Segoe UI', sans-serif", fontSize: '10px', color: '#1a1a2e', background: '#fff', width: '730px', margin: '0 auto' }}>
                 {/* PDF Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #003366', paddingBottom: '18px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>

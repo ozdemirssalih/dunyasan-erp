@@ -978,30 +978,30 @@ export default function QuotationsPage() {
                   </div>
                 </div>
 
-                {/* Info Boxes */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '18px' }}>
-                  <div style={{ border: '1px solid #dde1e7', borderRadius: '6px', padding: '12px 16px', background: '#fafbfc' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '8px', paddingBottom: '5px', borderBottom: '1px solid #e2e6eb' }}>Müşteri Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.8 }}>
+                {/* Info Boxes — compact */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ border: '1px solid #dde1e7', borderRadius: '4px', padding: '6px 10px', background: '#fafbfc' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '4px', paddingBottom: '3px', borderBottom: '1px solid #e2e6eb' }}>Müşteri Bilgileri</div>
+                    <table style={{ fontSize: '9px', lineHeight: 1.5 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Firma:</td><td>{previewQuotation.customer_name}</td></tr>
-                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Yetkili:</td><td>{previewQuotation.customer_contact}</td></tr>}
-                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Tel:</td><td>{previewQuotation.customer_phone}</td></tr>}
-                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>E-posta:</td><td>{previewQuotation.customer_email}</td></tr>}
-                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Adres:</td><td>{previewQuotation.customer_address}</td></tr>}
+                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Firma:</td><td>{previewQuotation.customer_name}</td></tr>
+                        {previewQuotation.customer_contact && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Yetkili:</td><td>{previewQuotation.customer_contact}</td></tr>}
+                        {previewQuotation.customer_phone && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Tel:</td><td>{previewQuotation.customer_phone}</td></tr>}
+                        {previewQuotation.customer_email && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>E-posta:</td><td>{previewQuotation.customer_email}</td></tr>}
+                        {previewQuotation.customer_address && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Adres:</td><td>{previewQuotation.customer_address}</td></tr>}
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ border: '1px solid #dde1e7', borderRadius: '6px', padding: '12px 16px', background: '#fafbfc' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '8px', paddingBottom: '5px', borderBottom: '1px solid #e2e6eb' }}>Teklif Bilgileri</div>
-                    <table style={{ fontSize: '10px', lineHeight: 1.8 }}>
+                  <div style={{ border: '1px solid #dde1e7', borderRadius: '4px', padding: '6px 10px', background: '#fafbfc' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '4px', paddingBottom: '3px', borderBottom: '1px solid #e2e6eb' }}>Teklif Bilgileri</div>
+                    <table style={{ fontSize: '9px', lineHeight: 1.5 }}>
                       <tbody>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Teklif No:</td><td style={{ fontWeight: 700 }}>{previewQuotation.quotation_number}</td></tr>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Tarih:</td><td>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Geçerlilik:</td><td>{previewQuotation.validity_days} gün</td></tr>
-                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Teslim:</td><td>{previewQuotation.delivery_time}</td></tr>}
-                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Ödeme:</td><td>{previewQuotation.payment_terms}</td></tr>}
-                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '10px' }}>Para Birimi:</td><td>{previewQuotation.currency}</td></tr>
+                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Teklif No:</td><td style={{ fontWeight: 700 }}>{previewQuotation.quotation_number}</td></tr>
+                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Tarih:</td><td>{new Date(previewQuotation.quotation_date).toLocaleDateString('tr-TR')}</td></tr>
+                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Geçerlilik:</td><td>{previewQuotation.validity_days} gün</td></tr>
+                        {previewQuotation.delivery_time && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Teslim:</td><td>{previewQuotation.delivery_time}</td></tr>}
+                        {previewQuotation.payment_terms && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Ödeme:</td><td>{previewQuotation.payment_terms}</td></tr>}
+                        <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Para Birimi:</td><td>{previewQuotation.currency}</td></tr>
                       </tbody>
                     </table>
                   </div>

@@ -824,14 +824,16 @@ export default function QuotationsPage() {
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-gray-600">Ara Toplam:</span><span className="font-semibold">{fmtMoney(subtotal)}</span></div>
+                      {(discountAmount > 0 || taxAmount > 0) && (
+                        <div className="flex justify-between"><span className="text-gray-600">Ara Toplam:</span><span className="font-semibold">{fmtMoney(subtotal)}</span></div>
+                      )}
                       {discountAmount > 0 && (
                         <div className="flex justify-between text-red-600"><span>İndirim ({form.discount_rate}%):</span><span>-{fmtMoney(discountAmount)}</span></div>
                       )}
                       {taxAmount > 0 && (
                         <div className="flex justify-between"><span className="text-gray-600">KDV ({form.tax_rate}%):</span><span className="font-semibold">{fmtMoney(taxAmount)}</span></div>
                       )}
-                      <div className="flex justify-between border-t pt-2 text-lg font-bold text-blue-700">
+                      <div className={`flex justify-between text-lg font-bold text-blue-700 ${(discountAmount > 0 || taxAmount > 0) ? 'border-t pt-2' : ''}`}>
                         <span>TOPLAM:</span><span>{fmtMoney(grandTotal)}</span>
                       </div>
                     </div>
@@ -1047,10 +1049,13 @@ export default function QuotationsPage() {
                   <div style={{ width: '320px', border: '2px solid #003366', borderRadius: '6px', overflow: 'hidden' }}>
                     {(() => {
                       const sym = CURRENCIES.find(c => c.code === previewQuotation.currency)?.symbol || '€'
+                      const hasExtras = previewQuotation.discount_amount > 0 || previewQuotation.tax_amount > 0
                       const rowStyle = { display: 'flex', justifyContent: 'space-between', padding: '7px 14px', fontSize: '11px', borderBottom: '1px solid #e2e6eb' }
                       return (
                         <>
-                          <div style={rowStyle}><span style={{ fontWeight: 600, color: '#444' }}>Ara Toplam:</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
+                          {hasExtras && (
+                            <div style={rowStyle}><span style={{ fontWeight: 600, color: '#444' }}>Ara Toplam:</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{sym} {previewQuotation.subtotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
+                          )}
                           {previewQuotation.discount_amount > 0 && (
                             <div style={rowStyle}><span style={{ fontWeight: 600, color: '#c53030' }}>İndirim ({previewQuotation.discount_rate}%):</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#c53030' }}>-{sym} {previewQuotation.discount_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
                           )}

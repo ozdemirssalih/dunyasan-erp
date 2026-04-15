@@ -832,7 +832,7 @@ export default function QuotationsPage() {
                         <div className="flex justify-between"><span className="text-gray-600">KDV ({form.tax_rate}%):</span><span className="font-semibold">{fmtMoney(taxAmount)}</span></div>
                       )}
                       <div className="flex justify-between border-t pt-2 text-lg font-bold text-blue-700">
-                        <span>GENEL TOPLAM:</span><span>{fmtMoney(grandTotal)}</span>
+                        <span>TOPLAM:</span><span>{fmtMoney(grandTotal)}</span>
                       </div>
                     </div>
                   </div>
@@ -1058,7 +1058,7 @@ export default function QuotationsPage() {
                             <div style={rowStyle}><span style={{ fontWeight: 600, color: '#444' }}>KDV ({previewQuotation.tax_rate}%):</span><span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#003366' }}>{sym} {previewQuotation.tax_amount?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span></div>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#003366' }}>
-                            <span style={{ fontWeight: 700, color: '#fff', fontSize: '12px' }}>GENEL TOPLAM</span>
+                            <span style={{ fontWeight: 700, color: '#fff', fontSize: '12px' }}>TOPLAM</span>
                             <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: '#fff', fontSize: '14px' }}>{sym} {previewQuotation.grand_total?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
                           </div>
                         </>

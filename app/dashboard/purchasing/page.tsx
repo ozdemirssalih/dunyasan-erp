@@ -431,7 +431,11 @@ export default function PurchasingPage() {
   const approvedCount = records.filter(r => r.satinalma_onay).length
   const rejectedCount = records.filter(r => r.satinalma_red).length
   const pendingCount = records.filter(r => !r.satinalma_onay && !r.satinalma_red).length
-  const totalAmount = records.reduce((sum, r) => sum + ((r.fiyat || 0) * (r.miktar || 1)), 0)
+  const totalsByCurrency: Record<string, number> = {}
+  records.forEach(r => {
+    const cur = r.para_birimi || 'TRY'
+    totalsByCurrency[cur] = (totalsByCurrency[cur] || 0) + ((r.fiyat || 0) * (r.miktar || 1))
+  })
 
   const SortIcon = ({ field }: { field: string }) => {
     if (sortField !== field) return <ChevronDown className="w-3 h-3 text-gray-300" />
@@ -508,8 +512,18 @@ export default function PurchasingPage() {
             <p className="text-2xl font-bold text-red-600">{rejectedCount}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500">
-            <p className="text-sm text-gray-500">Toplam Tutar</p>
-            <p className="text-2xl font-bold text-purple-600">{totalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-sm text-gray-500 mb-1">Toplam Tutar</p>
+            {Object.keys(totalsByCurrency).length > 0 ? (
+              <div className="space-y-1">
+                {Object.entries(totalsByCurrency).map(([cur, amount]) => (
+                  <p key={cur} className="text-lg font-bold text-purple-600">
+                    {CURRENCIES.find(c => c.code === cur)?.symbol || cur} {amount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-2xl font-bold text-purple-600">0,00</p>
+            )}
           </div>
         </div>
 

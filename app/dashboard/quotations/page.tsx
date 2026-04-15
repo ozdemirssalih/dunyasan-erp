@@ -573,7 +573,7 @@ export default function QuotationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-3xl font-bold text-gray-800">Fiyat Teklifleri</h2>
-                <p className="text-gray-600">Müşterilere gönderilecek proforma fiyat tekliflerini yönetin</p>
+                <p className="text-gray-600">Müşterilere gönderilecek fiyat tekliflerini yönetin</p>
               </div>
               <button onClick={handleNew} className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 <Plus className="w-5 h-5" />
@@ -971,8 +971,8 @@ export default function QuotationsPage() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#003366', letterSpacing: '1px' }}>PROFORMA FİYAT TEKLİFİ</div>
-                    <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>Proforma Price Quotation</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#003366', letterSpacing: '1px' }}>FİYAT TEKLİFİ</div>
+                    <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>Price Quotation</div>
                   </div>
                 </div>
 

@@ -431,7 +431,7 @@ export default function PurchasingPage() {
   const approvedCount = records.filter(r => r.satinalma_onay).length
   const rejectedCount = records.filter(r => r.satinalma_red).length
   const pendingCount = records.filter(r => !r.satinalma_onay && !r.satinalma_red).length
-  const totalAmount = records.reduce((sum, r) => sum + (r.fiyat || 0), 0)
+  const totalAmount = records.reduce((sum, r) => sum + ((r.fiyat || 0) * (r.miktar || 1)), 0)
 
   const SortIcon = ({ field }: { field: string }) => {
     if (sortField !== field) return <ChevronDown className="w-3 h-3 text-gray-300" />
@@ -590,7 +590,7 @@ export default function PurchasingPage() {
                       onClick={() => handleSort('fiyat')}
                     >
                       <div className="flex items-center space-x-1">
-                        <span>Fiyat</span>
+                        <span>Toplam Tutar</span>
                         <SortIcon field="fiyat" />
                       </div>
                     </th>
@@ -626,7 +626,7 @@ export default function PurchasingPage() {
                         <td className="px-3 py-3 text-sm text-gray-600">{record.malzeme_talep_no || '-'}</td>
                         <td className="px-3 py-3 text-sm text-gray-600">{record.satinalma_teklif_no || '-'}</td>
                         <td className="px-3 py-3 text-sm font-semibold text-gray-900">
-                          {record.fiyat != null ? `${(CURRENCIES.find(c => c.code === record.para_birimi)?.symbol || '₺')} ${record.fiyat.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '-'}
+                          {record.fiyat != null ? `${(CURRENCIES.find(c => c.code === record.para_birimi)?.symbol || '₺')} ${((record.fiyat || 0) * (record.miktar || 1)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '-'}
                         </td>
                         <td className="px-3 py-3 text-sm text-gray-600">{record.miktar ?? '-'}</td>
                         <td className="px-3 py-3">
@@ -926,7 +926,7 @@ export default function PurchasingPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Fiyat ({CURRENCIES.find(c => c.code === formData.para_birimi)?.symbol || '₺'})
+                      Birim Fiyat ({CURRENCIES.find(c => c.code === formData.para_birimi)?.symbol || '₺'})
                     </label>
                     <input
                       type="number"
@@ -959,6 +959,18 @@ export default function PurchasingPage() {
                     />
                   </div>
                 </div>
+
+                {/* Toplam Tutar Gösterimi */}
+                {formData.fiyat && formData.miktar && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                    <span className="text-sm text-blue-700 font-medium">
+                      Toplam Tutar: {CURRENCIES.find(c => c.code === formData.para_birimi)?.symbol || '₺'} {(parseFloat(formData.fiyat) * parseFloat(formData.miktar)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs text-blue-500">
+                      ({formData.miktar} × {CURRENCIES.find(c => c.code === formData.para_birimi)?.symbol || '₺'} {parseFloat(formData.fiyat).toLocaleString('tr-TR', { minimumFractionDigits: 2 })})
+                    </span>
+                  </div>
+                )}
 
                 {/* Row 4: Waybill, Invoice */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

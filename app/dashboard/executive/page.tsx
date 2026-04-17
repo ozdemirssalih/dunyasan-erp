@@ -31,8 +31,12 @@ export default function ExecutiveDashboard() {
   const [employeeCount, setEmployeeCount] = useState(0)
   const [recentActivities, setRecentActivities] = useState<any[]>([])
   const [waybillStats, setWaybillStats] = useState({ pending: 0, completed: 0 })
+  const [purchasingSummary, setPurchasingSummary] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 })
+  const [quotationSummary, setQuotationSummary] = useState({ draft: 0, sent: 0, accepted: 0, rejected: 0, totalAmount: 0 })
+  const [warehouseFlow, setWarehouseFlow] = useState({ entries30: 0, exits30: 0 })
+  const [liveTime, setLiveTime] = useState(new Date())
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { loadAll(); const t = setInterval(() => setLiveTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
   const loadAll = async () => {
     try {
@@ -58,6 +62,9 @@ export default function ExecutiveDashboard() {
         loadMachines(cid).catch(e => console.error('machines:', e)),
         loadRecentActivities(cid).catch(e => console.error('activities:', e)),
         loadWaybills(cid).catch(e => console.error('waybills:', e)),
+        loadPurchasing(cid).catch(e => console.error('purchasing:', e)),
+        loadQuotations(cid).catch(e => console.error('quotations:', e)),
+        loadWarehouseFlow(cid).catch(e => console.error('wh-flow:', e)),
       ])
     } catch (err) { console.error('Dashboard error:', err) }
     finally { setLoading(false) }
@@ -233,6 +240,45 @@ export default function ExecutiveDashboard() {
     } catch { /* */ }
   }
 
+  const loadPurchasing = async (cid: string) => {
+    try {
+      const { data } = await supabase.from('purchasing_tracking').select('satinalma_onay, satinalma_red, fiyat, miktar').eq('company_id', cid)
+      if (!data) return
+      setPurchasingSummary({
+        pending: data.filter(d => !d.satinalma_onay && !d.satinalma_red).length,
+        approved: data.filter(d => d.satinalma_onay).length,
+        rejected: data.filter(d => d.satinalma_red).length,
+        total: data.length,
+      })
+    } catch { /* */ }
+  }
+
+  const loadQuotations = async (cid: string) => {
+    try {
+      const { data } = await supabase.from('quotations').select('status, grand_total').eq('company_id', cid)
+      if (!data) return
+      setQuotationSummary({
+        draft: data.filter(d => d.status === 'draft').length,
+        sent: data.filter(d => d.status === 'sent').length,
+        accepted: data.filter(d => d.status === 'accepted').length,
+        rejected: data.filter(d => d.status === 'rejected').length,
+        totalAmount: data.reduce((s, d) => s + (d.grand_total || 0), 0),
+      })
+    } catch { /* */ }
+  }
+
+  const loadWarehouseFlow = async (cid: string) => {
+    try {
+      const d30 = new Date(Date.now() - 30 * 86400000).toISOString()
+      const { data } = await supabase.from('warehouse_transactions').select('type, quantity').eq('company_id', cid).gte('created_at', d30)
+      if (!data) return
+      setWarehouseFlow({
+        entries30: data.filter(t => t.type === 'entry').reduce((s, t) => s + (t.quantity || 0), 0),
+        exits30: data.filter(t => t.type === 'exit').reduce((s, t) => s + (t.quantity || 0), 0),
+      })
+    } catch { /* */ }
+  }
+
   const loadRecentActivities = async (cid: string) => {
     const activities: any[] = []
 
@@ -323,8 +369,8 @@ export default function ExecutiveDashboard() {
             <p className="text-slate-300 mt-2">Tüm sistemin genel görünümü</p>
           </div>
           <div className="text-right text-sm text-slate-400">
-            <p>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-            <p className="text-lg font-bold text-white mt-1">{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</p>
+            <p>{liveTime.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p className="text-2xl font-bold text-white mt-1 font-mono">{liveTime.toLocaleTimeString('tr-TR')}</p>
           </div>
         </div>
       </div>
@@ -559,6 +605,71 @@ export default function ExecutiveDashboard() {
                 <p className="text-sm mt-1"><span className="text-red-600 font-bold">{item.stock}</span> / <span className="text-gray-500">{item.min} {item.unit}</span></p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Satınalma + Teklif + Depo Akışı */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* Satınalma Özeti */}
+        <div onClick={() => router.push('/dashboard/purchasing')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-indigo-100 rounded-lg"><Package className="w-5 h-5 text-indigo-600" /></div>
+            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">SATINALMA</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div><p className="text-xl font-bold text-yellow-600">{purchasingSummary.pending}</p><p className="text-[10px] text-gray-500">Bekleyen</p></div>
+            <div><p className="text-xl font-bold text-green-600">{purchasingSummary.approved}</p><p className="text-[10px] text-gray-500">Onaylanan</p></div>
+            <div><p className="text-xl font-bold text-red-600">{purchasingSummary.rejected}</p><p className="text-[10px] text-gray-500">Reddedilen</p></div>
+          </div>
+        </div>
+
+        {/* Fiyat Teklifleri */}
+        <div onClick={() => router.push('/dashboard/quotations')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-cyan-100 rounded-lg"><BarChart3 className="w-5 h-5 text-cyan-600" /></div>
+            <span className="text-xs font-semibold text-cyan-600 bg-cyan-50 px-2 py-1 rounded-full">TEKLİFLER</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1 text-center">
+            <div><p className="text-lg font-bold text-gray-600">{quotationSummary.draft}</p><p className="text-[10px] text-gray-500">Taslak</p></div>
+            <div><p className="text-lg font-bold text-blue-600">{quotationSummary.sent}</p><p className="text-[10px] text-gray-500">Gönderilen</p></div>
+            <div><p className="text-lg font-bold text-green-600">{quotationSummary.accepted}</p><p className="text-[10px] text-gray-500">Kabul</p></div>
+            <div><p className="text-lg font-bold text-red-600">{quotationSummary.rejected}</p><p className="text-[10px] text-gray-500">Red</p></div>
+          </div>
+        </div>
+
+        {/* Depo Akışı */}
+        <div onClick={() => router.push('/dashboard/warehouse')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-teal-100 rounded-lg"><Truck className="w-5 h-5 text-teal-600" /></div>
+            <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-full">SON 30 GÜN</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-green-50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-green-700">{fmtN(warehouseFlow.entries30)}</p>
+              <p className="text-[10px] text-green-600">Depo Giriş</p>
+            </div>
+            <div className="bg-red-50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-red-700">{fmtN(warehouseFlow.exits30)}</p>
+              <p className="text-[10px] text-red-600">Depo Çıkış</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tezgah Durum Çubuğu */}
+      {machineStats.total > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border p-5 mb-6">
+          <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-3"><Wrench className="w-5 h-5 text-gray-600" /> Tezgah Durumları</h2>
+          <div className="flex rounded-full overflow-hidden h-6 mb-3">
+            {machineStats.active > 0 && <div className="bg-green-500 flex items-center justify-center text-white text-xs font-bold" style={{ width: `${machineStats.active / machineStats.total * 100}%` }}>{machineStats.active}</div>}
+            {machineStats.maintenance > 0 && <div className="bg-yellow-500 flex items-center justify-center text-white text-xs font-bold" style={{ width: `${machineStats.maintenance / machineStats.total * 100}%` }}>{machineStats.maintenance}</div>}
+            {machineStats.offline > 0 && <div className="bg-red-500 flex items-center justify-center text-white text-xs font-bold" style={{ width: `${machineStats.offline / machineStats.total * 100}%` }}>{machineStats.offline}</div>}
+          </div>
+          <div className="flex gap-4 text-xs text-gray-600">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500"></span> Aktif ({machineStats.active})</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> Bakım ({machineStats.maintenance})</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500"></span> Devre Dışı ({machineStats.offline})</span>
           </div>
         </div>
       )}

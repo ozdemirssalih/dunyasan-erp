@@ -153,9 +153,14 @@ export default function ManagementDashboard() {
   const [criticalStock, setCriticalStock] = useState<StockItem[]>([])
   const [topProjects, setTopProjects] = useState<TopProject[]>([])
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
+  const [warehouseSummary, setWarehouseSummary] = useState({ totalItems: 0, totalStock: 0, entries30: 0, exits30: 0 })
+  const [purchasingSummary, setPurchasingSummary] = useState({ pending: 0, approved: 0, rejected: 0, totalAmount: 0 })
+  const [liveTime, setLiveTime] = useState(new Date())
 
   useEffect(() => {
     loadDashboardData()
+    const timer = setInterval(() => setLiveTime(new Date()), 1000)
+    return () => clearInterval(timer)
   }, [])
 
   const loadDashboardData = async () => {
@@ -187,7 +192,9 @@ export default function ManagementDashboard() {
         loadMachineComparison(profile.company_id),
         loadCriticalStock(profile.company_id),
         loadTopProjects(profile.company_id),
-        loadRecentActivities(profile.company_id)
+        loadRecentActivities(profile.company_id),
+        loadWarehouseSummary(profile.company_id),
+        loadPurchasingSummary(profile.company_id),
       ])
 
     } catch (error) {
@@ -797,6 +804,33 @@ export default function ManagementDashboard() {
     }
   }
 
+  const loadWarehouseSummary = async (companyId: string) => {
+    try {
+      const { data: items } = await supabase.from('warehouse_items').select('current_stock').eq('company_id', companyId).eq('is_active', true)
+      const totalItems = items?.length || 0
+      const totalStock = items?.reduce((s, i) => s + (i.current_stock || 0), 0) || 0
+
+      const d30 = new Date(Date.now() - 30 * 86400000).toISOString()
+      const { data: txns } = await supabase.from('warehouse_transactions').select('type, quantity').eq('company_id', companyId).gte('created_at', d30)
+      const entries30 = txns?.filter(t => t.type === 'entry').reduce((s, t) => s + (t.quantity || 0), 0) || 0
+      const exits30 = txns?.filter(t => t.type === 'exit').reduce((s, t) => s + (t.quantity || 0), 0) || 0
+
+      setWarehouseSummary({ totalItems, totalStock, entries30, exits30 })
+    } catch (err) { console.error('Depo özet hatası:', err) }
+  }
+
+  const loadPurchasingSummary = async (companyId: string) => {
+    try {
+      const { data } = await supabase.from('purchasing_tracking').select('satinalma_onay, satinalma_red, fiyat, miktar').eq('company_id', companyId)
+      if (!data) return
+      const pending = data.filter(d => !d.satinalma_onay && !d.satinalma_red).length
+      const approved = data.filter(d => d.satinalma_onay).length
+      const rejected = data.filter(d => d.satinalma_red).length
+      const totalAmount = data.reduce((s, d) => s + ((d.fiyat || 0) * (d.miktar || 1)), 0)
+      setPurchasingSummary({ pending, approved, rejected, totalAmount })
+    } catch (err) { console.error('Satınalma özet hatası:', err) }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -827,7 +861,7 @@ export default function ManagementDashboard() {
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{liveTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
               </div>
             </div>
           </div>
@@ -1245,6 +1279,141 @@ export default function ManagementDashboard() {
           </div>
         </div>
       </div>
+      {/* Warehouse & Purchasing Summary */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Depo Özeti */}
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <Box className="w-7 h-7 text-cyan-600" />
+              Depo Özeti
+            </h3>
+            <button onClick={() => router.push('/dashboard/warehouse')} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+              Depoya Git <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-5 border border-cyan-200">
+              <div className="text-xs font-semibold text-cyan-600 mb-1">Toplam Ürün Çeşidi</div>
+              <div className="text-3xl font-bold text-cyan-800">{warehouseSummary.totalItems}</div>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border border-blue-200">
+              <div className="text-xs font-semibold text-blue-600 mb-1">Toplam Stok</div>
+              <div className="text-3xl font-bold text-blue-800">{warehouseSummary.totalStock.toLocaleString()}</div>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
+              <div className="text-xs font-semibold text-green-600 mb-1">Son 30 Gün Giriş</div>
+              <div className="text-3xl font-bold text-green-800">{warehouseSummary.entries30.toLocaleString()}</div>
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200">
+              <div className="text-xs font-semibold text-orange-600 mb-1">Son 30 Gün Çıkış</div>
+              <div className="text-3xl font-bold text-orange-800">{warehouseSummary.exits30.toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Satınalma Özeti */}
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <ShoppingCart className="w-7 h-7 text-indigo-600" />
+              Satınalma Özeti
+            </h3>
+            <button onClick={() => router.push('/dashboard/purchasing')} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+              Satınalmaya Git <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-5 border border-yellow-200">
+              <div className="text-xs font-semibold text-yellow-600 mb-1">Bekleyen Talepler</div>
+              <div className="text-3xl font-bold text-yellow-800">{purchasingSummary.pending}</div>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
+              <div className="text-xs font-semibold text-green-600 mb-1">Onaylanan</div>
+              <div className="text-3xl font-bold text-green-800">{purchasingSummary.approved}</div>
+            </div>
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-5 border border-red-200">
+              <div className="text-xs font-semibold text-red-600 mb-1">Reddedilen</div>
+              <div className="text-3xl font-bold text-red-800">{purchasingSummary.rejected}</div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 border border-purple-200">
+              <div className="text-xs font-semibold text-purple-600 mb-1">Toplam Tutar</div>
+              <div className="text-xl font-bold text-purple-800">{purchasingSummary.totalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Machine Comparison Bar Chart */}
+      {machineComparison.length > 0 && (
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <BarChart3 className="w-7 h-7 text-indigo-600" />
+            Tezgah Karşılaştırma (Son 30 Gün)
+          </h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={machineComparison} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis type="number" stroke="#6b7280" style={{ fontSize: '11px' }} />
+              <YAxis type="category" dataKey="machine" width={80} stroke="#6b7280" style={{ fontSize: '11px' }} />
+              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #ddd' }} />
+              <Legend />
+              <Bar dataKey="production" fill="#3b82f6" name="Üretim" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="efficiency" fill="#10b981" name="Verimlilik (%)" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Top Projects Table */}
+      {topProjects.length > 0 && (
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <Target className="w-7 h-7 text-green-600" />
+              Proje Performans Tablosu
+            </h3>
+            <button onClick={() => router.push('/dashboard/projects')} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+              Projelere Git <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b-2 border-gray-200">
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-700">Proje</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">Toplam Üretim</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">Fire</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">Fire Oranı</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">Verimlilik</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProjects.map((p, i) => {
+                  const fireRate = p.total_production > 0 ? (p.total_defects / p.total_production * 100) : 0
+                  return (
+                    <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/50">
+                      <td className="px-4 py-3 font-semibold text-gray-900">{p.project_name}</td>
+                      <td className="px-4 py-3 text-right font-bold text-blue-600">{p.total_production.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-red-600">{p.total_defects.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${fireRate > 5 ? 'bg-red-100 text-red-700' : fireRate > 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          %{fireRate.toFixed(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`font-bold ${p.efficiency >= 80 ? 'text-green-600' : p.efficiency >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          %{p.efficiency.toFixed(1)}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

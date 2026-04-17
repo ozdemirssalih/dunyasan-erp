@@ -134,19 +134,28 @@ export default function ExecutiveDashboard() {
   }
 
   const loadShipments = async (cid: string) => {
-    const { data } = await supabase.from('warehouse_transactions')
-      .select('id, type, quantity, supplier, shipment_destination, department_name, reference_number, notes, transaction_date, item_id')
-      .eq('company_id', cid).order('created_at', { ascending: false }).limit(15)
-    if (!data) return
+    try {
+      const { data, error } = await supabase.from('warehouse_transactions')
+        .select('id, type, quantity, supplier, shipment_destination, reference_number, notes, transaction_date, item_id')
+        .eq('company_id', cid).order('created_at', { ascending: false }).limit(15)
 
-    const itemIds = Array.from(new Set(data.map(t => t.item_id).filter(Boolean)))
-    const { data: items } = itemIds.length ? await supabase.from('warehouse_items').select('id, name, code, unit').in('id', itemIds) : { data: [] }
-    const itemMap = new Map((items ?? []).map(i => [i.id, i]))
-    const withItems = data.map(t => {
-      const item = itemMap.get(t.item_id)
-      return { ...t, item_name: item?.name || '-', item_code: item?.code || '-', unit: item?.unit || '' }
-    })
-    setRecentShipments(withItems)
+      if (error) {
+        console.error('Depo hareketleri hatası:', error)
+        return
+      }
+      if (!data || data.length === 0) return
+
+      const itemIds = Array.from(new Set(data.map(t => t.item_id).filter(Boolean)))
+      const { data: items } = itemIds.length ? await supabase.from('warehouse_items').select('id, name, code, unit').in('id', itemIds) : { data: [] }
+      const itemMap = new Map((items ?? []).map(i => [i.id, i]))
+      const withItems = data.map(t => {
+        const item = itemMap.get(t.item_id)
+        return { ...t, item_name: item?.name || '-', item_code: item?.code || '-', unit: item?.unit || '', department_name: '' }
+      })
+      setRecentShipments(withItems)
+    } catch (err) {
+      console.error('loadShipments hatası:', err)
+    }
   }
 
   const loadEmployees = async (cid: string) => {

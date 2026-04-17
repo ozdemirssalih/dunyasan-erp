@@ -9,7 +9,7 @@ import {
   Wallet, Truck, Shield, AlertTriangle,
   Clock, ArrowUpRight, ArrowDownRight, Box, FolderKanban,
   ExternalLink, DollarSign, Wrench, BarChart3, Package,
-  CheckCircle2, XCircle, Percent, Flame
+  CheckCircle2, XCircle, Percent, Flame, FileText
 } from 'lucide-react'
 
 export default function ExecutiveDashboard() {
@@ -34,6 +34,7 @@ export default function ExecutiveDashboard() {
   const [purchasingSummary, setPurchasingSummary] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 })
   const [quotationSummary, setQuotationSummary] = useState({ draft: 0, sent: 0, accepted: 0, rejected: 0, totalAmount: 0 })
   const [warehouseFlow, setWarehouseFlow] = useState({ entries30: 0, exits30: 0 })
+  const [invoiceSummary, setInvoiceSummary] = useState({ total: 0, sales: 0, purchase: 0, salesAmount: 0, purchaseAmount: 0, draft: 0, recent: [] as any[] })
   const [liveTime, setLiveTime] = useState(new Date())
 
   useEffect(() => { loadAll(); const t = setInterval(() => setLiveTime(new Date()), 1000); return () => clearInterval(t) }, [])
@@ -65,6 +66,7 @@ export default function ExecutiveDashboard() {
         loadPurchasing(cid).catch(e => console.error('purchasing:', e)),
         loadQuotations(cid).catch(e => console.error('quotations:', e)),
         loadWarehouseFlow(cid).catch(e => console.error('wh-flow:', e)),
+        loadInvoices(cid).catch(e => console.error('invoices:', e)),
       ])
     } catch (err) { console.error('Dashboard error:', err) }
     finally { setLoading(false) }
@@ -286,6 +288,50 @@ export default function ExecutiveDashboard() {
         exits30: data.filter(t => t.type === 'exit').reduce((s, t) => s + (t.quantity || 0), 0),
       })
     } catch { /* */ }
+  }
+
+  const loadInvoices = async (cid: string) => {
+    try {
+      const { data } = await supabase.from('invoices')
+        .select('id, invoice_number, invoice_type, invoice_date, total_amount, tax_amount, status, customer_id, supplier_id')
+        .eq('company_id', cid)
+        .order('invoice_date', { ascending: false })
+
+      if (!data) return
+
+      const sales = data.filter(d => d.invoice_type === 'sales')
+      const purchase = data.filter(d => d.invoice_type === 'purchase')
+
+      // Son 5 fatura için müşteri/tedarikçi isimlerini çek
+      const recent5 = data.slice(0, 8)
+      const custIds = Array.from(new Set(recent5.map(r => r.customer_id).filter(Boolean)))
+      const suppIds = Array.from(new Set(recent5.map(r => r.supplier_id).filter(Boolean)))
+
+      const [custRes, suppRes] = await Promise.all([
+        custIds.length ? supabase.from('contacts').select('id, contact_name').in('id', custIds) : Promise.resolve({ data: [] }),
+        suppIds.length ? supabase.from('contacts').select('id, contact_name').in('id', suppIds) : Promise.resolve({ data: [] }),
+      ])
+
+      const custMap = new Map(((custRes as any).data ?? []).map((c: any) => [c.id, c.contact_name]))
+      const suppMap = new Map(((suppRes as any).data ?? []).map((s: any) => [s.id, s.contact_name]))
+
+      const recent = recent5.map(r => ({
+        ...r,
+        contact_name: r.invoice_type === 'sales'
+          ? custMap.get(r.customer_id) || '-'
+          : suppMap.get(r.supplier_id) || '-',
+      }))
+
+      setInvoiceSummary({
+        total: data.length,
+        sales: sales.length,
+        purchase: purchase.length,
+        salesAmount: sales.reduce((s, r) => s + (r.total_amount || 0), 0),
+        purchaseAmount: purchase.reduce((s, r) => s + (r.total_amount || 0), 0),
+        draft: data.filter(d => d.status === 'draft').length,
+        recent,
+      })
+    } catch { /* invoices table might not exist */ }
   }
 
   const loadRecentActivities = async (cid: string) => {
@@ -665,6 +711,79 @@ export default function ExecutiveDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Kesilen Faturalar */}
+      {invoiceSummary.total > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Fatura Özet Kartları */}
+          <div onClick={() => router.push('/dashboard/invoices')} className="bg-white rounded-xl shadow-sm border p-5 cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2"><FileText className="w-5 h-5 text-blue-600" /> Fatura Özeti</h2>
+              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{invoiceSummary.total} Fatura</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-xs text-green-600 font-semibold">Satış Faturaları</p>
+                <p className="text-xl font-bold text-green-700">{invoiceSummary.sales}</p>
+                <p className="text-xs text-green-600 mt-1">{fmt(invoiceSummary.salesAmount)}</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3">
+                <p className="text-xs text-red-600 font-semibold">Alış Faturaları</p>
+                <p className="text-xl font-bold text-red-700">{invoiceSummary.purchase}</p>
+                <p className="text-xs text-red-600 mt-1">{fmt(invoiceSummary.purchaseAmount)}</p>
+              </div>
+            </div>
+            {invoiceSummary.draft > 0 && (
+              <div className="mt-3 bg-yellow-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-yellow-700 font-semibold">{invoiceSummary.draft} taslak fatura bekliyor</p>
+              </div>
+            )}
+          </div>
+
+          {/* Son Kesilen Faturalar */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border">
+            <div onClick={() => router.push('/dashboard/invoices')} className="p-4 border-b flex items-center justify-between cursor-pointer hover:bg-gray-50">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-500" /> Son Kesilen Faturalar</h2>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="p-4 max-h-[300px] overflow-y-auto">
+              {invoiceSummary.recent.length === 0 ? (
+                <p className="text-gray-400 text-center py-6 text-sm">Henüz fatura yok</p>
+              ) : (
+                <div className="space-y-2">
+                  {invoiceSummary.recent.map((inv: any) => (
+                    <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 text-sm hover:bg-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-8 rounded-full ${inv.invoice_type === 'sales' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {inv.invoice_number || '-'}
+                            <span className="ml-2 text-xs font-normal text-gray-400">{inv.invoice_type === 'sales' ? 'Satış' : 'Alış'}</span>
+                          </p>
+                          <p className="text-xs text-gray-500">{inv.contact_name} • {new Date(inv.invoice_date).toLocaleDateString('tr-TR')}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${inv.invoice_type === 'sales' ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(inv.total_amount || 0)}
+                        </p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          inv.status === 'paid' ? 'bg-green-100 text-green-700' :
+                          inv.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                          inv.status === 'draft' ? 'bg-gray-100 text-gray-700' :
+                          inv.status === 'overdue' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {inv.status === 'paid' ? 'Ödendi' : inv.status === 'sent' ? 'Gönderildi' : inv.status === 'draft' ? 'Taslak' : inv.status === 'overdue' ? 'Gecikmiş' : inv.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tezgah Durum Çubuğu */}
       {machineStats.total > 0 && (

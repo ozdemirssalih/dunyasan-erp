@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers' | 'returns' | 'send-to-qc'
+type Tab = 'items' | 'entry' | 'exit' | 'scrap' | 'history' | 'by-source' | 'requests' | 'production-requests' | 'production-transfers' | 'qc-transfers' | 'returns' | 'send-to-qc'
 
 // ── Sabit Konfigürasyonlar ───────────────
 const WAREHOUSE_CATEGORIES = ['Aparat', 'Boryağ', 'Fire/Hurda', 'Hammadde', 'Mamül', 'Sarf Malzemeleri', 'Temizlik Malzemeleri', 'Yarı Mamül']
@@ -1278,6 +1278,7 @@ export default function WarehousePage() {
               { id: 'exit', label: 'Çıkış İşlemleri', icon: '↑' },
               { id: 'scrap', label: 'Hurda', icon: '🗑️', count: transactions.filter(t => t.type === 'scrap').length },
               { id: 'history', label: 'Geçmiş', count: transactions.length },
+              { id: 'by-source', label: 'Firma Bazlı', icon: '🏢' },
               { id: 'requests', label: 'Satın Alma Talepleri', count: requests.filter(r => r.status === 'pending').length },
               { id: 'production-requests', label: 'Üretim Talepleri', count: productionRequests.filter(r => r.status === 'pending').length },
               { id: 'production-transfers', label: 'Üretimden Transferler', count: productionTransfers.filter((t: any) => t.status === 'pending').length },
@@ -1943,22 +1944,84 @@ export default function WarehousePage() {
           </div>
         )}
 
-        {/* HISTORY TAB */}
-        {activeTab === 'history' && (() => {
+        {/* BY-SOURCE TAB */}
+        {activeTab === 'by-source' && (() => {
           // Kaynak bazlı özet hesapla
-          const sourceMap: Record<string, { entries: number; exits: number; scrap: number; count: number }> = {}
+          const sourceMap: Record<string, { entries: number; exits: number; scrap: number; count: number; items: Record<string, { name: string; code: string; unit: string; entry: number; exit: number }> }> = {}
           transactions.forEach(tx => {
             const source = tx.type === 'entry'
               ? (tx.supplier || 'Belirtilmemiş')
               : (tx.shipment_destination || tx.department_name || tx.supplier || 'Belirtilmemiş')
-            if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0 }
+            if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0, items: {} }
             sourceMap[source].count++
             if (tx.type === 'entry') sourceMap[source].entries += tx.quantity || 0
             else if (tx.type === 'exit') sourceMap[source].exits += tx.quantity || 0
             else if (tx.type === 'scrap') sourceMap[source].scrap += tx.quantity || 0
+            // Ürün bazlı detay
+            const itemKey = tx.item_id
+            if (!sourceMap[source].items[itemKey]) sourceMap[source].items[itemKey] = { name: tx.item_name, code: tx.item_code, unit: tx.unit, entry: 0, exit: 0 }
+            if (tx.type === 'entry') sourceMap[source].items[itemKey].entry += tx.quantity || 0
+            else sourceMap[source].items[itemKey].exit += tx.quantity || 0
           })
           const sortedSources = Object.entries(sourceMap).sort((a, b) => b[1].count - a[1].count)
 
+          return (
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="font-bold text-gray-800 mb-1">Firma / Kaynak Bazlı Depo Hareketleri</h3>
+                <p className="text-xs text-gray-500">{sortedSources.length} farklı kaynak • Bir firmaya tıklayarak detayını görün</p>
+              </div>
+
+              {/* Firma Kartları */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sortedSources.map(([source, data]) => (
+                  <div key={source} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all">
+                    <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3">
+                      <h4 className="font-bold text-white text-sm truncate" title={source}>{source}</h4>
+                      <p className="text-slate-300 text-xs">{data.count} işlem</p>
+                    </div>
+                    <div className="p-4">
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="bg-green-50 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-green-700">{data.entries.toLocaleString('tr-TR')}</p>
+                          <p className="text-[10px] text-green-600 font-semibold">Giriş</p>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-red-700">{data.exits.toLocaleString('tr-TR')}</p>
+                          <p className="text-[10px] text-red-600 font-semibold">Çıkış</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-gray-700">{(data.entries - data.exits).toLocaleString('tr-TR')}</p>
+                          <p className="text-[10px] text-gray-500 font-semibold">Net</p>
+                        </div>
+                      </div>
+                      {/* Ürün detayları */}
+                      <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                        {Object.values(data.items)
+                          .sort((a, b) => (b.entry + b.exit) - (a.entry + a.exit))
+                          .map((item, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-semibold text-gray-800 truncate block">{item.name}</span>
+                              <span className="text-gray-400">{item.code}</span>
+                            </div>
+                            <div className="flex gap-3 ml-2 shrink-0">
+                              {item.entry > 0 && <span className="text-green-600 font-semibold">+{item.entry} {item.unit}</span>}
+                              {item.exit > 0 && <span className="text-red-600 font-semibold">-{item.exit} {item.unit}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* HISTORY TAB */}
+        {activeTab === 'history' && (() => {
           const filteredTx = transactions.filter(tx => {
             const matchType = historyTypeFilter === 'all' || tx.type === historyTypeFilter
             const matchSearch = historySearch === '' ||
@@ -1970,51 +2033,10 @@ export default function WarehousePage() {
               (tx.notes || '').toLowerCase().includes(historySearch.toLowerCase())
             const matchDateFrom = !historyDateFrom || tx.transaction_date >= historyDateFrom
             const matchDateTo = !historyDateTo || tx.transaction_date <= historyDateTo
-            const matchSource = historySourceFilter === 'all' || (() => {
-              const txSource = tx.type === 'entry'
-                ? (tx.supplier || 'Belirtilmemiş')
-                : (tx.shipment_destination || tx.department_name || tx.supplier || 'Belirtilmemiş')
-              return txSource === historySourceFilter
-            })()
-            return matchType && matchSearch && matchDateFrom && matchDateTo && matchSource
+            return matchType && matchSearch && matchDateFrom && matchDateTo
           })
           return (
           <div className="space-y-4">
-            {/* Kaynak Bazlı Özet Kartları */}
-            {sortedSources.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-800 text-sm">Kaynak/Firma Bazlı Özet</h3>
-                  {historySourceFilter !== 'all' && (
-                    <button onClick={() => setHistorySourceFilter('all')} className="text-xs text-blue-600 hover:text-blue-800 font-semibold bg-blue-50 px-3 py-1 rounded-full">
-                      Filtreyi Kaldır ✕
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {sortedSources.map(([source, data]) => (
-                    <button
-                      key={source}
-                      onClick={() => setHistorySourceFilter(historySourceFilter === source ? 'all' : source)}
-                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                        historySourceFilter === source
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                      }`}
-                    >
-                      <div className="font-bold text-left mb-1">{source}</div>
-                      <div className="flex gap-2 text-[10px]">
-                        {data.entries > 0 && <span className={historySourceFilter === source ? 'text-green-200' : 'text-green-600'}>↓{data.entries}</span>}
-                        {data.exits > 0 && <span className={historySourceFilter === source ? 'text-red-200' : 'text-red-600'}>↑{data.exits}</span>}
-                        {data.scrap > 0 && <span className={historySourceFilter === source ? 'text-gray-300' : 'text-gray-500'}>🗑{data.scrap}</span>}
-                        <span className={historySourceFilter === source ? 'text-blue-200' : 'text-gray-400'}>({data.count})</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Filtreler */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -2034,7 +2056,7 @@ export default function WarehousePage() {
                 <input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Başlangıç" />
                 <input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Bitiş" />
               </div>
-              <p className="text-xs text-gray-500 mt-2">{filteredTx.length} / {transactions.length} kayıt{historySourceFilter !== 'all' && <span className="ml-2 text-blue-600 font-semibold">• Filtre: {historySourceFilter}</span>}</p>
+              <p className="text-xs text-gray-500 mt-2">{filteredTx.length} / {transactions.length} kayıt</p>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

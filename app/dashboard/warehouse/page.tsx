@@ -2056,8 +2056,9 @@ export default function WarehousePage() {
           }> = {}
           transactions.forEach(tx => {
             const source = tx.type === 'entry'
-              ? (tx.supplier || 'Belirtilmemiş')
-              : (tx.shipment_destination || tx.department_name || tx.supplier || 'Belirtilmemiş')
+              ? (tx.supplier || '')
+              : (tx.shipment_destination || tx.department_name || tx.supplier || '')
+            if (!source) return
             if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0, firstDate: tx.transaction_date, lastDate: tx.transaction_date, items: {}, transactions: [] }
             sourceMap[source].count++
             sourceMap[source].transactions.push(tx)

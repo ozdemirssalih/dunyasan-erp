@@ -99,6 +99,8 @@ export default function WarehousePage() {
   const [historyDateFrom, setHistoryDateFrom] = useState('')
   const [historyDateTo, setHistoryDateTo] = useState('')
   const [historySourceFilter, setHistorySourceFilter] = useState('all')
+  const [sourceSearch, setSourceSearch] = useState('')
+  const [expandedSource, setExpandedSource] = useState<string | null>(null)
   const [qcSendForm, setQCSendForm] = useState({ item_id: '', quantity: 0, notes: '' })
 
   // Filter states
@@ -2070,9 +2072,6 @@ export default function WarehousePage() {
             else if (tx.type === 'exit') sourceMap[source].items[itemKey].exit += tx.quantity || 0
             else if (tx.type === 'scrap') sourceMap[source].items[itemKey].scrap += tx.quantity || 0
           })
-
-          const [sourceSearch, setSourceSearch] = useState('')
-          const [expandedSource, setExpandedSource] = useState<string | null>(null)
 
           const filteredSources = Object.entries(sourceMap)
             .filter(([source]) => sourceSearch === '' || source.toLowerCase().includes(sourceSearch.toLowerCase()))

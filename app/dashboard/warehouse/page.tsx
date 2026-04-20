@@ -1947,75 +1947,195 @@ export default function WarehousePage() {
         {/* BY-SOURCE TAB */}
         {activeTab === 'by-source' && (() => {
           // Kaynak bazlı özet hesapla
-          const sourceMap: Record<string, { entries: number; exits: number; scrap: number; count: number; items: Record<string, { name: string; code: string; unit: string; entry: number; exit: number }> }> = {}
+          const sourceMap: Record<string, {
+            entries: number; exits: number; scrap: number; count: number;
+            firstDate: string; lastDate: string;
+            items: Record<string, { name: string; code: string; unit: string; entry: number; exit: number; scrap: number }>;
+            transactions: typeof transactions;
+          }> = {}
           transactions.forEach(tx => {
             const source = tx.type === 'entry'
               ? (tx.supplier || 'Belirtilmemiş')
               : (tx.shipment_destination || tx.department_name || tx.supplier || 'Belirtilmemiş')
-            if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0, items: {} }
+            if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0, firstDate: tx.transaction_date, lastDate: tx.transaction_date, items: {}, transactions: [] }
             sourceMap[source].count++
+            sourceMap[source].transactions.push(tx)
+            if (tx.transaction_date < sourceMap[source].firstDate) sourceMap[source].firstDate = tx.transaction_date
+            if (tx.transaction_date > sourceMap[source].lastDate) sourceMap[source].lastDate = tx.transaction_date
             if (tx.type === 'entry') sourceMap[source].entries += tx.quantity || 0
             else if (tx.type === 'exit') sourceMap[source].exits += tx.quantity || 0
             else if (tx.type === 'scrap') sourceMap[source].scrap += tx.quantity || 0
-            // Ürün bazlı detay
             const itemKey = tx.item_id
-            if (!sourceMap[source].items[itemKey]) sourceMap[source].items[itemKey] = { name: tx.item_name, code: tx.item_code, unit: tx.unit, entry: 0, exit: 0 }
+            if (!sourceMap[source].items[itemKey]) sourceMap[source].items[itemKey] = { name: tx.item_name, code: tx.item_code, unit: tx.unit, entry: 0, exit: 0, scrap: 0 }
             if (tx.type === 'entry') sourceMap[source].items[itemKey].entry += tx.quantity || 0
-            else sourceMap[source].items[itemKey].exit += tx.quantity || 0
+            else if (tx.type === 'exit') sourceMap[source].items[itemKey].exit += tx.quantity || 0
+            else if (tx.type === 'scrap') sourceMap[source].items[itemKey].scrap += tx.quantity || 0
           })
-          const sortedSources = Object.entries(sourceMap).sort((a, b) => b[1].count - a[1].count)
+
+          const [sourceSearch, setSourceSearch] = useState('')
+          const [expandedSource, setExpandedSource] = useState<string | null>(null)
+
+          const filteredSources = Object.entries(sourceMap)
+            .filter(([source]) => sourceSearch === '' || source.toLowerCase().includes(sourceSearch.toLowerCase()))
+            .sort((a, b) => b[1].count - a[1].count)
+
+          const totalEntries = Object.values(sourceMap).reduce((s, d) => s + d.entries, 0)
+          const totalExits = Object.values(sourceMap).reduce((s, d) => s + d.exits, 0)
+          const totalScrap = Object.values(sourceMap).reduce((s, d) => s + d.scrap, 0)
 
           return (
             <div className="space-y-4">
+              {/* Genel Özet */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+                  <p className="text-3xl font-bold text-blue-600">{filteredSources.length}</p>
+                  <p className="text-xs text-gray-500 font-semibold">Firma / Kaynak</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600">{totalEntries.toLocaleString('tr-TR')}</p>
+                  <p className="text-xs text-gray-500 font-semibold">Toplam Giriş</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+                  <p className="text-3xl font-bold text-red-600">{totalExits.toLocaleString('tr-TR')}</p>
+                  <p className="text-xs text-gray-500 font-semibold">Toplam Çıkış</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
+                  <p className="text-3xl font-bold text-orange-600">{totalScrap.toLocaleString('tr-TR')}</p>
+                  <p className="text-xs text-gray-500 font-semibold">Toplam Hurda</p>
+                </div>
+              </div>
+
+              {/* Arama */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <h3 className="font-bold text-gray-800 mb-1">Firma / Kaynak Bazlı Depo Hareketleri</h3>
-                <p className="text-xs text-gray-500">{sortedSources.length} farklı kaynak • Bir firmaya tıklayarak detayını görün</p>
+                <input
+                  type="text"
+                  placeholder="Firma / kaynak ara..."
+                  value={sourceSearch}
+                  onChange={(e) => setSourceSearch(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm"
+                />
               </div>
 
               {/* Firma Kartları */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {sortedSources.map(([source, data]) => (
-                  <div key={source} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all">
-                    <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3">
-                      <h4 className="font-bold text-white text-sm truncate" title={source}>{source}</h4>
-                      <p className="text-slate-300 text-xs">{data.count} işlem</p>
-                    </div>
-                    <div className="p-4">
-                      <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div className="bg-green-50 rounded-lg p-2 text-center">
-                          <p className="text-lg font-bold text-green-700">{data.entries.toLocaleString('tr-TR')}</p>
-                          <p className="text-[10px] text-green-600 font-semibold">Giriş</p>
+              <div className="space-y-4">
+                {filteredSources.map(([source, data]) => {
+                  const isExpanded = expandedSource === source
+                  const itemList = Object.values(data.items).sort((a, b) => (b.entry + b.exit + b.scrap) - (a.entry + a.exit + a.scrap))
+                  return (
+                    <div key={source} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      {/* Firma Başlığı */}
+                      <div
+                        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => setExpandedSource(isExpanded ? null : source)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-sm">
+                            {source.charAt(0)}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-900">{source}</h4>
+                            <p className="text-xs text-gray-500">
+                              {data.count} işlem •
+                              İlk: {new Date(data.firstDate).toLocaleDateString('tr-TR')} •
+                              Son: {new Date(data.lastDate).toLocaleDateString('tr-TR')} •
+                              {itemList.length} farklı ürün
+                            </p>
+                          </div>
                         </div>
-                        <div className="bg-red-50 rounded-lg p-2 text-center">
-                          <p className="text-lg font-bold text-red-700">{data.exits.toLocaleString('tr-TR')}</p>
-                          <p className="text-[10px] text-red-600 font-semibold">Çıkış</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2 text-center">
-                          <p className="text-lg font-bold text-gray-700">{(data.entries - data.exits).toLocaleString('tr-TR')}</p>
-                          <p className="text-[10px] text-gray-500 font-semibold">Net</p>
+                        <div className="flex items-center gap-4">
+                          <div className="flex gap-3 text-sm">
+                            <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full font-bold">↓ {data.entries.toLocaleString('tr-TR')}</span>
+                            <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full font-bold">↑ {data.exits.toLocaleString('tr-TR')}</span>
+                            {data.scrap > 0 && <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full font-bold">🗑 {data.scrap.toLocaleString('tr-TR')}</span>}
+                            <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-bold">Net: {(data.entries - data.exits - data.scrap).toLocaleString('tr-TR')}</span>
+                          </div>
+                          <span className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                         </div>
                       </div>
-                      {/* Ürün detayları */}
-                      <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                        {Object.values(data.items)
-                          .sort((a, b) => (b.entry + b.exit) - (a.entry + a.exit))
-                          .map((item, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
-                            <div className="flex-1 min-w-0">
-                              <span className="font-semibold text-gray-800 truncate block">{item.name}</span>
-                              <span className="text-gray-400">{item.code}</span>
-                            </div>
-                            <div className="flex gap-3 ml-2 shrink-0">
-                              {item.entry > 0 && <span className="text-green-600 font-semibold">+{item.entry} {item.unit}</span>}
-                              {item.exit > 0 && <span className="text-red-600 font-semibold">-{item.exit} {item.unit}</span>}
+
+                      {/* Genişletilmiş Detay */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-200">
+                          {/* Ürün Tablosu */}
+                          <div className="p-5">
+                            <h5 className="font-bold text-gray-800 text-sm mb-3">Ürün Bazlı Detay ({itemList.length} ürün)</h5>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-200">
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Kod</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Ürün Adı</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold text-green-600">Giriş</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold text-red-600">Çıkış</th>
+                                    {data.scrap > 0 && <th className="px-3 py-2 text-right text-xs font-semibold text-orange-600">Hurda</th>}
+                                    <th className="px-3 py-2 text-right text-xs font-semibold text-blue-600">Net</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {itemList.map((item, i) => (
+                                    <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/30">
+                                      <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.code || '-'}</td>
+                                      <td className="px-3 py-2 font-semibold text-gray-900">{item.name}</td>
+                                      <td className="px-3 py-2 text-right font-semibold text-green-600">{item.entry > 0 ? `+${item.entry.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>
+                                      <td className="px-3 py-2 text-right font-semibold text-red-600">{item.exit > 0 ? `-${item.exit.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>
+                                      {data.scrap > 0 && <td className="px-3 py-2 text-right font-semibold text-orange-600">{item.scrap > 0 ? `${item.scrap.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>}
+                                      <td className="px-3 py-2 text-right font-bold text-blue-700">{(item.entry - item.exit - item.scrap).toLocaleString('tr-TR')} {item.unit}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-gray-100 font-bold">
+                                    <td className="px-3 py-2" colSpan={2}>TOPLAM</td>
+                                    <td className="px-3 py-2 text-right text-green-700">{data.entries.toLocaleString('tr-TR')}</td>
+                                    <td className="px-3 py-2 text-right text-red-700">{data.exits.toLocaleString('tr-TR')}</td>
+                                    {data.scrap > 0 && <td className="px-3 py-2 text-right text-orange-700">{data.scrap.toLocaleString('tr-TR')}</td>}
+                                    <td className="px-3 py-2 text-right text-blue-700">{(data.entries - data.exits - data.scrap).toLocaleString('tr-TR')}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
                             </div>
                           </div>
-                        ))}
-                      </div>
+
+                          {/* Son İşlemler */}
+                          <div className="px-5 pb-5">
+                            <h5 className="font-bold text-gray-800 text-sm mb-3">Son İşlemler (Son 10)</h5>
+                            <div className="space-y-1">
+                              {data.transactions
+                                .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
+                                .slice(0, 10)
+                                .map((tx, i) => (
+                                <div key={i} className="flex items-center justify-between text-xs py-2 border-b border-gray-100 last:border-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-1.5 h-6 rounded-full ${tx.type === 'entry' ? 'bg-green-500' : tx.type === 'exit' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
+                                    <span className="text-gray-500 w-20">{new Date(tx.transaction_date).toLocaleDateString('tr-TR')}</span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tx.type === 'entry' ? 'bg-green-100 text-green-700' : tx.type === 'exit' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                                      {tx.type === 'entry' ? 'GİRİŞ' : tx.type === 'exit' ? 'ÇIKIŞ' : 'HURDA'}
+                                    </span>
+                                    <span className="font-semibold text-gray-800">{tx.item_name}</span>
+                                    <span className="text-gray-400">{tx.item_code}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    {tx.reference_number && <span className="text-gray-400">{tx.reference_number}</span>}
+                                    <span className={`font-bold ${tx.type === 'entry' ? 'text-green-700' : 'text-red-700'}`}>
+                                      {tx.type === 'entry' ? '+' : '-'}{tx.quantity} {tx.unit}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
+
+              {filteredSources.length === 0 && (
+                <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
+                  <p className="text-gray-400 text-lg">Sonuç bulunamadı</p>
+                </div>
+              )}
             </div>
           )
         })()}

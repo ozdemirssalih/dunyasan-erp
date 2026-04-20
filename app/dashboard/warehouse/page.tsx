@@ -1776,11 +1776,36 @@ export default function WarehousePage() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                   >
                     <option value="">Seçin...</option>
-                    {items.filter(i => i.current_stock > 0).map(item => (
-                      <option key={item.id} value={item.id}>
-                        {item.code} - {item.name} (Mevcut: {item.current_stock} {item.unit})
-                      </option>
-                    ))}
+                    {(() => {
+                      const normalItems = items.filter(i => i.current_stock > 0 && i.category !== 'HURDA' && i.category !== 'Hurda' && i.category !== 'İADE' && i.category !== 'Iade' && !i.name.includes('HURDA') && !i.name.includes('İADE'))
+                      const hurdaItems = items.filter(i => i.current_stock > 0 && (i.category === 'HURDA' || i.category === 'Hurda' || i.name.includes('HURDA')))
+                      const iadeItems = items.filter(i => i.current_stock > 0 && (i.category === 'İADE' || i.category === 'Iade' || i.name.includes('İADE')))
+                      return (
+                        <>
+                          {normalItems.length > 0 && (
+                            <optgroup label="Stok Ürünleri">
+                              {normalItems.map(item => (
+                                <option key={item.id} value={item.id}>{item.code} - {item.name} (Mevcut: {item.current_stock} {item.unit})</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {hurdaItems.length > 0 && (
+                            <optgroup label="HURDA Ürünler">
+                              {hurdaItems.map(item => (
+                                <option key={item.id} value={item.id}>[HURDA] {item.code} - {item.name} (Mevcut: {item.current_stock} {item.unit})</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {iadeItems.length > 0 && (
+                            <optgroup label="İADE Ürünler">
+                              {iadeItems.map(item => (
+                                <option key={item.id} value={item.id}>[İADE] {item.code} - {item.name} (Mevcut: {item.current_stock} {item.unit})</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      )
+                    })()}
                   </select>
                 </div>
 

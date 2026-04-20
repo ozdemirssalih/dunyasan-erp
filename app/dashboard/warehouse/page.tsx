@@ -556,7 +556,7 @@ export default function WarehousePage() {
         return
       }
 
-      // 3. Transferi onayla
+      // 3. Transferi onayla (trigger stoku orijinal ürüne ekleyecek)
       const { error } = await supabase
         .from('qc_to_warehouse_transfers')
         .update({
@@ -568,7 +568,69 @@ export default function WarehousePage() {
 
       if (error) throw error
 
-      alert(`✅ Transfer onaylandı! Ürün ${destination} eklendi.`)
+      // 4. Hurda veya iade ise: orijinal üründen al, ayrı ürüne ekle
+      const qualityResult = transfer?.quality_result
+      if (qualityResult === 'scrap' || qualityResult === 'return') {
+        const suffix = qualityResult === 'scrap' ? 'HURDA' : 'İADE'
+
+        // Orijinal ürün bilgilerini al
+        const { data: origItem } = await supabase
+          .from('warehouse_items')
+          .select('id, name, code, unit, category_name, company_id')
+          .eq('id', transferData.item_id)
+          .single()
+
+        if (origItem) {
+          const newCode = `${origItem.code}-${suffix}`
+          const newName = `${origItem.name} ${suffix}`
+
+          // Trigger orijinal ürüne eklemiş olabilir — geri al
+          const { data: origStock } = await supabase
+            .from('warehouse_items')
+            .select('current_stock')
+            .eq('id', origItem.id)
+            .single()
+
+          if (origStock) {
+            await supabase
+              .from('warehouse_items')
+              .update({ current_stock: Math.max(0, origStock.current_stock - transferData.quantity), updated_at: new Date().toISOString() })
+              .eq('id', origItem.id)
+          }
+
+          // Hurda/İade ürünü var mı kontrol et
+          const { data: existingSuffix } = await supabase
+            .from('warehouse_items')
+            .select('id, current_stock')
+            .eq('company_id', companyId)
+            .eq('code', newCode)
+            .maybeSingle()
+
+          if (existingSuffix) {
+            // Mevcut hurda/iade ürününe ekle
+            await supabase
+              .from('warehouse_items')
+              .update({ current_stock: existingSuffix.current_stock + transferData.quantity, updated_at: new Date().toISOString() })
+              .eq('id', existingSuffix.id)
+          } else {
+            // Yeni hurda/iade ürünü oluştur
+            await supabase
+              .from('warehouse_items')
+              .insert({
+                company_id: companyId,
+                code: newCode,
+                name: newName,
+                unit: origItem.unit,
+                category_name: suffix,
+                current_stock: transferData.quantity,
+                min_stock: 0,
+                is_active: true,
+              })
+          }
+        }
+      }
+
+      alert(`✅ Transfer onaylandı! Ürün ${qualityResult === 'scrap' ? 'HURDA olarak' : qualityResult === 'return' ? 'İADE olarak' : ''} ${destination} eklendi.`)
       loadData()
     } catch (error: any) {
       console.error('Error approving QC transfer:', error)
@@ -1380,9 +1442,21 @@ export default function WarehousePage() {
                     {filteredItems.map(item => (
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.code}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{item.name}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {item.name}
+                          {(item.category === 'HURDA' || item.category === 'Hurda' || item.name.includes('HURDA')) && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded">HURDA</span>
+                          )}
+                          {(item.category === 'İADE' || item.category === 'Iade' || item.name.includes('İADE')) && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded">İADE</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                          <span className={`px-2 py-1 text-xs rounded font-semibold ${
+                            item.category === 'HURDA' || item.category === 'Hurda' ? 'bg-orange-100 text-orange-700' :
+                            item.category === 'İADE' || item.category === 'Iade' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
                             {item.category}
                           </span>
                         </td>

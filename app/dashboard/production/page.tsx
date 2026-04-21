@@ -79,6 +79,7 @@ interface ProductionOutput {
   notes?: string
   project_id?: string
   project_part_id?: string
+  input_item_id?: string
 }
 
 export default function ProductionPage() {
@@ -392,7 +393,8 @@ export default function ProductionPage() {
       transfer_status: o.transfer_status || 'pending',
       notes: o.notes || '',
       project_id: o.project_id || '',
-      project_part_id: o.project_part_id || ''
+      project_part_id: o.project_part_id || '',
+      input_item_id: o.input_item_id || ''
     })) || []
 
     setOutputs(outputsData)
@@ -744,6 +746,7 @@ export default function ProductionPage() {
         .insert({
           company_id: companyId,
           output_item_id: outputForm.output_item_id,
+          input_item_id: outputForm.input_item_id || null,
           quantity: outputForm.quantity,
           shift: outputForm.shift,
           operator_id: outputForm.operator_id || null,
@@ -1021,14 +1024,14 @@ export default function ProductionPage() {
   }
 
   const handleDeleteOutput = async (output: ProductionOutput) => {
-    if (!confirm(`"${output.output_item_name}" için üretim kaydını silmek istediğinizden emin misiniz?\n\nMiktar: ${output.quantity} ${output.unit}\nTarih: ${new Date(output.production_date).toLocaleDateString('tr-TR')}\n\nÖNEMLİ: Bu işlem üretim stoğundan ürünü düşürecektir.`)) {
+    if (!confirm(`"${output.output_item_name}" için üretim kaydını silmek istediğinizden emin misiniz?\n\nMiktar: ${output.quantity} ${output.unit}\nTarih: ${new Date(output.production_date).toLocaleDateString('tr-TR')}\n\nBu işlem:\n• Mamül stoğundan ${output.quantity} adet düşecek\n• Hammadde stoğuna ${output.quantity} adet geri eklenecek`)) {
       return
     }
 
     try {
       if (!companyId) return
 
-      // 1. Üretim deposundan stoğu düş
+      // 1. Üretim deposundan mamül stoğunu düş
       const { data: currentStock } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -1058,8 +1061,42 @@ export default function ProductionPage() {
         if (stockError) throw stockError
       }
 
-      // 2. Üretim kaydını sil
-      const { error: deleteError, count } = await supabase
+      // 2. Hammaddeyi geri ekle (input_item_id varsa)
+      const inputItemId = output.input_item_id
+      if (inputItemId) {
+        const { data: rawStock } = await supabase
+          .from('production_inventory')
+          .select('current_stock')
+          .eq('company_id', companyId)
+          .eq('item_id', inputItemId)
+          .eq('item_type', 'raw_material')
+          .maybeSingle()
+
+        if (rawStock) {
+          await supabase
+            .from('production_inventory')
+            .update({
+              current_stock: rawStock.current_stock + output.quantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('company_id', companyId)
+            .eq('item_id', inputItemId)
+            .eq('item_type', 'raw_material')
+        } else {
+          await supabase
+            .from('production_inventory')
+            .insert({
+              company_id: companyId,
+              item_id: inputItemId,
+              current_stock: output.quantity,
+              item_type: 'raw_material',
+              notes: 'Üretim kaydı silinmesi ile geri eklendi'
+            })
+        }
+      }
+
+      // 3. Üretim kaydını sil
+      const { error: deleteError } = await supabase
         .from('production_outputs')
         .delete()
         .eq('id', output.id)
@@ -1081,7 +1118,7 @@ export default function ProductionPage() {
         throw deleteError
       }
 
-      alert('Üretim kaydı silindi ve stok güncellendi!')
+      alert(`Üretim kaydı silindi!\n\n• Mamül stoğundan ${output.quantity} adet düşüldü${inputItemId ? `\n• Hammadde stoğuna ${output.quantity} adet geri eklendi` : ''}`)
       loadData()
     } catch (error: any) {
       console.error('Error deleting output:', error)

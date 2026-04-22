@@ -1298,13 +1298,12 @@ export default function ProductionPage() {
       setSubmittingQCTransfer(true)
 
       // 1. Üretim deposunda yeterli stok var mı kontrol et
-      const dbItemType = qcTransferForm.item_type === 'hurda' ? 'finished_product' : qcTransferForm.item_type
       const { data: productionStock, error: stockError } = await supabase
         .from('production_inventory')
         .select('current_stock')
         .eq('company_id', companyId)
         .eq('item_id', qcTransferForm.item_id)
-        .eq('item_type', dbItemType)
+        .eq('item_type', qcTransferForm.item_type)
         .single()
 
       if (stockError) {
@@ -1327,7 +1326,7 @@ export default function ProductionPage() {
         })
         .eq('company_id', companyId)
         .eq('item_id', qcTransferForm.item_id)
-        .eq('item_type', dbItemType)
+        .eq('item_type', qcTransferForm.item_type)
 
       if (updateError) throw updateError
 
@@ -2795,8 +2794,7 @@ export default function ProductionPage() {
                       onChange={(e) => setQCTransferForm({ ...qcTransferForm, item_type: e.target.value, item_id: '' })}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg"
                     >
-                      <option value="finished_product">Sağlam Mamül</option>
-                      <option value="hurda">Hurda</option>
+                      <option value="finished_product">Bitmiş Ürün (Mamül)</option>
                       <option value="raw_material">Hammadde</option>
                       <option value="tashih">Tashih</option>
                     </select>
@@ -2814,16 +2812,7 @@ export default function ProductionPage() {
                     >
                       <option value="">Seçin...</option>
                       {productionInventory
-                        .filter(item => {
-                          if (item.current_stock <= 0) return false
-                          if (qcTransferForm.item_type === 'hurda') {
-                            return item.item_type === 'finished_product' && (item.item_name?.includes('HURDA') || item.item_code?.includes('HURDA'))
-                          }
-                          if (qcTransferForm.item_type === 'finished_product') {
-                            return item.item_type === 'finished_product' && !item.item_name?.includes('HURDA') && !item.item_code?.includes('HURDA')
-                          }
-                          return item.item_type === qcTransferForm.item_type
-                        })
+                        .filter(item => item.item_type === qcTransferForm.item_type && item.current_stock > 0)
                         .map(item => (
                           <option key={item.id} value={item.item_id}>
                             {item.item_code} - {item.item_name} (Stok: {item.current_stock} {item.unit})

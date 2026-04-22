@@ -376,7 +376,7 @@ export default function RFQPage() {
                       <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600 w-28">Parça Kodu</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600">Parça Adı</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600">Malzeme</th>
-                      <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600 w-16">Miktar</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600 w-24">Miktar</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600 w-20">Birim</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-gray-600">Teknik Detay</th>
                       <th className="px-2 py-2 w-20"></th>

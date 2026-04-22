@@ -14,7 +14,7 @@ export default function CurrentAccountsPage() {
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
-  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '' })
+  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
 
   useEffect(() => { loadData() }, [])
 
@@ -163,15 +163,15 @@ export default function CurrentAccountsPage() {
     setContactTransactions(all)
   }
 
-  // Benzersiz grupları çıkar
-  const groups = Array.from(new Set(contacts.map(c => c.contact_type || 'Diğer').filter(Boolean))).sort()
+  // Sektöre göre gruplandırma
+  const groups = Array.from(new Set(contacts.map(c => c.sector || 'Diğer').filter(Boolean))).sort()
 
   const filtered = contacts.filter(c => {
     const matchSearch = searchQuery === '' || c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchBalance = balanceFilter === 'all' ||
       (balanceFilter === 'positive' && c.balance > 0) ||
       (balanceFilter === 'negative' && c.balance < 0)
-    const matchGroup = groupFilter === 'all' || (c.contact_type || 'Diğer') === groupFilter
+    const matchGroup = groupFilter === 'all' || (c.sector || 'Diğer') === groupFilter
     return matchSearch && matchBalance && matchGroup
   })
 
@@ -223,9 +223,18 @@ export default function CurrentAccountsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
                 <input value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="Adres" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
-                <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
+                  <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sektör</label>
+                  <input value={newForm.sector} onChange={e => setNewForm({...newForm, sector: e.target.value})} placeholder="Ör: Savunma, Otomotiv..." list="sector-list" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  <datalist id="sector-list">
+                    {groups.filter(g => g !== 'Diğer').map(g => <option key={g} value={g} />)}
+                  </datalist>
+                </div>
               </div>
               <button
                 onClick={async () => {
@@ -234,12 +243,13 @@ export default function CurrentAccountsPage() {
                     company_id: companyId, contact_name: newForm.contact_name,
                     phone: newForm.phone || null, email: newForm.email || null,
                     address: newForm.address || null, tax_number: newForm.tax_number || null,
+                    sector: newForm.sector || null,
                     is_active: true
                   })
                   if (error) return alert('Hata: ' + error.message)
                   alert('Cari hesap eklendi!')
                   setShowNewModal(false)
-                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '' })
+                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
                   loadData()
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
@@ -383,7 +393,7 @@ export default function CurrentAccountsPage() {
           {groups.length > 1 && (
             <div className="bg-white rounded-xl shadow-md p-4">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-gray-600 mr-2">Grup:</span>
+                <span className="text-sm font-semibold text-gray-600 mr-2">Sektör:</span>
                 <button
                   onClick={() => setGroupFilter('all')}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${groupFilter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
@@ -391,8 +401,8 @@ export default function CurrentAccountsPage() {
                   Tümü ({contacts.length})
                 </button>
                 {groups.map(g => {
-                  const count = contacts.filter(c => (c.contact_type || 'Diğer') === g).length
-                  const groupBalance = contacts.filter(c => (c.contact_type || 'Diğer') === g).reduce((s, c) => s + c.balance, 0)
+                  const count = contacts.filter(c => (c.sector || 'Diğer') === g).length
+                  const groupBalance = contacts.filter(c => (c.sector || 'Diğer') === g).reduce((s, c) => s + c.balance, 0)
                   return (
                     <button
                       key={g}

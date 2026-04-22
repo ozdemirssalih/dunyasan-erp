@@ -136,7 +136,7 @@ export default function RFQPage() {
   const duplicateItem = (i: number) => setItems(prev => [...prev, { ...prev[i], sira: prev.length + 1 }])
 
   const handleSave = async (status: string = 'draft') => {
-    if (!form.supplier_name.trim()) { alert('Tedarikçi adı zorunludur!'); return }
+    if (!form.rfq_number.trim()) { alert('RFQ numarası zorunludur!'); return }
     if (!items[0]?.parca_adi) { alert('En az bir kalem ekleyin!'); return }
     try {
       const payload = {
@@ -351,20 +351,6 @@ export default function RFQPage() {
                   <div><label className="block text-xs font-semibold text-gray-600 mb-1">Para Birimi</label><select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div>
                   <div><label className="block text-xs font-semibold text-gray-600 mb-1">İstenen Teslim Süresi</label><input type="text" value={form.delivery_time} onChange={e => setForm({ ...form, delivery_time: e.target.value })} placeholder="Ör: 4-6 hafta" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
                   <div><label className="block text-xs font-semibold text-gray-600 mb-1">Ödeme Koşulları</label><input type="text" value={form.payment_terms} onChange={e => setForm({ ...form, payment_terms: e.target.value })} placeholder="Ör: 30 gün vadeli" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                </div>
-              </div>
-
-              {/* Tedarikçi */}
-              <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
-                <h3 className="font-bold text-gray-800 border-b pb-2">Tedarikçi Bilgileri</h3>
-                <div className="space-y-3">
-                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Tedarikçi Seçin</label><select onChange={e => handleSupplierSelect(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Listeden seçin veya manuel girin</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}</select></div>
-                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Firma Adı <span className="text-red-500">*</span></label><input type="text" value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Yetkili Kişi</label><input type="text" value={form.supplier_contact} onChange={e => setForm({ ...form, supplier_contact: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Telefon</label><input type="text" value={form.supplier_phone} onChange={e => setForm({ ...form, supplier_phone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">E-posta</label><input type="text" value={form.supplier_email} onChange={e => setForm({ ...form, supplier_email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" /></div>
-                  </div>
                 </div>
               </div>
 

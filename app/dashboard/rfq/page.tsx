@@ -449,16 +449,7 @@ export default function RFQPage() {
               </div>
 
               {/* Info */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                <div style={{ border: '1px solid #dde1e7', borderRadius: '4px', padding: '6px 10px', background: '#fafbfc' }}>
-                  <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '4px', paddingBottom: '3px', borderBottom: '1px solid #e2e6eb' }}>Tedarikçi Bilgileri</div>
-                  <table style={{ fontSize: '9px', lineHeight: 1.5 }}><tbody>
-                    <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Firma:</td><td>{previewRFQ.supplier_name}</td></tr>
-                    {previewRFQ.supplier_contact && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Yetkili:</td><td>{previewRFQ.supplier_contact}</td></tr>}
-                    {previewRFQ.supplier_phone && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>Tel:</td><td>{previewRFQ.supplier_phone}</td></tr>}
-                    {previewRFQ.supplier_email && <tr><td style={{ fontWeight: 600, color: '#555', paddingRight: '6px' }}>E-posta:</td><td>{previewRFQ.supplier_email}</td></tr>}
-                  </tbody></table>
-                </div>
+              <div style={{ marginBottom: '12px' }}>
                 <div style={{ border: '1px solid #dde1e7', borderRadius: '4px', padding: '6px 10px', background: '#fafbfc' }}>
                   <div style={{ fontSize: '8px', fontWeight: 700, color: '#003366', textTransform: 'uppercase', marginBottom: '4px', paddingBottom: '3px', borderBottom: '1px solid #e2e6eb' }}>Talep Bilgileri</div>
                   <table style={{ fontSize: '9px', lineHeight: 1.5 }}><tbody>

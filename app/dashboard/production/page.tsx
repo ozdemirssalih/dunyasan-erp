@@ -863,8 +863,40 @@ export default function ProductionPage() {
         }
       }
 
-      // 5. Sağlam bitmiş ürün stoğu trigger tarafından otomatik ekleniyor
-      // (trg_add_production_output trigger'ı production_outputs INSERT'inde çalışır)
+      // 5. Sağlam bitmiş ürünü stoğa ekle
+      const { data: existingFinished } = await supabase
+        .from('production_inventory')
+        .select('current_stock')
+        .eq('company_id', companyId)
+        .eq('item_id', outputForm.output_item_id)
+        .eq('item_type', 'finished_product')
+        .maybeSingle()
+
+      if (existingFinished) {
+        const { error: updateFinishedError } = await supabase
+          .from('production_inventory')
+          .update({
+            current_stock: existingFinished.current_stock + outputForm.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', outputForm.output_item_id)
+          .eq('item_type', 'finished_product')
+
+        if (updateFinishedError) throw updateFinishedError
+      } else {
+        const { error: insertFinishedError } = await supabase
+          .from('production_inventory')
+          .insert({
+            company_id: companyId,
+            item_id: outputForm.output_item_id,
+            current_stock: outputForm.quantity,
+            item_type: 'finished_product',
+            notes: 'Üretimden gelen bitmiş ürün'
+          })
+
+        if (insertFinishedError) throw insertFinishedError
+      }
 
       // Başarı mesajı
       let successMsg = '✅ Üretim kaydı oluşturuldu!'

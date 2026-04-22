@@ -405,7 +405,7 @@ export default function ProductionPage() {
       .from('production_scrap_records')
       .select('item_id, quantity')
       .eq('company_id', companyId)
-      .eq('source_type', 'production')
+      .in('source_type', ['production', 'manual_scrap'])
 
     setScrapRecords(data || [])
   }
@@ -485,7 +485,7 @@ export default function ProductionPage() {
       .from('production_scrap_records')
       .select('quantity')
       .eq('company_id', companyId)
-      .eq('source_type', 'production')
+      .in('source_type', ['production', 'manual_scrap'])
 
     const totalFire = allFire?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
@@ -775,11 +775,14 @@ export default function ProductionPage() {
       // 4. Eğer fire varsa fire kaydını oluştur ve HURDA olarak stoğa ekle
       if (outputForm.fire_quantity > 0) {
         // 4a. Fire kaydını oluştur
+        // source_type: 'manual_scrap' kullanıyoruz çünkü 'production' kullanırsak
+        // trigger (trg_record_scrap) finished_product stoğundan tekrar düşürüyor
+        // Biz zaten sağlam ve hurda miktarını ayrı ayrı yönetiyoruz
         const { error: fireError } = await supabase
           .from('production_scrap_records')
           .insert({
             company_id: companyId,
-            source_type: 'production',
+            source_type: 'manual_scrap',
             item_id: outputForm.output_item_id,
             quantity: outputForm.fire_quantity,
             scrap_reason: outputForm.fire_reason,

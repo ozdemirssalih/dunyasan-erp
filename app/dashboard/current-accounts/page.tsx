@@ -10,6 +10,7 @@ export default function CurrentAccountsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'positive' | 'negative'>('all')
+  const [groupFilter, setGroupFilter] = useState('all')
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
@@ -162,12 +163,16 @@ export default function CurrentAccountsPage() {
     setContactTransactions(all)
   }
 
+  // Benzersiz grupları çıkar
+  const groups = Array.from(new Set(contacts.map(c => c.contact_type || 'Diğer').filter(Boolean))).sort()
+
   const filtered = contacts.filter(c => {
     const matchSearch = searchQuery === '' || c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchBalance = balanceFilter === 'all' ||
       (balanceFilter === 'positive' && c.balance > 0) ||
       (balanceFilter === 'negative' && c.balance < 0)
-    return matchSearch && matchBalance
+    const matchGroup = groupFilter === 'all' || (c.contact_type || 'Diğer') === groupFilter
+    return matchSearch && matchBalance && matchGroup
   })
 
   const totalReceivables = contacts.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0)
@@ -374,6 +379,37 @@ export default function CurrentAccountsPage() {
         </div>
       ) : (
         <>
+          {/* Grup Butonları */}
+          {groups.length > 1 && (
+            <div className="bg-white rounded-xl shadow-md p-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-gray-600 mr-2">Grup:</span>
+                <button
+                  onClick={() => setGroupFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${groupFilter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                >
+                  Tümü ({contacts.length})
+                </button>
+                {groups.map(g => {
+                  const count = contacts.filter(c => (c.contact_type || 'Diğer') === g).length
+                  const groupBalance = contacts.filter(c => (c.contact_type || 'Diğer') === g).reduce((s, c) => s + c.balance, 0)
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setGroupFilter(groupFilter === g ? 'all' : g)}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${groupFilter === g ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      {g} ({count})
+                      <span className={`ml-1 text-xs ${groupFilter === g ? 'text-blue-200' : groupBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {groupBalance >= 0 ? '+' : ''}{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(groupBalance)}₺
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Filtreler */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -397,6 +433,7 @@ export default function CurrentAccountsPage() {
                 <option value="negative">Borçlu (-)</option>
               </select>
             </div>
+            <p className="text-xs text-gray-500 mt-2">{filtered.length} / {contacts.length} cari gösteriliyor{groupFilter !== 'all' && <span className="ml-1 text-blue-600 font-semibold">• {groupFilter}</span>}</p>
           </div>
 
           {/* Cari Hesap Listesi */}

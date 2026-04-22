@@ -390,7 +390,7 @@ export default function CurrentAccountsPage() {
       ) : (
         <>
           {/* Grup Butonları */}
-          {groups.length > 1 && (
+          {groups.length > 0 && (
             <div className="bg-white rounded-xl shadow-md p-4">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-gray-600 mr-2">Sektör:</span>

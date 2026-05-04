@@ -535,7 +535,30 @@ export default function AccountingPageV2() {
             return alert('Çek kaydı oluşturulamadı: ' + checkError.message)
           }
 
-          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
+          // Çeki cari hesaba yansıt
+          const contactId = transactionForm.customer_id || transactionForm.supplier_id
+          const contactName = customers.find(c => c.id === contactId)?.customer_name || ''
+          const cariEntry: any = {
+            company_id: companyId,
+            transaction_type: isTahsilat ? 'receivable' : 'payable',
+            amount: amount,
+            paid_amount: 0,
+            status: 'unpaid',
+            currency: transactionForm.currency,
+            transaction_date: transactionForm.transaction_date,
+            due_date: transactionForm.check_due_date,
+            description: `Çek: ${transactionForm.check_number} - ${transactionForm.description || ''}`,
+            reference_number: `CHK-${transactionForm.check_number}`,
+            contact_id: contactId || null,
+            contact_name: contactName,
+            customer_id: isTahsilat ? contactId : null,
+            supplier_id: !isTahsilat ? contactId : null,
+            created_by: user?.id
+          }
+          const { error: cariErr } = await supabase.from('current_account_transactions').insert(cariEntry)
+          if (cariErr) console.error('Çek cari yansıtma hatası:', cariErr)
+
+          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi ve cariye yansıtıldı!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
 
           setShowTransactionModal(false)
           setTransactionForm({
@@ -902,7 +925,28 @@ export default function AccountingPageV2() {
         await supabase.from('cash_accounts').update({ current_balance: newBalance, updated_at: new Date().toISOString() }).eq('id', collectAccountId)
       }
 
-      alert(`✅ Çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}!\n\nÇek No: ${check.check_number}\nTutar: ${check.amount} ${check.currency}\nKasa: ${selectedAcc?.account_name || ''}`)
+      // Carideki çek kaydını kapat (paid olarak işaretle)
+      try {
+        const contactId = check.customer_id || check.supplier_id
+        if (contactId) {
+          const { data: cariRecords } = await supabase
+            .from('current_account_transactions')
+            .select('id, amount, paid_amount')
+            .eq('company_id', companyId)
+            .like('reference_number', `CHK-${check.check_number}%`)
+            .neq('status', 'paid')
+            .limit(1)
+
+          if (cariRecords && cariRecords.length > 0) {
+            const rec = cariRecords[0]
+            await supabase.from('current_account_transactions')
+              .update({ paid_amount: rec.amount, status: 'paid', updated_at: new Date().toISOString() })
+              .eq('id', rec.id)
+          }
+        }
+      } catch (cariErr) { console.error('Çek cari kapama hatası:', cariErr) }
+
+      alert(`✅ Çek ${isIncoming ? 'tahsil edildi' : 'ödendi'} ve cari hesap güncellendi!\n\nÇek No: ${check.check_number}\nTutar: ${check.amount} ${check.currency}\nKasa: ${selectedAcc?.account_name || ''}`)
       setShowCheckCollectModal(false)
       setCollectingCheck(null)
       setCollectAccountId('')

@@ -18,6 +18,9 @@ interface Employee {
   hire_date?: string
   salary?: number
   address?: string
+  body_size?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
   status: string
   notes?: string
   created_at: string
@@ -41,6 +44,9 @@ export default function EmployeesPage() {
     hire_date: '',
     salary: '',
     address: '',
+    body_size: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
     status: 'active',
     notes: ''
   })
@@ -121,6 +127,9 @@ export default function EmployeesPage() {
       hire_date: '',
       salary: '',
       address: '',
+      body_size: '',
+      emergency_contact_name: '',
+      emergency_contact_phone: '',
       status: 'active',
       notes: ''
     })
@@ -141,6 +150,9 @@ export default function EmployeesPage() {
         hire_date: employee.hire_date || '',
         salary: employee.salary?.toString() || '',
         address: employee.address || '',
+        body_size: (employee as any).body_size || '',
+        emergency_contact_name: (employee as any).emergency_contact_name || '',
+        emergency_contact_phone: (employee as any).emergency_contact_phone || '',
         status: employee.status,
         notes: employee.notes || ''
       })
@@ -169,6 +181,9 @@ export default function EmployeesPage() {
         hire_date: formData.hire_date || null,
         salary: formData.salary ? parseFloat(formData.salary) : null,
         address: formData.address || null,
+        body_size: formData.body_size || null,
+        emergency_contact_name: formData.emergency_contact_name || null,
+        emergency_contact_phone: formData.emergency_contact_phone || null,
         status: formData.status,
         notes: formData.notes || null
       }
@@ -627,6 +642,49 @@ export default function EmployeesPage() {
                     rows={2}
                     placeholder="Personel adresi..."
                   />
+                </div>
+
+                {/* Body Size */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Beden</label>
+                  <select
+                    value={formData.body_size}
+                    onChange={(e) => setFormData({ ...formData, body_size: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Seçin...</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                    <option value="3XL">3XL</option>
+                  </select>
+                </div>
+
+                {/* Emergency Contact */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Yakını Adı</label>
+                    <input
+                      type="text"
+                      value={formData.emergency_contact_name}
+                      onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Acil durumda aranacak kişi"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Yakını Telefon</label>
+                    <input
+                      type="text"
+                      value={formData.emergency_contact_phone}
+                      onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0532..."
+                    />
+                  </div>
                 </div>
 
                 {/* Notes */}

@@ -64,6 +64,9 @@ export default function AccountingPageV2() {
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
   const [checkDocumentFile, setCheckDocumentFile] = useState<File | null>(null)
+  const [showCheckCollectModal, setShowCheckCollectModal] = useState(false)
+  const [collectingCheck, setCollectingCheck] = useState<any>(null)
+  const [collectAccountId, setCollectAccountId] = useState('')
 
   // Yaklaşan çekler için tarih aralığı
   const [upcomingChecksStartDate, setUpcomingChecksStartDate] = useState<string>(new Date().toISOString().split('T')[0])
@@ -110,7 +113,9 @@ export default function AccountingPageV2() {
     currency: 'TRY',
     customer_id: '',
     supplier_id: '',
-    cash_account_id: ''
+    cash_account_id: '',
+    check_number: '',
+    check_due_date: ''
   })
 
   // Edit form state
@@ -493,12 +498,55 @@ export default function AccountingPageV2() {
 
 
       } else if (formMode === 'payment') {
-        // ÖDEME KAYDI (Kasa işlemi)
+        // ÖDEME KAYDI
         const amount = parseFloat(transactionForm.amount)
 
         // Validasyon: Müşteri veya tedarikçi seçilmeli
         if (!transactionForm.customer_id && !transactionForm.supplier_id) {
           return alert('Müşteri veya tedarikçi seçimi zorunludur!')
+        }
+
+        // ÇEK İLE ÖDEME → Kasa işlemi yapmadan çek kaydı oluştur
+        if (transactionForm.payment_method === 'check') {
+          if (!transactionForm.check_number || !transactionForm.check_due_date) {
+            return alert('Çek numarası ve vade tarihi zorunludur!')
+          }
+
+          const isTahsilat = transactionForm.transaction_type === 'receivable'
+
+          const { error: checkError } = await supabase.from('checks').insert({
+            company_id: companyId,
+            check_number: transactionForm.check_number,
+            check_type: isTahsilat ? 'incoming' : 'outgoing',
+            amount: amount,
+            currency: transactionForm.currency,
+            check_date: transactionForm.transaction_date,
+            due_date: transactionForm.check_due_date,
+            customer_id: isTahsilat ? (transactionForm.customer_id || null) : null,
+            supplier_id: !isTahsilat ? (transactionForm.customer_id || transactionForm.supplier_id || null) : null,
+            description: transactionForm.description || `${isTahsilat ? 'Tahsilat' : 'Ödeme'} çeki`,
+            status: 'pending',
+            created_by: user?.id,
+            document_url: documentUrl,
+          })
+
+          if (checkError) {
+            console.error('Çek kaydı hatası:', checkError)
+            return alert('Çek kaydı oluşturulamadı: ' + checkError.message)
+          }
+
+          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
+
+          setShowTransactionModal(false)
+          setTransactionForm({
+            transaction_type: 'receivable', amount: '', description: '',
+            transaction_date: new Date().toISOString().split('T')[0],
+            payment_method: 'cash', currency: 'TRY', customer_id: '', supplier_id: '',
+            cash_account_id: '', check_number: '', check_due_date: ''
+          })
+          setDocumentFile(null)
+          await loadData()
+          return
         }
 
         // Tarihe şu anki saati ekle
@@ -687,7 +735,9 @@ export default function AccountingPageV2() {
       currency: 'TRY',
       customer_id: '',
       supplier_id: '',
-      cash_account_id: ''
+      cash_account_id: '',
+      check_number: '',
+      check_due_date: ''
     })
   }
 
@@ -804,17 +854,82 @@ export default function AccountingPageV2() {
     }
   }
 
+  const handleCollectCheck = async () => {
+    if (!collectingCheck || !collectAccountId) {
+      return alert('Lütfen kasa seçin!')
+    }
+
+    const check = collectingCheck
+    const isIncoming = check.check_type === 'incoming'
+    const status = isIncoming ? 'collected' : 'paid'
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      // Çek durumunu güncelle
+      const { error } = await supabase
+        .from('checks')
+        .update({ status })
+        .eq('id', check.id)
+
+      if (error) throw error
+
+      // Kasa işlemi oluştur
+      const cashData: any = {
+        company_id: companyId,
+        transaction_type: isIncoming ? 'income' : 'expense',
+        amount: parseFloat(check.amount),
+        currency: check.currency,
+        payment_method: 'check',
+        transaction_date: new Date().toISOString(),
+        description: `${check.check_number} numaralı çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}`,
+        reference_number: `CHECK-${check.check_number}-${Date.now()}`,
+        cash_account_id: collectAccountId,
+        created_by: user?.id
+      }
+      if (check.customer_id) cashData.customer_id = check.customer_id
+      if (check.supplier_id) cashData.supplier_id = check.supplier_id
+
+      const { error: cashError } = await supabase.from('cash_transactions').insert(cashData)
+      if (cashError) throw cashError
+
+      // Kasa bakiyesini güncelle
+      const selectedAcc = cashAccounts.find((a: any) => a.id === collectAccountId)
+      if (selectedAcc) {
+        const newBalance = isIncoming
+          ? selectedAcc.current_balance + parseFloat(check.amount)
+          : selectedAcc.current_balance - parseFloat(check.amount)
+        await supabase.from('cash_accounts').update({ current_balance: newBalance, updated_at: new Date().toISOString() }).eq('id', collectAccountId)
+      }
+
+      alert(`✅ Çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}!\n\nÇek No: ${check.check_number}\nTutar: ${check.amount} ${check.currency}\nKasa: ${selectedAcc?.account_name || ''}`)
+      setShowCheckCollectModal(false)
+      setCollectingCheck(null)
+      setCollectAccountId('')
+      loadData()
+    } catch (error: any) {
+      console.error('Çek tahsil hatası:', error)
+      alert('Hata: ' + error.message)
+    }
+  }
+
   const handleUpdateCheckStatus = async (check: any) => {
-    const newStatus = prompt(`Çek durumunu güncelleyin:\n1: Beklemede\n2: Tahsil Edildi\n3: Ödendi\n4: Karşılıksız\n5: İptal`, '1')
+    const newStatus = prompt(`Çek durumunu güncelleyin:\n1: Beklemede\n2: ${check.check_type === 'incoming' ? 'Tahsil Et' : 'Öde'}\n3: Karşılıksız\n4: İptal`, '1')
 
     if (!newStatus) return
 
+    // Tahsil/Ödeme seçildiyse kasa modalı aç
+    if (newStatus === '2') {
+      setCollectingCheck(check)
+      setCollectAccountId('')
+      setShowCheckCollectModal(true)
+      return
+    }
+
     const statusMap: Record<string, string> = {
       '1': 'pending',
-      '2': 'collected',
-      '3': 'paid',
-      '4': 'bounced',
-      '5': 'cancelled'
+      '3': 'bounced',
+      '4': 'cancelled'
     }
 
     const status = statusMap[newStatus]
@@ -832,41 +947,6 @@ export default function AccountingPageV2() {
         .eq('id', check.id)
 
       if (error) throw error
-
-      // Eğer çek tahsil edildi veya ödendi ise, cash_transactions'a otomatik kayıt ekle
-      if ((status === 'collected' || status === 'paid') && check.status === 'pending') {
-        const isIncoming = check.check_type === 'incoming'
-
-        const cashData: any = {
-          company_id: companyId,
-          transaction_type: isIncoming ? 'income' : 'expense',
-          amount: parseFloat(check.amount),
-          currency: check.currency,
-          payment_method: 'check',
-          transaction_date: new Date().toISOString(),
-          description: `${check.check_number} numaralı çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}`,
-          reference_number: `CHECK-${check.check_number}-${Date.now()}`,
-          created_by: user?.id
-        }
-
-        if (check.customer_id) {
-          cashData.customer_id = check.customer_id
-        }
-        if (check.supplier_id) {
-          cashData.supplier_id = check.supplier_id
-        }
-
-        const { error: cashError } = await supabase
-          .from('cash_transactions')
-          .insert(cashData)
-
-        if (cashError) {
-          console.error('Kasa kaydı oluşturulamadı:', cashError)
-          alert('⚠️ Çek durumu güncellendi ancak kasa kaydı oluşturulamadı: ' + cashError.message)
-          return
-        }
-
-      }
 
       alert('Çek durumu güncellendi!')
       loadData()
@@ -2590,21 +2670,46 @@ export default function AccountingPageV2() {
                           <option value="other">Diğer</option>
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Hesabı (Kasa) *</label>
-                        <select
-                          value={transactionForm.cash_account_id || ''}
-                          onChange={(e) => setTransactionForm({...transactionForm, cash_account_id: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Hesap Seçin</option>
-                          {cashAccounts.map((acc: any) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.account_name} ({acc.currency}) - Bakiye: {new Intl.NumberFormat('tr-TR').format(acc.current_balance)} {acc.currency}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {transactionForm.payment_method !== 'check' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Ödeme Hesabı (Kasa) *</label>
+                          <select
+                            value={transactionForm.cash_account_id || ''}
+                            onChange={(e) => setTransactionForm({...transactionForm, cash_account_id: e.target.value})}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                          >
+                            <option value="">Hesap Seçin</option>
+                            {cashAccounts.map((acc: any) => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.account_name} ({acc.currency}) - Bakiye: {new Intl.NumberFormat('tr-TR').format(acc.current_balance)} {acc.currency}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {transactionForm.payment_method === 'check' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Çek Numarası *</label>
+                            <input
+                              type="text"
+                              value={transactionForm.check_number}
+                              onChange={(e) => setTransactionForm({...transactionForm, check_number: e.target.value})}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                              placeholder="Çek numarası"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Vade Tarihi *</label>
+                            <input
+                              type="date"
+                              value={transactionForm.check_due_date}
+                              onChange={(e) => setTransactionForm({...transactionForm, check_due_date: e.target.value})}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                            />
+                          </div>
+                        </>
+                      )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Tarih *</label>
                         <input
@@ -2699,6 +2804,56 @@ export default function AccountingPageV2() {
         )}
 
         {/* Check Modal */}
+        {/* Çek Tahsil/Ödeme Kasa Seçim Modalı */}
+        {showCheckCollectModal && collectingCheck && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowCheckCollectModal(false)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-800">
+                  {collectingCheck.check_type === 'incoming' ? '💰 Çek Tahsil Et' : '💸 Çek Öde'}
+                </h3>
+                <button onClick={() => setShowCheckCollectModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Çek No:</span><span className="font-bold">{collectingCheck.check_number}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Tutar:</span><span className="font-bold text-lg">{parseFloat(collectingCheck.amount).toLocaleString('tr-TR')} {collectingCheck.currency}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Vade:</span><span className="font-semibold">{collectingCheck.due_date ? new Date(collectingCheck.due_date).toLocaleDateString('tr-TR') : '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Tip:</span><span className={`font-semibold ${collectingCheck.check_type === 'incoming' ? 'text-green-600' : 'text-red-600'}`}>{collectingCheck.check_type === 'incoming' ? 'Gelen Çek (+)' : 'Giden Çek (-)'}</span></div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  {collectingCheck.check_type === 'incoming' ? 'Paranın Geçeceği Kasa *' : 'Ödeme Yapılacak Kasa *'}
+                </label>
+                <select
+                  value={collectAccountId}
+                  onChange={(e) => setCollectAccountId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 text-sm"
+                >
+                  <option value="">Kasa Seçin...</option>
+                  {cashAccounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.currency}) — Bakiye: {new Intl.NumberFormat('tr-TR').format(acc.current_balance)} {acc.currency}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowCheckCollectModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">İptal</button>
+                <button
+                  onClick={handleCollectCheck}
+                  disabled={!collectAccountId}
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-semibold text-white ${collectingCheck.check_type === 'incoming' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} disabled:bg-gray-300 disabled:cursor-not-allowed`}
+                >
+                  {collectingCheck.check_type === 'incoming' ? '💰 Tahsil Et' : '💸 Öde'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showCheckModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-2xl w-full shadow-xl max-h-[90vh] overflow-y-auto">

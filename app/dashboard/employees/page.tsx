@@ -21,6 +21,7 @@ interface Employee {
   body_size?: string
   emergency_contact_name?: string
   emergency_contact_phone?: string
+  birth_date?: string
   status: string
   notes?: string
   created_at: string
@@ -47,6 +48,7 @@ export default function EmployeesPage() {
     body_size: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
+    birth_date: '',
     status: 'active',
     notes: ''
   })
@@ -130,6 +132,7 @@ export default function EmployeesPage() {
       body_size: '',
       emergency_contact_name: '',
       emergency_contact_phone: '',
+      birth_date: '',
       status: 'active',
       notes: ''
     })
@@ -153,6 +156,7 @@ export default function EmployeesPage() {
         body_size: (employee as any).body_size || '',
         emergency_contact_name: (employee as any).emergency_contact_name || '',
         emergency_contact_phone: (employee as any).emergency_contact_phone || '',
+        birth_date: (employee as any).birth_date || '',
         status: employee.status,
         notes: employee.notes || ''
       })
@@ -184,6 +188,7 @@ export default function EmployeesPage() {
         body_size: formData.body_size || null,
         emergency_contact_name: formData.emergency_contact_name || null,
         emergency_contact_phone: formData.emergency_contact_phone || null,
+        birth_date: formData.birth_date || null,
         status: formData.status,
         notes: formData.notes || null
       }
@@ -312,24 +317,40 @@ export default function EmployeesPage() {
 
         {/* Employees Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {employees.map((employee) => (
+          {employees.map((employee) => {
+            const isBirthday = (() => {
+              if (!(employee as any).birth_date) return false
+              const today = new Date()
+              const birth = new Date((employee as any).birth_date)
+              return today.getDate() === birth.getDate() && today.getMonth() === birth.getMonth()
+            })()
+            return (
             <div
               key={employee.id}
-              className={`bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow relative ${
-                employee.status === 'inactive' ? 'opacity-60' : ''
+              className={`rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow relative ${
+                employee.status === 'inactive' ? 'opacity-60 bg-white' : isBirthday ? 'bg-gradient-to-br from-pink-50 via-yellow-50 to-purple-50 border-2 border-pink-300 ring-2 ring-pink-200' : 'bg-white'
               }`}
             >
+              {isBirthday && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-pink-500 to-purple-500 text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg animate-bounce">
+                  🎂 Doğum Günü Kutlu Olsun! 🎉
+                </div>
+              )}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start space-x-3 flex-1">
                   <div className={`p-3 rounded-lg ${
-                    employee.status === 'active' ? 'bg-blue-100' : 'bg-gray-100'
+                    isBirthday ? 'bg-pink-100' : employee.status === 'active' ? 'bg-blue-100' : 'bg-gray-100'
                   }`}>
-                    <Users className={`w-6 h-6 ${
-                      employee.status === 'active' ? 'text-blue-600' : 'text-gray-600'
-                    }`} />
+                    {isBirthday ? (
+                      <span className="text-2xl">🎂</span>
+                    ) : (
+                      <Users className={`w-6 h-6 ${employee.status === 'active' ? 'text-blue-600' : 'text-gray-600'}`} />
+                    )}
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-800">{employee.full_name}</h3>
+                    <h3 className={`text-lg font-bold ${isBirthday ? 'text-pink-700' : 'text-gray-800'}`}>
+                      {employee.full_name} {isBirthday && '🎉'}
+                    </h3>
                     <p className="text-xs text-gray-500">#{employee.employee_code}</p>
                     {employee.status === 'inactive' && (
                       <span className="inline-block mt-1 px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded-full">
@@ -446,7 +467,7 @@ export default function EmployeesPage() {
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
 
         {employees.length === 0 && (
@@ -644,7 +665,17 @@ export default function EmployeesPage() {
                   />
                 </div>
 
-                {/* Body Size */}
+                {/* Birth Date & Body Size */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Doğum Tarihi</label>
+                    <input
+                      type="date"
+                      value={formData.birth_date}
+                      onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Beden</label>
                   <select
@@ -661,6 +692,7 @@ export default function EmployeesPage() {
                     <option value="XXL">XXL</option>
                     <option value="3XL">3XL</option>
                   </select>
+                </div>
                 </div>
 
                 {/* Emergency Contact */}

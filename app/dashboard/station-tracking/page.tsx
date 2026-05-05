@@ -46,6 +46,10 @@ export default function StationTrackingPage() {
   const [stopReason, setStopReason] = useState('')
   const [expandedMachine, setExpandedMachine] = useState<string | null>(null)
   const [logFilter, setLogFilter] = useState<'all' | 'today' | 'week'>('today')
+  const [pendingQC, setPendingQC] = useState<any[]>([])
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   // Timer tick
   useEffect(() => {
@@ -65,33 +69,82 @@ export default function StationTrackingPage() {
       if (!profile?.company_id) return
       setCompanyId(profile.company_id)
 
-      const [machinesRes, sessionsRes, logsRes] = await Promise.all([
+      const [machinesRes, sessionsRes, logsRes, pendingRes] = await Promise.all([
         supabase.from('machines').select('id, machine_code, machine_name, status').eq('company_id', profile.company_id).order('machine_code'),
         supabase.from('station_logs').select('id, machine_id, started_at, started_by').eq('company_id', profile.company_id).eq('action', 'start').is('stopped_at', null),
         supabase.from('station_logs').select('*').eq('company_id', profile.company_id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('station_logs').select('id, machine_id, started_by, created_at').eq('company_id', profile.company_id).eq('action', 'pending_qc').eq('qc_status', 'pending'),
       ])
 
       setMachines(machinesRes.data || [])
       setActiveSessions(sessionsRes.data || [])
       setLogs(logsRes.data || [])
+      setPendingQC(pendingRes.data || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }
 
-  const handleStart = async (machineId: string) => {
+  const handleRequestStart = async (machineId: string) => {
     if (!companyId || !userId) return
     const existing = activeSessions.find(s => s.machine_id === machineId)
     if (existing) return alert('Bu makine zaten çalışıyor!')
+    const existingPending = pendingQC.find(p => p.machine_id === machineId)
+    if (existingPending) return alert('Bu makine için zaten KK onayı bekleniyor!')
 
     try {
       const { error } = await supabase.from('station_logs').insert({
         company_id: companyId,
         machine_id: machineId,
-        action: 'start',
-        started_at: new Date().toISOString(),
+        action: 'pending_qc',
+        qc_status: 'pending',
         started_by: userId,
       })
       if (error) throw error
+      alert('✅ Kalite kontrol onayı talep edildi!')
+      loadData()
+    } catch (err: any) { alert('Hata: ' + err.message) }
+  }
+
+  const handleQCApprove = async (logId: string, machineId: string) => {
+    if (!companyId || !userId) return
+    try {
+      // Pending kaydını onayla ve start olarak güncelle
+      const { error } = await supabase.from('station_logs')
+        .update({
+          action: 'start',
+          qc_status: 'approved',
+          qc_approved_by: userId,
+          qc_approved_at: new Date().toISOString(),
+          started_at: new Date().toISOString(),
+        })
+        .eq('id', logId)
+      if (error) throw error
+      alert('✅ Onaylandı! Makine çalıştırıldı.')
+      loadData()
+    } catch (err: any) { alert('Hata: ' + err.message) }
+  }
+
+  const handleQCRejectClick = (logId: string) => {
+    setRejectingId(logId)
+    setRejectReason('')
+    setShowRejectModal(true)
+  }
+
+  const handleQCRejectConfirm = async () => {
+    if (!rejectingId || !rejectReason.trim()) return alert('Red sebebi zorunludur!')
+    try {
+      const { error } = await supabase.from('station_logs')
+        .update({
+          qc_status: 'rejected',
+          qc_approved_by: userId,
+          qc_approved_at: new Date().toISOString(),
+          qc_reject_reason: rejectReason.trim(),
+        })
+        .eq('id', rejectingId)
+      if (error) throw error
+      setShowRejectModal(false)
+      setRejectingId(null)
+      alert('Talep reddedildi.')
       loadData()
     } catch (err: any) { alert('Hata: ' + err.message) }
   }
@@ -151,7 +204,8 @@ export default function StationTrackingPage() {
   )
 
   const runningCount = activeSessions.length
-  const stoppedCount = machines.length - runningCount
+  const pendingCount = pendingQC.length
+  const stoppedCount = machines.length - runningCount - pendingCount
 
   // Log filtreleme
   const now = new Date()
@@ -196,21 +250,25 @@ export default function StationTrackingPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-xl shadow-sm border p-4 border-l-4 border-green-500">
-            <p className="text-sm text-gray-500">Çalışan Makine</p>
+            <p className="text-sm text-gray-500">Çalışan</p>
             <p className="text-3xl font-bold text-green-600">{runningCount}</p>
           </div>
+          <div className="bg-white rounded-xl shadow-sm border p-4 border-l-4 border-yellow-500">
+            <p className="text-sm text-gray-500">KK Onayı Bekleyen</p>
+            <p className="text-3xl font-bold text-yellow-600">{pendingCount}</p>
+          </div>
           <div className="bg-white rounded-xl shadow-sm border p-4 border-l-4 border-gray-400">
-            <p className="text-sm text-gray-500">Duran Makine</p>
+            <p className="text-sm text-gray-500">Duran</p>
             <p className="text-3xl font-bold text-gray-600">{stoppedCount}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border p-4 border-l-4 border-blue-500">
-            <p className="text-sm text-gray-500">Toplam Makine</p>
+            <p className="text-sm text-gray-500">Toplam</p>
             <p className="text-3xl font-bold text-blue-600">{machines.length}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border p-4 border-l-4 border-purple-500">
-            <p className="text-sm text-gray-500">Bugün Toplam Çalışma</p>
+            <p className="text-sm text-gray-500">Bugün Çalışma</p>
             <p className="text-3xl font-bold text-purple-600 font-mono">{formatDuration(todayTotalSeconds)}</p>
           </div>
         </div>
@@ -229,35 +287,37 @@ export default function StationTrackingPage() {
           {filteredMachines.map(machine => {
             const session = activeSessions.find(s => s.machine_id === machine.id)
             const isRunning = !!session
+            const isPending = pendingQC.some(p => p.machine_id === machine.id)
+            const pendingLog = pendingQC.find(p => p.machine_id === machine.id)
             const elapsed = session ? getElapsed(session.started_at) : 0
             const machineLogs = logs.filter(l => l.machine_id === machine.id).slice(0, 5)
             const isExpanded = expandedMachine === machine.id
 
             return (
-              <div key={machine.id} className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${isRunning ? 'border-green-400' : 'border-gray-200'}`}>
+              <div key={machine.id} className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all ${isRunning ? 'border-green-400' : isPending ? 'border-yellow-400' : 'border-gray-200'}`}>
                 {/* Makine Başlık */}
-                <div className={`px-4 py-3 ${isRunning ? 'bg-green-50' : 'bg-gray-50'}`}>
+                <div className={`px-4 py-3 ${isRunning ? 'bg-green-50' : isPending ? 'bg-yellow-50' : 'bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-bold text-gray-900">{machine.machine_code}</h3>
                       <p className="text-xs text-gray-500 truncate">{machine.machine_name}</p>
                     </div>
-                    <div className={`w-3 h-3 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : isPending ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'}`}></div>
                   </div>
                 </div>
 
                 {/* Timer */}
                 <div className="px-4 py-4 text-center">
-                  <div className={`text-3xl font-mono font-bold mb-2 ${isRunning ? 'text-green-600' : 'text-gray-400'}`}>
+                  <div className={`text-3xl font-mono font-bold mb-2 ${isRunning ? 'text-green-600' : isPending ? 'text-yellow-600' : 'text-gray-400'}`}>
                     {isRunning ? formatDuration(elapsed) : '00:00:00'}
                   </div>
-                  <p className={`text-xs font-semibold ${isRunning ? 'text-green-600' : 'text-gray-400'}`}>
-                    {isRunning ? 'ÇALIŞIYOR' : 'DURDU'}
+                  <p className={`text-xs font-semibold ${isRunning ? 'text-green-600' : isPending ? 'text-yellow-600' : 'text-gray-400'}`}>
+                    {isRunning ? 'ÇALIŞIYOR' : isPending ? 'KK ONAYI BEKLENİYOR' : 'DURDU'}
                   </p>
                 </div>
 
                 {/* Butonlar */}
-                <div className="px-4 pb-3">
+                <div className="px-4 pb-3 space-y-2">
                   {isRunning ? (
                     <button
                       onClick={() => handleStopClick(machine.id)}
@@ -265,12 +325,27 @@ export default function StationTrackingPage() {
                     >
                       <Square className="w-4 h-4" /> Durdur
                     </button>
+                  ) : isPending ? (
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => handleQCApprove(pendingLog!.id, machine.id)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
+                      >
+                        ✓ KK Onayla & Çalıştır
+                      </button>
+                      <button
+                        onClick={() => handleQCRejectClick(pendingLog!.id)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold text-sm transition-colors"
+                      >
+                        ✕ Reddet
+                      </button>
+                    </div>
                   ) : (
                     <button
-                      onClick={() => handleStart(machine.id)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
+                      onClick={() => handleRequestStart(machine.id)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
                     >
-                      <Play className="w-4 h-4" /> Çalıştır
+                      <Play className="w-4 h-4" /> KK Onayı Talep Et
                     </button>
                   )}
                 </div>
@@ -423,6 +498,25 @@ export default function StationTrackingPage() {
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                   <Square className="w-4 h-4" /> Durdur
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Red Modalı */}
+        {showRejectModal && rejectingId && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowRejectModal(false)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-gray-800 mb-4">KK Talebini Reddet</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Red Sebebi <span className="text-red-500">*</span></label>
+                <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3}
+                  placeholder="Red sebebini yazın..." autoFocus
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowRejectModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">İptal</button>
+                <button onClick={handleQCRejectConfirm} disabled={!rejectReason.trim()}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold disabled:bg-gray-300">Reddet</button>
               </div>
             </div>
           </div>

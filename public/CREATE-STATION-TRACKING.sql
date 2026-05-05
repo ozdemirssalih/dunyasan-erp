@@ -7,7 +7,11 @@ CREATE TABLE IF NOT EXISTS station_logs (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   machine_id UUID NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 
-  action VARCHAR(20) NOT NULL, -- 'start', 'stop'
+  action VARCHAR(20) NOT NULL, -- 'pending_qc', 'start', 'stop'
+  qc_status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+  qc_approved_by UUID REFERENCES auth.users(id),
+  qc_approved_at TIMESTAMPTZ,
+  qc_reject_reason TEXT,
   started_at TIMESTAMPTZ,
   stopped_at TIMESTAMPTZ,
   duration_seconds INTEGER,

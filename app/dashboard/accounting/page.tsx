@@ -925,28 +925,8 @@ export default function AccountingPageV2() {
         await supabase.from('cash_accounts').update({ current_balance: newBalance, updated_at: new Date().toISOString() }).eq('id', collectAccountId)
       }
 
-      // Carideki çek kaydını kapat (paid olarak işaretle)
-      try {
-        const contactId = check.customer_id || check.supplier_id
-        if (contactId) {
-          const { data: cariRecords } = await supabase
-            .from('current_account_transactions')
-            .select('id, amount, paid_amount')
-            .eq('company_id', companyId)
-            .like('reference_number', `CHK-${check.check_number}%`)
-            .neq('status', 'paid')
-            .limit(1)
-
-          if (cariRecords && cariRecords.length > 0) {
-            const rec = cariRecords[0]
-            await supabase.from('current_account_transactions')
-              .update({ paid_amount: rec.amount, status: 'paid', updated_at: new Date().toISOString() })
-              .eq('id', rec.id)
-          }
-        }
-      } catch (cariErr) { console.error('Çek cari kapama hatası:', cariErr) }
-
-      alert(`✅ Çek ${isIncoming ? 'tahsil edildi' : 'ödendi'} ve cari hesap güncellendi!\n\nÇek No: ${check.check_number}\nTutar: ${check.amount} ${check.currency}\nKasa: ${selectedAcc?.account_name || ''}`)
+      // Çek tahsil/ödeme sadece kasa işlemidir, cariye dokunulmaz
+      alert(`✅ Çek ${isIncoming ? 'tahsil edildi' : 'ödendi'}!\n\nÇek No: ${check.check_number}\nTutar: ${check.amount} ${check.currency}\nKasa: ${selectedAcc?.account_name || ''}`)
       setShowCheckCollectModal(false)
       setCollectingCheck(null)
       setCollectAccountId('')

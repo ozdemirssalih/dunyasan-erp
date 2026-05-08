@@ -130,6 +130,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <div className="h-screen overflow-hidden">{children}</div>
   }
 
+  // Calc sayfası: navbar olmadan göster
+  if (pathname === '/dashboard/calc') {
+    return <div className="min-h-screen bg-gray-50 p-6">{children}</div>
+  }
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}

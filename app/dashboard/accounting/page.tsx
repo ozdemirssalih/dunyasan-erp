@@ -2947,7 +2947,7 @@ export default function AccountingPageV2() {
                         <option value="">Tedarikçi Seçiniz...</option>
                         {suppliers.map(supplier => (
                           <option key={supplier.id} value={supplier.id}>
-                            {supplier.contact_name}
+                            {supplier.company_name}
                           </option>
                         ))}
                       </select>

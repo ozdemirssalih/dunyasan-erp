@@ -61,6 +61,15 @@ export default function AccountingPageV2() {
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '', description: '' })
 
+  // Gider kategorileri
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([
+    'Hammadde', 'Takım/Alet', 'Bakım/Onarım', 'Nakliye/Lojistik', 'Personel', 'Enerji',
+    'Kira', 'Sigorta', 'Vergi/Harç', 'Ofis/Kırtasiye', 'Yemek/İkram', 'Akaryakıt',
+    'Reklam/Pazarlama', 'Danışmanlık', 'Diğer'
+  ])
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+
   // Çek takip state'leri
   const [checks, setChecks] = useState<any[]>([])
   const [checkDocumentFile, setCheckDocumentFile] = useState<File | null>(null)
@@ -196,6 +205,12 @@ export default function AccountingPageV2() {
 
       setAllCashTransactions(cashTxns || [])
       setRecentCashTransactions(cashTxns?.slice(0, 10) || [])
+
+      // Mevcut gider kategorilerini çıkar
+      const existingCats = cashTxns?.map(t => t.expense_category).filter(Boolean) || []
+      const defaultCats = ['Hammadde', 'Takım/Alet', 'Bakım/Onarım', 'Nakliye/Lojistik', 'Personel', 'Enerji', 'Kira', 'Sigorta', 'Vergi/Harç', 'Ofis/Kırtasiye', 'Yemek/İkram', 'Akaryakıt', 'Reklam/Pazarlama', 'Danışmanlık', 'Diğer']
+      const allCats = Array.from(new Set([...defaultCats, ...existingCats])).sort()
+      setExpenseCategories(allCats)
 
       // Kasa bakiyesini hesapla (sadece ödemelerden)
       const cashByCurrency: Record<string, number> = {}
@@ -2770,28 +2785,35 @@ export default function AccountingPageV2() {
                     {transactionForm.is_expense && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Gider Kategorisi *</label>
-                        <select
-                          value={transactionForm.expense_category}
-                          onChange={(e) => setTransactionForm({...transactionForm, expense_category: e.target.value})}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
-                        >
-                          <option value="">Kategori Seçin...</option>
-                          <option value="Hammadde">Hammadde</option>
-                          <option value="Takım/Alet">Takım / Alet</option>
-                          <option value="Bakım/Onarım">Bakım / Onarım</option>
-                          <option value="Nakliye/Lojistik">Nakliye / Lojistik</option>
-                          <option value="Personel">Personel Gideri</option>
-                          <option value="Enerji">Enerji (Elektrik/Doğalgaz)</option>
-                          <option value="Kira">Kira</option>
-                          <option value="Sigorta">Sigorta</option>
-                          <option value="Vergi/Harç">Vergi / Harç</option>
-                          <option value="Ofis/Kırtasiye">Ofis / Kırtasiye</option>
-                          <option value="Yemek/İkram">Yemek / İkram</option>
-                          <option value="Akaryakıt">Akaryakıt</option>
-                          <option value="Reklam/Pazarlama">Reklam / Pazarlama</option>
-                          <option value="Danışmanlık">Danışmanlık</option>
-                          <option value="Diğer">Diğer</option>
-                        </select>
+                        <div className="flex gap-2">
+                          <select
+                            value={transactionForm.expense_category}
+                            onChange={(e) => setTransactionForm({...transactionForm, expense_category: e.target.value})}
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                          >
+                            <option value="">Kategori Seçin...</option>
+                            {expenseCategories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
+                            className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition-colors">
+                            +
+                          </button>
+                        </div>
+                        {showNewCategoryInput && (
+                          <div className="flex gap-2 mt-2">
+                            <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)}
+                              placeholder="Yeni kategori adı..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                            <button type="button" onClick={() => {
+                              if (!newCategoryName.trim()) return
+                              const updated = [...expenseCategories, newCategoryName.trim()].sort()
+                              setExpenseCategories(Array.from(new Set(updated)))
+                              setTransactionForm({...transactionForm, expense_category: newCategoryName.trim()})
+                              setNewCategoryName(''); setShowNewCategoryInput(false)
+                            }} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold">Ekle</button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

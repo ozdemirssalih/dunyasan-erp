@@ -8,7 +8,7 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
 type Period = 'today' | 'week' | 'month' | 'custom'
-type Tab = 'overview' | 'production' | 'warehouse' | 'finance' | 'quality' | 'employees'
+type Tab = 'overview' | 'production' | 'warehouse' | 'finance' | 'quality' | 'employees' | 'expenses'
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 
 export default function ReportsPage() {
@@ -26,6 +26,7 @@ export default function ReportsPage() {
   const [fin, setFin] = useState<any>({ income: 0, expense: 0, bal: 0, recv: 0, pay: 0, byAcc: [], daily: [] })
   const [qc, setQc] = useState<any>({ passed: 0, failed: 0, returned: 0, scrap: 0, pending: 0 })
   const [emp, setEmp] = useState<any>({ total: 0, active: 0, top: [] })
+  const [expenses, setExpenses] = useState<any>({ total: 0, byCategory: [], list: [] })
 
   // Proje filtresi
   const [projects, setProjects] = useState<any[]>([])
@@ -119,7 +120,7 @@ export default function ReportsPage() {
   async function loadAll() {
     if (!cid) return
     setLoading(true)
-    await Promise.all([loadProd(), loadWh(), loadFin(), loadQc(), loadEmp()].map(p => p.catch(() => {})))
+    await Promise.all([loadProd(), loadWh(), loadFin(), loadQc(), loadEmp(), loadExpenses()].map(p => p.catch(() => {})))
     setLoading(false)
   }
 
@@ -224,6 +225,16 @@ export default function ReportsPage() {
     setEmp({ total: es?.length || 0, active: es?.filter(e => e.status === 'active').length || 0, top })
   }
 
+  async function loadExpenses() {
+    const { data } = await supabase.from('cash_transactions').select('amount, expense_category, description, transaction_date, currency, payment_method, customer_id, supplier_id').eq('company_id', cid!).not('expense_category', 'is', null).gte('transaction_date', df + 'T00:00:00').lte('transaction_date', dt + 'T23:59:59').order('transaction_date', { ascending: false })
+    if (!data) return
+    const total = data.reduce((s, r) => s + (r.amount || 0), 0)
+    const catMap: Record<string, number> = {}
+    data.forEach(r => { catMap[r.expense_category] = (catMap[r.expense_category] || 0) + (r.amount || 0) })
+    const byCategory = Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+    setExpenses({ total, byCategory, list: data })
+  }
+
   const f = (n: number) => new Intl.NumberFormat('tr-TR').format(n)
   const fm = (n: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n)
   const fd = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}` }
@@ -253,7 +264,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto">
-        {[{ id: 'overview' as Tab, l: 'Genel Özet', I: BarChart3 }, { id: 'production' as Tab, l: 'Üretim', I: Factory }, { id: 'warehouse' as Tab, l: 'Depo', I: Package }, { id: 'finance' as Tab, l: 'Finans', I: Wallet }, { id: 'quality' as Tab, l: 'Kalite Kontrol', I: Shield }, { id: 'employees' as Tab, l: 'Personel', I: Users }].map(t => (
+        {[{ id: 'overview' as Tab, l: 'Genel Özet', I: BarChart3 }, { id: 'production' as Tab, l: 'Üretim', I: Factory }, { id: 'warehouse' as Tab, l: 'Depo', I: Package }, { id: 'finance' as Tab, l: 'Finans', I: Wallet }, { id: 'expenses' as Tab, l: 'Giderler', I: Wallet }, { id: 'quality' as Tab, l: 'Kalite Kontrol', I: Shield }, { id: 'employees' as Tab, l: 'Personel', I: Users }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${tab === t.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}>
             <t.I className="w-4 h-4" /> {t.l}
           </button>
@@ -485,6 +496,78 @@ export default function ReportsPage() {
             </div>
             {emp.top.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">En Verimli Personeller</h3><ResponsiveContainer width="100%" height={300}><BarChart data={emp.top}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Bar dataKey="Üretim" fill="#3b82f6" radius={[4, 4, 0, 0]} /><Bar dataKey="Fire" fill="#ef4444" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
             {emp.top.length > 0 && <div className="bg-white rounded-xl shadow-sm border p-5"><h3 className="font-bold text-gray-800 mb-4">Sıralama</h3><div className="space-y-2">{emp.top.map((e: any, i: number) => (<div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-200 text-gray-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{i + 1}</div><div><p className="font-semibold text-sm">{e.name}</p><p className="text-xs text-gray-500">{e.Gün} gün • {e.Fire} fire</p></div></div><p className="font-bold text-blue-600">{f(e.Üretim)}</p></div>))}</div></div>}
+          </div>
+        )}
+
+        {tab === 'expenses' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-red-600">{fm(expenses.total)}</p><p className="text-sm text-gray-500">Toplam Gider</p></div>
+              <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-blue-600">{expenses.byCategory.length}</p><p className="text-sm text-gray-500">Kategori Sayısı</p></div>
+              <div className="bg-white rounded-xl shadow-sm border p-5 text-center"><p className="text-3xl font-bold text-gray-600">{expenses.list.length}</p><p className="text-sm text-gray-500">İşlem Sayısı</p></div>
+            </div>
+
+            {expenses.byCategory.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-xl shadow-sm border p-5">
+                  <h3 className="font-bold text-gray-800 mb-4">Kategori Bazlı Gider Dağılımı</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie data={expenses.byCategory} cx="50%" cy="50%" outerRadius={100} dataKey="value"
+                        label={({ name, percent }) => `${name} %${(percent * 100).toFixed(0)}`}>
+                        {expenses.byCategory.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: any) => fm(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border p-5">
+                  <h3 className="font-bold text-gray-800 mb-4">Kategoriler</h3>
+                  <div className="space-y-2">
+                    {expenses.byCategory.map((cat: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                          <span className="font-semibold text-sm text-gray-800">{cat.name}</span>
+                        </div>
+                        <span className="font-bold text-red-600">{fm(cat.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {expenses.list.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border p-5">
+                <h3 className="font-bold text-gray-800 mb-4">Gider Listesi ({expenses.list.length})</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-gray-50 border-b">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Tarih</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Kategori</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Açıklama</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Ödeme</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Tutar</th>
+                    </tr></thead>
+                    <tbody className="divide-y">
+                      {expenses.list.map((e: any, i: number) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-600">{new Date(e.transaction_date).toLocaleDateString('tr-TR')}</td>
+                          <td className="px-4 py-3"><span className="px-2 py-1 bg-red-50 text-red-700 rounded-full text-xs font-semibold">{e.expense_category}</span></td>
+                          <td className="px-4 py-3 text-gray-700">{e.description || '-'}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{e.payment_method === 'cash' ? 'Nakit' : e.payment_method === 'transfer' ? 'Havale' : e.payment_method === 'check' ? 'Çek' : e.payment_method || '-'}</td>
+                          <td className="px-4 py-3 text-right font-bold text-red-600">{fm(e.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {expenses.list.length === 0 && <div className="bg-white rounded-xl shadow-sm border p-12 text-center text-gray-400">Bu dönemde gider kaydı bulunmuyor</div>}
           </div>
         )}
       </div>

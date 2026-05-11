@@ -518,9 +518,12 @@ export default function AccountingPageV2() {
         // ÖDEME KAYDI
         const amount = parseFloat(transactionForm.amount)
 
-        // Validasyon: Müşteri veya tedarikçi seçilmeli
-        if (!transactionForm.customer_id && !transactionForm.supplier_id) {
+        // Validasyon: Gider değilse müşteri/tedarikçi zorunlu
+        if (!transactionForm.is_expense && !transactionForm.customer_id && !transactionForm.supplier_id) {
           return alert('Müşteri veya tedarikçi seçimi zorunludur!')
+        }
+        if (transactionForm.is_expense && !transactionForm.expense_category) {
+          return alert('Gider kategorisi seçimi zorunludur!')
         }
 
         // ÇEK İLE ÖDEME → Kasa işlemi yapmadan çek kaydı oluştur
@@ -644,10 +647,8 @@ export default function AccountingPageV2() {
           }
         }
 
-        // Ödeme/Tahsilat → Carideki borcu/alacağı kapat
-        // Tahsilat = alacak azalır (receivable olan kayıtların paid_amount'ı artar)
-        // Ödeme = borç azalır (payable olan kayıtların paid_amount'ı artar)
-        try {
+        // Ödeme/Tahsilat → Carideki borcu/alacağı kapat (gider ise atla)
+        if (!transactionForm.is_expense) try {
           const contactId = transactionForm.customer_id || transactionForm.supplier_id
           const isTahsilat = transactionForm.transaction_type === 'receivable'
           const targetType = isTahsilat ? 'receivable' : 'payable'

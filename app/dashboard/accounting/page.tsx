@@ -96,6 +96,7 @@ export default function AccountingPageV2() {
     customer_id: '',
     supplier_id: '',
     description: '',
+    bank_name: '',
     status: 'pending' as 'pending' | 'collected' | 'paid' | 'bounced' | 'cancelled'
   })
 
@@ -800,6 +801,7 @@ export default function AccountingPageV2() {
       customer_id: '',
       supplier_id: '',
       description: '',
+      bank_name: '',
       status: 'pending'
     })
   }
@@ -856,6 +858,7 @@ export default function AccountingPageV2() {
           supplier_id: checkForm.check_type === 'outgoing' ? checkForm.supplier_id : null,
           document_url: documentUrl,
           description: checkForm.description,
+          bank_name: checkForm.bank_name || null,
           status: checkForm.status,
           created_by: user?.id
         })
@@ -2420,6 +2423,7 @@ export default function AccountingPageV2() {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Çek No</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Banka</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tür</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tutar</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Müşteri/Tedarikçi</th>
@@ -2434,6 +2438,7 @@ export default function AccountingPageV2() {
                     {checks.map((check) => (
                       <tr key={check.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-900">{check.check_number}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{check.bank_name || '-'}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                             check.check_type === 'incoming'
@@ -3094,6 +3099,35 @@ export default function AccountingPageV2() {
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Banka */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Banka</label>
+                  <select
+                    value={checkForm.bank_name}
+                    onChange={(e) => setCheckForm({...checkForm, bank_name: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                  >
+                    <option value="">Banka Seçin...</option>
+                    <option value="Denizbank">Denizbank</option>
+                    <option value="Garanti BBVA">Garanti BBVA</option>
+                    <option value="Yapı Kredi">Yapı Kredi</option>
+                    <option value="İş Bankası">İş Bankası</option>
+                    <option value="Ziraat Bankası">Ziraat Bankası</option>
+                    <option value="Halkbank">Halkbank</option>
+                    <option value="Vakıfbank">Vakıfbank</option>
+                    <option value="Akbank">Akbank</option>
+                    <option value="QNB Finansbank">QNB Finansbank</option>
+                    <option value="TEB">TEB</option>
+                    <option value="ING">ING</option>
+                    <option value="HSBC">HSBC</option>
+                    <option value="Şekerbank">Şekerbank</option>
+                    <option value="Kuveyt Türk">Kuveyt Türk</option>
+                    <option value="Türkiye Finans">Türkiye Finans</option>
+                    <option value="Albaraka Türk">Albaraka Türk</option>
+                    <option value="Diğer">Diğer</option>
+                  </select>
                 </div>
 
                 {/* Açıklama */}

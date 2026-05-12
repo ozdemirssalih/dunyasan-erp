@@ -908,8 +908,7 @@ export default function AccountingPageV2() {
         cash_account_id: collectAccountId,
         created_by: user?.id
       }
-      if (check.customer_id) cashData.customer_id = check.customer_id
-      if (check.supplier_id) cashData.supplier_id = check.supplier_id
+      // Çek tahsil/ödeme cariye yansıtılmaz — customer_id/supplier_id eklenmez
 
       const { error: cashError } = await supabase.from('cash_transactions').insert(cashData)
       if (cashError) throw cashError

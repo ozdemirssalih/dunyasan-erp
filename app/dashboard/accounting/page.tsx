@@ -862,36 +862,7 @@ export default function AccountingPageV2() {
 
       if (error) throw error
 
-      // Çeki cari hesaplara yansıt
-      try {
-        const isIncoming = checkForm.check_type === 'incoming'
-        const checkAmount = parseFloat(checkForm.amount)
-        const checkCariEntry: any = {
-          company_id: companyId,
-          transaction_type: isIncoming ? 'receivable' : 'payable',
-          amount: checkAmount,
-          paid_amount: 0,
-          status: 'unpaid',
-          currency: checkForm.currency,
-          transaction_date: checkForm.check_date,
-          due_date: checkForm.due_date,
-          description: `Çek: ${checkForm.check_number} - ${checkForm.description || ''}`,
-          reference_number: `CHK-${checkForm.check_number}`,
-          created_by: user?.id
-        }
-        if (isIncoming) {
-          checkCariEntry.customer_id = checkForm.customer_id
-          checkCariEntry.supplier_id = null
-        } else {
-          checkCariEntry.supplier_id = checkForm.supplier_id
-          checkCariEntry.customer_id = null
-        }
-        const { error: cariErr } = await supabase.from('current_account_transactions').insert(checkCariEntry)
-        if (cariErr) console.error('Çek cari yansıtma hatası:', cariErr)
-        else console.log('✅ Çek cari hesaba yansıtıldı')
-      } catch (e) { console.error('Çek cari exception:', e) }
-
-      alert('Çek başarıyla kaydedildi ve cari hesaba yansıtıldı!')
+      alert('Çek başarıyla kaydedildi!')
       setShowCheckModal(false)
       resetCheckForm()
       loadData()

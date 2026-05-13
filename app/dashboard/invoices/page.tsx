@@ -651,6 +651,7 @@ export default function InvoicesPage() {
                       }`}>
                         {invoice.invoice_type === 'sales' ? 'Satış' :
                          invoice.invoice_type === 'purchase' ? 'Alış' :
+                         invoice.invoice_type === 'gr' ? 'GR - Gider' :
                          invoice.invoice_type === 'incoming_return' ? 'Gelen İade' :
                          invoice.invoice_type === 'outgoing_return' ? 'Giden İade' :
                          invoice.invoice_type === 'withholding' ? 'Tevkifatlı' :
@@ -832,6 +833,7 @@ export default function InvoicesPage() {
                           invoice.invoice_type === 'sales' ? 'bg-green-100 text-green-800' :
                           invoice.invoice_type === 'outgoing_return' ? 'bg-green-100 text-green-700' :
                           invoice.invoice_type === 'sales_fx' ? 'bg-green-100 text-green-700' :
+                          invoice.invoice_type === 'gr' ? 'bg-amber-100 text-amber-800' :
                           invoice.invoice_type === 'purchase' ? 'bg-orange-100 text-orange-800' :
                           invoice.invoice_type === 'incoming_return' ? 'bg-red-100 text-red-700' :
                           invoice.invoice_type === 'withholding' ? 'bg-purple-100 text-purple-700' :
@@ -840,6 +842,7 @@ export default function InvoicesPage() {
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {invoice.invoice_type === 'sales' ? '💰 Satış' :
+                           invoice.invoice_type === 'gr' ? '📦 GR - Gider' :
                            invoice.invoice_type === 'purchase' ? '🛒 Alış' :
                            invoice.invoice_type === 'incoming_return' ? '↪️ Gelen İade' :
                            invoice.invoice_type === 'outgoing_return' ? '↩️ Giden İade' :
@@ -1014,6 +1017,7 @@ export default function InvoicesPage() {
                         <option value="sales_fx">💱 Satış Kur Farkı Faturası (+)</option>
                       </optgroup>
                       <optgroup label="📉 Borç (Gider - Tedarikçi İşlemleri)">
+                        <option value="gr">📦 GR - Gider Faturası (-)</option>
                         <option value="purchase">🛒 Alış Faturası (-)</option>
                         <option value="incoming_return">↪️ Gelen İade Faturası (-)</option>
                         <option value="withholding">📋 Tevkifatlı Fatura (-)</option>

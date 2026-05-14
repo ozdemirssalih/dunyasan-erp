@@ -167,7 +167,16 @@ export default function InvoicesPage() {
       }
 
       if (editingId) {
-        await supabase.from('invoices').update(data).eq('id', editingId)
+        // Düzenleme: dosya yükleme
+        let editDocUrl = editingDocumentUrl
+        if (invoiceFile) {
+          const fileExt = invoiceFile.name.split('.').pop()
+          const fileName = `invoices/${companyId}/${Date.now()}.${fileExt}`
+          const { error: uploadError } = await supabase.storage.from('accounting-documents').upload(fileName, invoiceFile)
+          if (!uploadError) editDocUrl = fileName
+        }
+
+        await supabase.from('invoices').update({ ...data, document_url: editDocUrl }).eq('id', editingId)
 
         // Düzenleme: eski cari kaydı güncelle (invoice_number referansıyla bul)
         const customerTransactionsEdit = ['sales', 'outgoing_return', 'sales_fx']
@@ -276,8 +285,12 @@ export default function InvoicesPage() {
     }
   }
 
+  const [editingDocumentUrl, setEditingDocumentUrl] = useState<string | null>(null)
+
   const handleEditInvoice = (invoice: any) => {
     setEditingId(invoice.id)
+    setEditingDocumentUrl(invoice.document_url || null)
+    setInvoiceFile(null)
     setInvoiceForm({
       invoice_number: invoice.invoice_number,
       invoice_type: invoice.invoice_type,
@@ -1147,10 +1160,29 @@ export default function InvoicesPage() {
                 {/* Dosya Yükleme */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Belgesi (PDF / Fotoğraf)</label>
+                  {editingId && editingDocumentUrl && !invoiceFile && (
+                    <div className="flex items-center gap-3 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-blue-700 flex-1">Mevcut belge yüklü</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(editingDocumentUrl, 3600)
+                          if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                      >Görüntüle</button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingDocumentUrl(null)}
+                        className="text-xs text-red-500 hover:text-red-700 font-semibold"
+                      >Kaldır</button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
                       <Upload className="w-5 h-5 text-gray-400" />
-                      <span className="text-sm text-gray-600">{invoiceFile ? invoiceFile.name : 'Dosya seçin veya sürükleyin'}</span>
+                      <span className="text-sm text-gray-600">{invoiceFile ? invoiceFile.name : editingId && editingDocumentUrl ? 'Yeni dosya seç (değiştirir)' : 'Dosya seçin veya sürükleyin'}</span>
                       <input
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png,.webp"

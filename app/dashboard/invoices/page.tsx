@@ -57,6 +57,7 @@ export default function InvoicesPage() {
   const [userId, setUserId] = useState<string>('')
   const [showWaybillModal, setShowWaybillModal] = useState(false)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [selectedWaybill, setSelectedWaybill] = useState<any>(null)
 
@@ -189,10 +190,20 @@ export default function InvoicesPage() {
 
         alert('Fatura ve cari hesap güncellendi!')
       } else {
+        // Dosya yükleme
+        let documentUrl: string | null = null
+        if (invoiceFile) {
+          const fileExt = invoiceFile.name.split('.').pop()
+          const fileName = `invoices/${companyId}/${Date.now()}.${fileExt}`
+          const { error: uploadError } = await supabase.storage.from('accounting-documents').upload(fileName, invoiceFile)
+          if (uploadError) console.error('Dosya yükleme hatası:', uploadError)
+          else documentUrl = fileName
+        }
+
         // Faturayı kaydet
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
-          .insert(data)
+          .insert({ ...data, document_url: documentUrl })
           .select()
           .single()
 
@@ -242,6 +253,7 @@ export default function InvoicesPage() {
       }
 
       setShowInvoiceModal(false)
+      setInvoiceFile(null)
       setInvoiceForm({
         invoice_number: '',
         invoice_type: 'sales',
@@ -1109,6 +1121,29 @@ export default function InvoicesPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     rows={3}
                   />
+                </div>
+
+                {/* Dosya Yükleme */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fatura Belgesi (PDF / Fotoğraf)</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                      <Upload className="w-5 h-5 text-gray-400" />
+                      <span className="text-sm text-gray-600">{invoiceFile ? invoiceFile.name : 'Dosya seçin veya sürükleyin'}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                    </label>
+                    {invoiceFile && (
+                      <button onClick={() => setInvoiceFile(null)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG formatları desteklenir</p>
                 </div>
               </div>
               <div className="p-6 border-t border-gray-200 flex gap-3 sticky bottom-0 bg-white">

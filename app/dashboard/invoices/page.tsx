@@ -831,6 +831,7 @@ export default function InvoicesPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tarih</th>
                     <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Tutar</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Durum</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Belge</th>
                     {(canEdit('invoices') || canDelete('invoices')) && (
                       <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
                     )}
@@ -876,6 +877,22 @@ export default function InvoicesPage() {
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {getStatusLabel(invoice.status)}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {invoice.document_url ? (
+                          <button
+                            onClick={async () => {
+                              const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(invoice.document_url, 3600)
+                              if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+                              else alert('Dosya açılamadı')
+                            }}
+                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                          >
+                            <FileDown className="w-4 h-4" /> Görüntüle
+                          </button>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
                       </td>
                       {(canEdit('invoices') || canDelete('invoices')) && (
                         <td className="px-6 py-4 text-right">

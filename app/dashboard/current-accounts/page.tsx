@@ -14,6 +14,7 @@ export default function CurrentAccountsPage() {
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
+  const [editingContact, setEditingContact] = useState<any>(null)
   const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
 
   useEffect(() => { loadData() }, [])
@@ -96,6 +97,29 @@ export default function CurrentAccountsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleEditContact = (contact: any) => {
+    setEditingContact(contact)
+    setNewForm({
+      contact_name: contact.contact_name || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+      address: contact.address || '',
+      tax_number: contact.tax_number || '',
+      sector: contact.sector || '',
+    })
+    setShowNewModal(true)
+  }
+
+  const handleDeleteContact = async (contact: any) => {
+    if (!confirm(`"${contact.contact_name}" cari hesabını silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz.`)) return
+    try {
+      const { error } = await supabase.from('contacts').update({ is_active: false }).eq('id', contact.id)
+      if (error) throw error
+      alert('Cari hesap silindi!')
+      loadData()
+    } catch (err: any) { alert('Hata: ' + err.message) }
   }
 
   const openContactDetail = async (contact: any) => {
@@ -198,10 +222,10 @@ export default function CurrentAccountsPage() {
 
       {/* Yeni Cari Modal */}
       {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNewModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowNewModal(false); setEditingContact(null); setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' }) }}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-800">Yeni Cari Hesap</h3>
+              <h3 className="text-xl font-bold text-gray-800">{editingContact ? 'Cari Hesap Düzenle' : 'Yeni Cari Hesap'}</h3>
               <button onClick={() => setShowNewModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
             </div>
             <div className="space-y-3">
@@ -239,22 +263,29 @@ export default function CurrentAccountsPage() {
               <button
                 onClick={async () => {
                   if (!newForm.contact_name || !companyId) return alert('Firma/kişi adı zorunludur!')
-                  const { error } = await supabase.from('contacts').insert({
-                    company_id: companyId, contact_name: newForm.contact_name,
+                  const payload = {
+                    contact_name: newForm.contact_name,
                     phone: newForm.phone || null, email: newForm.email || null,
                     address: newForm.address || null, tax_number: newForm.tax_number || null,
                     sector: newForm.sector || null,
-                    is_active: true
-                  })
-                  if (error) return alert('Hata: ' + error.message)
-                  alert('Cari hesap eklendi!')
+                  }
+                  if (editingContact) {
+                    const { error } = await supabase.from('contacts').update(payload).eq('id', editingContact.id)
+                    if (error) return alert('Hata: ' + error.message)
+                    alert('Cari hesap güncellendi!')
+                  } else {
+                    const { error } = await supabase.from('contacts').insert({ ...payload, company_id: companyId, is_active: true })
+                    if (error) return alert('Hata: ' + error.message)
+                    alert('Cari hesap eklendi!')
+                  }
                   setShowNewModal(false)
+                  setEditingContact(null)
                   setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
                   loadData()
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
               >
-                Kaydet
+                {editingContact ? 'Güncelle' : 'Kaydet'}
               </button>
             </div>
           </div>
@@ -457,6 +488,7 @@ export default function CurrentAccountsPage() {
                   <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600">Bakiye</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600">Detay</th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600">İşlemler</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -481,6 +513,16 @@ export default function CurrentAccountsPage() {
                     <td className="px-6 py-4 text-center text-sm text-gray-500">{c.transactionCount}</td>
                     <td className="px-6 py-4 text-center">
                       <button className="text-blue-600 hover:text-blue-800"><Eye className="w-4 h-4" /></button>
+                    </td>
+                    <td className="px-6 py-4 text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleEditContact(c)} className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Düzenle">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        </button>
+                        <button onClick={() => handleDeleteContact(c)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" title="Sil">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

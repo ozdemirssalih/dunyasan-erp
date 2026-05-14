@@ -140,7 +140,7 @@ export default function CurrentAccountsPage() {
     if (refNumbers.length > 0) {
       const { data: invoices } = await supabase
         .from('invoices')
-        .select('invoice_number, invoice_type, category')
+        .select('invoice_number, invoice_type, category, document_url')
         .eq('company_id', companyId)
         .in('invoice_number', refNumbers)
       if (invoices) {
@@ -164,6 +164,7 @@ export default function CurrentAccountsPage() {
         source: 'cari' as const,
         invoice_type: inv?.invoice_type || null,
         invoice_category: inv?.category || null,
+        document_url: inv?.document_url || null,
       }
     })
 
@@ -398,6 +399,17 @@ export default function CurrentAccountsPage() {
                               {isCash && t.cash_account_name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700">{t.cash_account_name}</span>}
                               {!isCash && t.status === 'paid' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700">Kapatıldı</span>}
                               {!isCash && t.status === 'partial' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-yellow-100 text-yellow-700">Kısmi Ödeme</span>}
+                              {t.document_url && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(t.document_url, 3600)
+                                    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+                                    else alert('Dosya açılamadı')
+                                  }}
+                                  className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold"
+                                >📄 PDF</button>
+                              )}
                             </div>
                             <p className="text-[10px] text-gray-400 mt-0.5">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
                           </div>

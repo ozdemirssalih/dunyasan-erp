@@ -210,6 +210,7 @@ export default function InvoicesPage() {
             alert('⚠️ Dosya yüklenemedi: ' + uploadError.message)
           } else {
             documentUrl = fileName
+            console.log('✅ Dosya yüklendi:', fileName)
           }
         }
 
@@ -219,6 +220,9 @@ export default function InvoicesPage() {
           .insert({ ...data, document_url: documentUrl })
           .select()
           .single()
+
+        console.log('📝 Fatura kaydediliyor:', { ...data, document_url: documentUrl })
+        console.log('📝 Kayıt sonucu:', insertedInvoice)
 
         if (invoiceError) {
           console.error('❌ Invoice insert error:', invoiceError)

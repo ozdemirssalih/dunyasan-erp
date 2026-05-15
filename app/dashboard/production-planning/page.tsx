@@ -47,6 +47,13 @@ export default function ProductionPlanningPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
+
+  // Operasyonlar
+  const [selectedPlan, setSelectedPlan] = useState<PlanItem | null>(null)
+  const [operations, setOperations] = useState<any[]>([])
+  const [showOpsPanel, setShowOpsPanel] = useState(false)
+  const [showAddOp, setShowAddOp] = useState(false)
+  const [opForm, setOpForm] = useState({ operation_name: '', machine_id: '', responsible: '', estimated_duration: '', notes: '' })
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
 
   const [form, setForm] = useState({
@@ -139,6 +146,48 @@ export default function ProductionPlanningPage() {
     init()
   }
 
+  // Operasyon fonksiyonları
+  const openOperations = async (plan: PlanItem) => {
+    setSelectedPlan(plan)
+    const { data } = await supabase.from('production_operations').select('*').eq('plan_id', plan.id).order('sira')
+    setOperations(data || [])
+    setShowOpsPanel(true)
+  }
+
+  const handleAddOperation = async () => {
+    if (!opForm.operation_name || !selectedPlan || !companyId) return alert('Operasyon adı zorunlu!')
+    const sira = operations.length + 1
+    const machineName = machines.find(m => m.id === opForm.machine_id)
+    const { error } = await supabase.from('production_operations').insert({
+      company_id: companyId, plan_id: selectedPlan.id, sira,
+      operation_name: opForm.operation_name,
+      machine_id: opForm.machine_id || null,
+      machine_name: machineName ? `${machineName.machine_code} - ${machineName.machine_name}` : null,
+      responsible: opForm.responsible || null,
+      estimated_duration: opForm.estimated_duration ? parseInt(opForm.estimated_duration) : null,
+      notes: opForm.notes || null, status: 'pending',
+    })
+    if (error) return alert('Hata: ' + error.message)
+    setOpForm({ operation_name: '', machine_id: '', responsible: '', estimated_duration: '', notes: '' })
+    setShowAddOp(false)
+    openOperations(selectedPlan)
+  }
+
+  const handleOpStatus = async (opId: string, status: string) => {
+    const now = new Date().toISOString()
+    const update: any = { status }
+    if (status === 'in_progress') update.started_at = now
+    if (status === 'completed') update.completed_at = now
+    await supabase.from('production_operations').update(update).eq('id', opId)
+    if (selectedPlan) openOperations(selectedPlan)
+  }
+
+  const handleDeleteOp = async (opId: string) => {
+    if (!confirm('Bu operasyonu silmek istediğinizden emin misiniz?')) return
+    await supabase.from('production_operations').delete().eq('id', opId)
+    if (selectedPlan) openOperations(selectedPlan)
+  }
+
   const resetForm = () => setForm({
     project_id: '', product_name: '', product_code: '', quantity: '',
     machine_id: '', priority: 'normal', status: 'planned',
@@ -174,6 +223,7 @@ export default function ProductionPlanningPage() {
             {plan.product_code && <p className="text-xs text-gray-400 font-mono">{plan.product_code}</p>}
           </div>
           <div className="flex gap-1">
+            <button onClick={() => openOperations(plan)} className="p-1 rounded hover:bg-purple-50 text-gray-400 hover:text-purple-600" title="Operasyonlar"><Factory className="w-3.5 h-3.5" /></button>
             <button onClick={() => handleEdit(plan)} className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"><Edit3 className="w-3.5 h-3.5" /></button>
             <button onClick={() => handleDelete(plan.id)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
@@ -368,6 +418,99 @@ export default function ProductionPlanningPage() {
         )}
 
         {/* Modal */}
+        {/* Operasyon Paneli */}
+        {showOpsPanel && selectedPlan && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowOpsPanel(false)}>
+            <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10 rounded-t-2xl">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Üretim Şeması</h3>
+                  <p className="text-sm text-gray-500">{selectedPlan.product_name} {selectedPlan.product_code && `(${selectedPlan.product_code})`}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAddOp(true); setOpForm({ operation_name: '', machine_id: '', responsible: '', estimated_duration: '', notes: '' }) }}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4 inline mr-1" />Operasyon Ekle</button>
+                  <button onClick={() => setShowOpsPanel(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {/* Operasyon Ekleme Formu */}
+                {showAddOp && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 space-y-3">
+                    <h4 className="font-semibold text-blue-800 text-sm">Yeni Operasyon</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Operasyon Adı *</label><input type="text" value={opForm.operation_name} onChange={e => setOpForm({...opForm, operation_name: e.target.value})} placeholder="Ör: Tornalama" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Tezgah</label><select value={opForm.machine_id} onChange={e => setOpForm({...opForm, machine_id: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Seçin...</option>{machines.map(m => <option key={m.id} value={m.id}>{m.machine_code} - {m.machine_name}</option>)}</select></div>
+                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Sorumlu</label><input type="text" value={opForm.responsible} onChange={e => setOpForm({...opForm, responsible: e.target.value})} placeholder="İsim" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Tahmini Süre (dk)</label><input type="number" value={opForm.estimated_duration} onChange={e => setOpForm({...opForm, estimated_duration: e.target.value})} placeholder="0" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                    </div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Not</label><input type="text" value={opForm.notes} onChange={e => setOpForm({...opForm, notes: e.target.value})} placeholder="Ek bilgi..." className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
+                    <div className="flex gap-2"><button onClick={() => setShowAddOp(false)} className="px-4 py-2 border text-gray-600 rounded-lg text-sm">İptal</button><button onClick={handleAddOperation} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold">Ekle</button></div>
+                  </div>
+                )}
+
+                {/* Operasyon Şeması */}
+                {operations.length > 0 ? (
+                  <div className="space-y-0">
+                    {operations.map((op, i) => {
+                      const isLast = i === operations.length - 1
+                      const isPending = op.status === 'pending'
+                      const isActive = op.status === 'in_progress'
+                      const isDone = op.status === 'completed'
+                      return (
+                        <div key={op.id}>
+                          <div className={`flex gap-4 p-4 rounded-xl border-2 transition-all ${isActive ? 'border-blue-400 bg-blue-50 shadow-md' : isDone ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                            {/* Sıra numarası */}
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${isDone ? 'bg-green-500 text-white' : isActive ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}>
+                              {isDone ? '✓' : op.sira}
+                            </div>
+                            {/* Detay */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-bold text-gray-900 text-sm">{op.operation_name}</h4>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDone ? 'bg-green-100 text-green-700' : isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {isDone ? 'Tamamlandı' : isActive ? 'Devam Ediyor' : 'Bekliyor'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                                {op.machine_name && <span>🔧 {op.machine_name}</span>}
+                                {op.responsible && <span>👤 {op.responsible}</span>}
+                                {op.estimated_duration && <span>⏱ {op.estimated_duration} dk</span>}
+                                {op.started_at && <span>▶ {new Date(op.started_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                                {op.completed_at && <span>✅ {new Date(op.completed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                              </div>
+                              {op.notes && <p className="text-xs text-gray-400 mt-1">{op.notes}</p>}
+                            </div>
+                            {/* Aksiyonlar */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {isPending && <button onClick={() => handleOpStatus(op.id, 'in_progress')} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold hover:bg-blue-200">Başlat</button>}
+                              {isActive && <button onClick={() => handleOpStatus(op.id, 'completed')} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold hover:bg-green-200">Bitir</button>}
+                              <button onClick={() => handleDeleteOp(op.id)} className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                          {/* Bağlantı çizgisi */}
+                          {!isLast && (
+                            <div className="flex items-center justify-center py-1">
+                              <div className={`w-0.5 h-6 ${isDone ? 'bg-green-400' : 'bg-gray-200'}`}></div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    <Factory className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>Henüz operasyon eklenmemiş</p>
+                    <p className="text-sm mt-1">Operasyon ekleyerek üretim şemasını oluşturun</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>

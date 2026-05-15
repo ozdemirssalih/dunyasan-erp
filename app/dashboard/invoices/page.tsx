@@ -660,6 +660,7 @@ export default function InvoicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Müşteri/Tedarikçi</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tarih</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Tutar</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">Belge</th>
                   {(canEdit('invoices') || canDelete('invoices')) && (
                     <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">İşlemler</th>
                   )}
@@ -698,6 +699,23 @@ export default function InvoicesPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
                     <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
                       {formatCurrency(parseFloat(invoice.total_amount))}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {invoice.document_url ? (
+                        <button
+                          onClick={async () => {
+                            const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(invoice.document_url, 3600)
+                            if (data?.signedUrl) { window.open(data.signedUrl, '_blank') }
+                            else {
+                              const { data: pub } = supabase.storage.from('accounting-documents').getPublicUrl(invoice.document_url)
+                              if (pub?.publicUrl) window.open(pub.publicUrl, '_blank')
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
+                        >📄 Görüntüle</button>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
                     </td>
                     {(canEdit('invoices') || canDelete('invoices')) && (
                       <td className="px-6 py-4 text-right">

@@ -76,6 +76,9 @@ export default function AccountingPageV2() {
   const [showCheckCollectModal, setShowCheckCollectModal] = useState(false)
   const [collectingCheck, setCollectingCheck] = useState<any>(null)
   const [collectAccountId, setCollectAccountId] = useState('')
+  const [showEndorseModal, setShowEndorseModal] = useState(false)
+  const [endorsingCheck, setEndorsingCheck] = useState<any>(null)
+  const [endorseSupplierId, setEndorseSupplierId] = useState('')
 
   // Yaklaşan çekler için tarih aralığı
   const [upcomingChecksStartDate, setUpcomingChecksStartDate] = useState<string>(new Date().toISOString().split('T')[0])
@@ -934,8 +937,45 @@ export default function AccountingPageV2() {
     }
   }
 
+  const handleEndorseCheck = async () => {
+    if (!endorsingCheck || !endorseSupplierId || !companyId) return alert('Tedarikçi seçin!')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const supplier = suppliers.find(s => s.id === endorseSupplierId)
+
+      // 1. Eski çeki cirolanmış olarak işaretle
+      await supabase.from('checks').update({ status: 'endorsed' }).eq('id', endorsingCheck.id)
+
+      // 2. Yeni giden çek oluştur
+      await supabase.from('checks').insert({
+        company_id: companyId,
+        check_number: endorsingCheck.check_number,
+        check_type: 'outgoing',
+        amount: endorsingCheck.amount,
+        currency: endorsingCheck.currency,
+        check_date: new Date().toISOString().split('T')[0],
+        due_date: endorsingCheck.due_date,
+        bank_name: endorsingCheck.bank_name,
+        supplier_id: endorseSupplierId,
+        description: `Cirolanmış çek - ${endorsingCheck.check_number} (${endorsingCheck.customer_name || 'Müşteri'} → ${supplier?.company_name || 'Tedarikçi'})`,
+        status: 'pending',
+        created_by: user?.id,
+      })
+
+      alert(`✅ Çek cirolandı!\n\nÇek No: ${endorsingCheck.check_number}\nKimden: ${endorsingCheck.customer_name || '-'}\nKime: ${supplier?.company_name || '-'}\nTutar: ${endorsingCheck.amount} ${endorsingCheck.currency}`)
+      setShowEndorseModal(false)
+      setEndorsingCheck(null)
+      setEndorseSupplierId('')
+      loadData()
+    } catch (err: any) { alert('Hata: ' + err.message) }
+  }
+
   const handleUpdateCheckStatus = async (check: any) => {
-    const newStatus = prompt(`Çek durumunu güncelleyin:\n1: Beklemede\n2: ${check.check_type === 'incoming' ? 'Tahsil Et' : 'Öde'}\n3: Karşılıksız\n4: İptal`, '1')
+    const isIncoming = check.check_type === 'incoming'
+    const promptText = isIncoming
+      ? `Çek durumunu güncelleyin:\n1: Beklemede\n2: Tahsil Et\n3: Cirola (Tedarikçiye Gönder)\n4: Karşılıksız\n5: İptal`
+      : `Çek durumunu güncelleyin:\n1: Beklemede\n2: Öde\n3: Karşılıksız\n4: İptal`
+    const newStatus = prompt(promptText, '1')
 
     if (!newStatus) return
 
@@ -947,11 +987,17 @@ export default function AccountingPageV2() {
       return
     }
 
-    const statusMap: Record<string, string> = {
-      '1': 'pending',
-      '3': 'bounced',
-      '4': 'cancelled'
+    // Cirola seçildiyse (sadece gelen çekler)
+    if (isIncoming && newStatus === '3') {
+      setEndorsingCheck(check)
+      setEndorseSupplierId('')
+      setShowEndorseModal(true)
+      return
     }
+
+    const statusMap: Record<string, string> = isIncoming
+      ? { '1': 'pending', '4': 'bounced', '5': 'cancelled' }
+      : { '1': 'pending', '3': 'bounced', '4': 'cancelled' }
 
     const status = statusMap[newStatus]
     if (!status) {
@@ -2462,12 +2508,14 @@ export default function AccountingPageV2() {
                             check.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
                             check.status === 'collected' ? 'bg-green-100 text-green-700' :
                             check.status === 'paid' ? 'bg-blue-100 text-blue-700' :
+                            check.status === 'endorsed' ? 'bg-purple-100 text-purple-700' :
                             check.status === 'bounced' ? 'bg-red-100 text-red-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
                             {check.status === 'pending' ? 'Beklemede' :
                              check.status === 'collected' ? 'Tahsil Edildi' :
                              check.status === 'paid' ? 'Ödendi' :
+                             check.status === 'endorsed' ? 'Cirolanmış' :
                              check.status === 'bounced' ? 'Karşılıksız' :
                              'İptal'}
                           </span>
@@ -2918,6 +2966,43 @@ export default function AccountingPageV2() {
                   className={`flex-1 px-4 py-2.5 rounded-lg font-semibold text-white ${collectingCheck.check_type === 'incoming' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} disabled:bg-gray-300 disabled:cursor-not-allowed`}
                 >
                   {collectingCheck.check_type === 'incoming' ? '💰 Tahsil Et' : '💸 Öde'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Çek Ciro Modalı */}
+        {showEndorseModal && endorsingCheck && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowEndorseModal(false)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-800">🔄 Çek Cirola</h3>
+                <button onClick={() => setShowEndorseModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+
+              <div className="bg-purple-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Çek No:</span><span className="font-bold">{endorsingCheck.check_number}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Tutar:</span><span className="font-bold text-lg">{parseFloat(endorsingCheck.amount).toLocaleString('tr-TR')} {endorsingCheck.currency}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Vade:</span><span className="font-semibold">{endorsingCheck.due_date ? new Date(endorsingCheck.due_date).toLocaleDateString('tr-TR') : '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Banka:</span><span>{endorsingCheck.bank_name || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Kimden:</span><span className="text-green-600 font-semibold">{endorsingCheck.customer_name || '-'}</span></div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Kime Cirolansın? (Tedarikçi) *</label>
+                <select value={endorseSupplierId} onChange={e => setEndorseSupplierId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 text-sm">
+                  <option value="">Tedarikçi Seçin...</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.company_name}</option>)}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowEndorseModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">İptal</button>
+                <button onClick={handleEndorseCheck} disabled={!endorseSupplierId}
+                  className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  🔄 Cirola
                 </button>
               </div>
             </div>

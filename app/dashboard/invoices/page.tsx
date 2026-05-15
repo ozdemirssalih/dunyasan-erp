@@ -171,7 +171,7 @@ export default function InvoicesPage() {
         let editDocUrl = editingDocumentUrl
         if (invoiceFile) {
           const fileExt = invoiceFile.name.split('.').pop()
-          const fileName = `invoices/${companyId}/${Date.now()}.${fileExt}`
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
           const { error: uploadError } = await supabase.storage.from('accounting-documents').upload(fileName, invoiceFile)
           if (!uploadError) editDocUrl = fileName
         }
@@ -203,7 +203,7 @@ export default function InvoicesPage() {
         let documentUrl: string | null = null
         if (invoiceFile) {
           const fileExt = invoiceFile.name.split('.').pop()
-          const fileName = `invoices/${companyId}/${Date.now()}.${fileExt}`
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
           const { error: uploadError } = await supabase.storage.from('accounting-documents').upload(fileName, invoiceFile)
           if (uploadError) {
             console.error('Dosya yükleme hatası:', uploadError)

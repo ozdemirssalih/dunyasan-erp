@@ -205,8 +205,12 @@ export default function InvoicesPage() {
           const fileExt = invoiceFile.name.split('.').pop()
           const fileName = `invoices/${companyId}/${Date.now()}.${fileExt}`
           const { error: uploadError } = await supabase.storage.from('accounting-documents').upload(fileName, invoiceFile)
-          if (uploadError) console.error('Dosya yükleme hatası:', uploadError)
-          else documentUrl = fileName
+          if (uploadError) {
+            console.error('Dosya yükleme hatası:', uploadError)
+            alert('⚠️ Dosya yüklenemedi: ' + uploadError.message)
+          } else {
+            documentUrl = fileName
+          }
         }
 
         // Faturayı kaydet
@@ -898,9 +902,15 @@ export default function InvoicesPage() {
                         {invoice.document_url ? (
                           <button
                             onClick={async () => {
+                              // Önce signed URL dene, olmazsa public URL
                               const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(invoice.document_url, 3600)
-                              if (data?.signedUrl) window.open(data.signedUrl, '_blank')
-                              else alert('Dosya açılamadı')
+                              if (data?.signedUrl) {
+                                window.open(data.signedUrl, '_blank')
+                              } else {
+                                const { data: pub } = supabase.storage.from('accounting-documents').getPublicUrl(invoice.document_url)
+                                if (pub?.publicUrl) window.open(pub.publicUrl, '_blank')
+                                else alert('Dosya açılamadı')
+                              }
                             }}
                             className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                           >

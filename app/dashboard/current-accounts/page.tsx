@@ -404,8 +404,13 @@ export default function CurrentAccountsPage() {
                                   onClick={async (e) => {
                                     e.stopPropagation()
                                     const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(t.document_url, 3600)
-                                    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
-                                    else alert('Dosya açılamadı')
+                                    if (data?.signedUrl) {
+                                      window.open(data.signedUrl, '_blank')
+                                    } else {
+                                      const { data: pub } = supabase.storage.from('accounting-documents').getPublicUrl(t.document_url)
+                                      if (pub?.publicUrl) window.open(pub.publicUrl, '_blank')
+                                      else alert('Dosya açılamadı')
+                                    }
                                   }}
                                   className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold"
                                 >📄 PDF</button>

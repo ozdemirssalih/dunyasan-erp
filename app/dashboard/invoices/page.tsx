@@ -716,7 +716,7 @@ export default function InvoicesPage() {
                             }
                           }}
                           className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
-                        >📄 Görüntüle</button>
+                        ><span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"><FileDown className="w-3.5 h-3.5" /> Belge</span></button>
                       ) : (
                         <span className="text-gray-300 text-xs">—</span>
                       )}
@@ -936,7 +936,7 @@ export default function InvoicesPage() {
                             }}
                             className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                           >
-                            <FileDown className="w-4 h-4" /> Görüntüle
+                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"><FileDown className="w-3.5 h-3.5" /> Belge</span>
                           </button>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>

@@ -412,8 +412,11 @@ export default function CurrentAccountsPage() {
                                       else alert('Dosya açılamadı')
                                     }
                                   }}
-                                  className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold"
-                                >📄 PDF</button>
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] font-semibold rounded-md hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                  Belge
+                                </button>
                               )}
                             </div>
                             <p className="text-[10px] text-gray-400 mt-0.5">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>

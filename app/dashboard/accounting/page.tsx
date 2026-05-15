@@ -461,7 +461,7 @@ export default function AccountingPageV2() {
       let documentUrl: string | null = null
       if (documentFile) {
         const fileExt = documentFile.name.split('.').pop()
-        const fileName = `${companyId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+        const fileName = `pay-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('accounting-documents')
@@ -998,20 +998,18 @@ export default function AccountingPageV2() {
     try {
       const { data, error } = await supabase.storage
         .from('accounting-documents')
-        .createSignedUrl(documentPath, 60) // 60 saniye geçerli URL
-
-      if (error) {
-        console.error('Download error:', error)
-        alert('Belge indirme hatası: ' + error.message)
-        return
-      }
+        .createSignedUrl(documentPath, 3600)
 
       if (data?.signedUrl) {
         window.open(data.signedUrl, '_blank')
+      } else {
+        const { data: pub } = supabase.storage.from('accounting-documents').getPublicUrl(documentPath)
+        if (pub?.publicUrl) window.open(pub.publicUrl, '_blank')
+        else alert('Dosya açılamadı')
       }
     } catch (err) {
       console.error('Download error:', err)
-      alert('Belge indirilemedi!')
+      alert('Belge açılamadı!')
     }
   }
 
@@ -1853,11 +1851,11 @@ export default function AccountingPageV2() {
                           {transaction.document_url ? (
                             <button
                               onClick={() => handleDownloadDocument(transaction.document_url)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
-                              title="Belgeyi İndir"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-md hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all"
+                              title="Belgeyi Görüntüle"
                             >
                               <FileDown className="w-3 h-3" />
-                              PDF
+                              Belge
                             </button>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
@@ -2072,11 +2070,11 @@ export default function AccountingPageV2() {
                           {transaction.document_url ? (
                             <button
                               onClick={() => handleDownloadDocument(transaction.document_url)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded transition-colors cursor-pointer"
-                              title="Belgeyi İndir"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-md hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all"
+                              title="Belgeyi Görüntüle"
                             >
                               <FileDown className="w-3 h-3" />
-                              PDF
+                              Belge
                             </button>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
@@ -3469,11 +3467,28 @@ export default function AccountingPageV2() {
                                 </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className={`font-bold ${t.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                                {t.transaction_type === 'income' ? '+' : '-'}{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(t.amount)} {t.currency}
-                              </p>
-                              <p className="text-xs text-gray-500">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
+                            <div className="flex items-center gap-3">
+                              {t.document_url && (
+                                <button
+                                  onClick={async () => {
+                                    const { data } = await supabase.storage.from('accounting-documents').createSignedUrl(t.document_url, 3600)
+                                    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+                                    else {
+                                      const { data: pub } = supabase.storage.from('accounting-documents').getPublicUrl(t.document_url)
+                                      if (pub?.publicUrl) window.open(pub.publicUrl, '_blank')
+                                    }
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-md hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all"
+                                >
+                                  <FileDown className="w-3 h-3" /> Belge
+                                </button>
+                              )}
+                              <div className="text-right">
+                                <p className={`font-bold ${t.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {t.transaction_type === 'income' ? '+' : '-'}{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(t.amount)} {t.currency}
+                                </p>
+                                <p className="text-xs text-gray-500">{new Date(t.transaction_date).toLocaleDateString('tr-TR')}</p>
+                              </div>
                             </div>
                           </div>
                         ))}

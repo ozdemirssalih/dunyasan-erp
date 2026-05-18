@@ -2870,7 +2870,7 @@ export default function AccountingPageV2() {
                             e.target.value = ''
                             return
                           }
-                          if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                          if (file.size > 30 * 1024 * 1024) { // 5MB limit
                             alert('Dosya boyutu 5MB\'dan küçük olmalıdır!')
                             e.target.value = ''
                             return
@@ -2897,7 +2897,7 @@ export default function AccountingPageV2() {
                       </div>
                     )}
                     <p className="text-xs text-gray-500">
-                      ℹ️ Fatura, makbuz veya sözleşme gibi belgeleri PDF formatında yükleyebilirsiniz. (Maks. 5MB)
+                      ℹ️ Fatura, makbuz veya sözleşme gibi belgeleri PDF formatında yükleyebilirsiniz. (Maks. 30MB)
                     </p>
                   </div>
                 </div>

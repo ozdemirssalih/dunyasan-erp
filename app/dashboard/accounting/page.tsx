@@ -54,7 +54,7 @@ export default function AccountingPageV2() {
   // Kasa/Hesap yönetimi
   const [cashAccounts, setCashAccounts] = useState<any[]>([])
   const [showAccountModal, setShowAccountModal] = useState(false)
-  const [accountForm, setAccountForm] = useState({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY' })
+  const [accountForm, setAccountForm] = useState({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY', credit_limit: '' })
   const [selectedAccount, setSelectedAccount] = useState<any>(null)
   const [accountTransactions, setAccountTransactions] = useState<any[]>([])
   const [accountBalanceInput, setAccountBalanceInput] = useState('')
@@ -3473,6 +3473,22 @@ export default function AccountingPageV2() {
                       {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.current_balance)} {acc.currency}
                     </p>
                     <p className="text-xs text-gray-400 mt-2">{acc.account_type === 'bank' ? 'Banka Hesabı' : acc.account_type === 'credit_card' ? 'Kredi Kartı' : acc.account_type === 'cash' ? 'Nakit' : 'Diğer'}</p>
+                    {acc.account_type === 'credit_card' && acc.credit_limit && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-500">Kullanılan</span>
+                          <span className="font-semibold text-red-600">{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(Math.abs(acc.current_balance))} {acc.currency}</span>
+                        </div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-500">Kalan Limit</span>
+                          <span className="font-semibold text-green-600">{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.credit_limit + acc.current_balance)} {acc.currency}</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2 mt-2">
+                          <div className="bg-red-500 h-2 rounded-full" style={{ width: `${Math.min(Math.abs(acc.current_balance) / acc.credit_limit * 100, 100)}%` }}></div>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Limit: {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.credit_limit)} {acc.currency}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {cashAccounts.length === 0 && (
@@ -3658,6 +3674,13 @@ export default function AccountingPageV2() {
                     <option value="GBP">GBP (İngiliz Sterlini)</option>
                   </select>
                 </div>
+                {accountForm.account_type === 'credit_card' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Kredi Limiti *</label>
+                    <input type="number" step="0.01" value={accountForm.credit_limit} onChange={(e) => setAccountForm({...accountForm, credit_limit: e.target.value})} placeholder="50000" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+                    <p className="text-xs text-gray-400 mt-1">Toplam kullanılabilir limit</p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -3669,11 +3692,12 @@ export default function AccountingPageV2() {
                       account_type: accountForm.account_type,
                       bank_name: accountForm.bank_name || null,
                       currency: accountForm.currency,
-                      current_balance: 0
+                      current_balance: 0,
+                      credit_limit: accountForm.credit_limit ? parseFloat(accountForm.credit_limit) : null
                     })
                     if (error) return alert('Hata: ' + error.message)
                     setShowAccountModal(false)
-                    setAccountForm({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY' })
+                    setAccountForm({ account_name: '', account_type: 'bank', bank_name: '', currency: 'TRY', credit_limit: '' })
                     loadData()
                     alert('Kasa başarıyla eklendi!')
                   }}

@@ -868,6 +868,23 @@ export default function AccountingPageV2() {
 
       if (error) throw error
 
+      // Giden çek → cariye ödeme olarak yansıt (+)
+      if (checkForm.check_type === 'outgoing' && checkForm.supplier_id) {
+        const supplier = suppliers.find(s => s.id === checkForm.supplier_id)
+        await supabase.from('cash_transactions').insert({
+          company_id: companyId,
+          transaction_type: 'expense',
+          amount: parseFloat(checkForm.amount),
+          currency: checkForm.currency,
+          payment_method: 'check',
+          transaction_date: checkForm.check_date,
+          description: `Giden çek: ${checkForm.check_number} - ${supplier?.company_name || ''}`,
+          reference_number: `CHKOUT-${checkForm.check_number}`,
+          supplier_id: checkForm.supplier_id,
+          created_by: user?.id,
+        })
+      }
+
       alert('Çek başarıyla kaydedildi!')
       setShowCheckModal(false)
       resetCheckForm()

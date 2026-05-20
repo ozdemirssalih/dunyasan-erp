@@ -110,10 +110,12 @@ export default function ProductionPlanningPage() {
       }
 
       if (editingId) {
-        await supabase.from('production_plans').update(payload).eq('id', editingId)
+        const { error } = await supabase.from('production_plans').update(payload).eq('id', editingId)
+        if (error) { alert('Güncelleme hatası: ' + error.message); return }
         alert('Plan güncellendi!')
       } else {
-        await supabase.from('production_plans').insert(payload)
+        const { error } = await supabase.from('production_plans').insert(payload)
+        if (error) { alert('Kayıt hatası: ' + error.message); return }
         alert('Plan oluşturuldu!')
       }
 

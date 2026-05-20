@@ -14,6 +14,15 @@ interface WorkOrder {
   project_id: string; customer_id: string;
 }
 
+const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+
+const F = ({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) => (
+  <div className={span ? `col-span-${span}` : ''}>
+    <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+    {children}
+  </div>
+)
+
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string }> = {
   draft: { label: 'Taslak', bg: 'bg-gray-100', text: 'text-gray-700' },
   active: { label: 'Aktif', bg: 'bg-blue-100', text: 'text-blue-700' },
@@ -131,14 +140,6 @@ export default function WorkOrdersPage() {
   })
 
   if (loading) return <PermissionGuard module="planning" permission="view"><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div></PermissionGuard>
-
-  const F = ({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) => (
-    <div className={span ? `col-span-${span}` : ''}>
-      <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
-      {children}
-    </div>
-  )
-  const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
 
   return (
     <PermissionGuard module="planning" permission="view">

@@ -437,20 +437,49 @@ export default function ProductionPlanningPage() {
               </div>
 
               <div className="p-6">
-                {/* Operasyon Ekleme Formu */}
-                {showAddOp && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 space-y-3">
-                    <h4 className="font-semibold text-blue-800 text-sm">Yeni Operasyon</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Operasyon Adı *</label><input type="text" value={opForm.operation_name} onChange={e => setOpForm({...opForm, operation_name: e.target.value})} placeholder="Ör: Tornalama" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Tezgah</label><select value={opForm.machine_id} onChange={e => setOpForm({...opForm, machine_id: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Seçin...</option>{machines.map(m => <option key={m.id} value={m.id}>{m.machine_code} - {m.machine_name}</option>)}</select></div>
-                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Sorumlu</label><input type="text" value={opForm.responsible} onChange={e => setOpForm({...opForm, responsible: e.target.value})} placeholder="İsim" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                      <div><label className="block text-xs font-semibold text-gray-600 mb-1">Tahmini Süre (dk)</label><input type="number" value={opForm.estimated_duration} onChange={e => setOpForm({...opForm, estimated_duration: e.target.value})} placeholder="0" className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                    </div>
-                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Not</label><input type="text" value={opForm.notes} onChange={e => setOpForm({...opForm, notes: e.target.value})} placeholder="Ek bilgi..." className="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-                    <div className="flex gap-2"><button onClick={() => setShowAddOp(false)} className="px-4 py-2 border text-gray-600 rounded-lg text-sm">İptal</button><button onClick={handleAddOperation} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold">Ekle</button></div>
+                {/* Proje Bilgisi */}
+                {selectedPlan.project_name && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-blue-800">Proje: {selectedPlan.project_name}</span>
+                    <span className="text-xs text-blue-500 ml-auto">{operations.length} operasyon</span>
                   </div>
                 )}
+
+                {/* Hızlı Operasyon Ekleme — Her zaman görünür */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-5">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">OPERASYON ADI *</label>
+                      <input type="text" value={opForm.operation_name} onChange={e => setOpForm({...opForm, operation_name: e.target.value})}
+                        onKeyDown={e => { if (e.key === 'Enter' && opForm.operation_name) handleAddOperation() }}
+                        placeholder="Ör: Tornalama, Frezeleme, Kalite Kontrol..."
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" autoFocus />
+                    </div>
+                    <div className="w-36">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">TEZGAH</label>
+                      <select value={opForm.machine_id} onChange={e => setOpForm({...opForm, machine_id: e.target.value})} className="w-full px-2 py-2 border rounded-lg text-xs">
+                        <option value="">Seçin...</option>
+                        {machines.map(m => <option key={m.id} value={m.id}>{m.machine_code}</option>)}
+                      </select>
+                    </div>
+                    <div className="w-28">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">SORUMLU</label>
+                      <input type="text" value={opForm.responsible} onChange={e => setOpForm({...opForm, responsible: e.target.value})}
+                        placeholder="İsim" className="w-full px-2 py-2 border rounded-lg text-xs" />
+                    </div>
+                    <div className="w-20">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1">SÜRE (dk)</label>
+                      <input type="number" value={opForm.estimated_duration} onChange={e => setOpForm({...opForm, estimated_duration: e.target.value})}
+                        placeholder="0" className="w-full px-2 py-2 border rounded-lg text-xs" />
+                    </div>
+                    <button onClick={handleAddOperation} disabled={!opForm.operation_name}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap">
+                      + Ekle
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1.5">Enter ile hızlı ekle — operasyonlar sırayla numaralanır</p>
+                </div>
 
                 {/* Operasyon Şeması */}
                 {operations.length > 0 ? (

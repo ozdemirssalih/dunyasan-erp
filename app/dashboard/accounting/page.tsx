@@ -559,30 +559,7 @@ export default function AccountingPageV2() {
             return alert('Çek kaydı oluşturulamadı: ' + checkError.message)
           }
 
-          // Çeki cari hesaba yansıt
-          const contactId = transactionForm.customer_id || transactionForm.supplier_id
-          const contactName = customers.find(c => c.id === contactId)?.customer_name || ''
-          const cariEntry: any = {
-            company_id: companyId,
-            transaction_type: isTahsilat ? 'receivable' : 'payable',
-            amount: amount,
-            paid_amount: 0,
-            status: 'unpaid',
-            currency: transactionForm.currency,
-            transaction_date: transactionForm.transaction_date,
-            due_date: transactionForm.check_due_date,
-            description: `Çek: ${transactionForm.check_number} - ${transactionForm.description || ''}`,
-            reference_number: `CHK-${transactionForm.check_number}`,
-            contact_id: contactId || null,
-            contact_name: contactName,
-            customer_id: isTahsilat ? contactId : null,
-            supplier_id: !isTahsilat ? contactId : null,
-            created_by: user?.id
-          }
-          const { error: cariErr } = await supabase.from('current_account_transactions').insert(cariEntry)
-          if (cariErr) console.error('Çek cari yansıtma hatası:', cariErr)
-
-          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi ve cariye yansıtıldı!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
+          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
 
           setShowTransactionModal(false)
           setTransactionForm({

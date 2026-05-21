@@ -424,8 +424,8 @@ export default function CurrentAccountsPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`font-bold ${isIncome ? 'text-blue-600' : isCash ? 'text-orange-600' : t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
-                            {(isIncome || t.transaction_type === 'receivable') ? '+' : '-'}
+                          <p className={`font-bold ${isCash ? 'text-blue-600' : t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
+                            {isCash ? '+' : (t.transaction_type === 'receivable' ? '+' : '-')}
                             {t.currency && t.currency !== 'TRY'
                               ? `${parseFloat(t.amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} ${t.currency}`
                               : fmt(parseFloat(t.amount))

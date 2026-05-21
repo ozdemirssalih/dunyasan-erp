@@ -197,14 +197,17 @@ export default function InvoicesPage() {
         const transTypeEdit = customerTransactionsEdit.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
         const editContactId = invoiceForm.customer_id || invoiceForm.supplier_id
         const updateCari: any = {
-          amount: amountTl,
+          amount: totalAmount,
+          currency: invoiceForm.currency,
           transaction_type: transTypeEdit,
           contact_id: editContactId,
           customer_id: transTypeEdit === 'receivable' ? editContactId : null,
           supplier_id: transTypeEdit === 'payable' ? editContactId : null,
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
-          description: invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`,
+          description: isForeign
+            ? `Fatura: ${invoiceForm.invoice_number} (Kur: ${exchangeRate} TL)${invoiceForm.notes ? ' - ' + invoiceForm.notes : ''}`
+            : (invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`),
         }
         await supabase.from('current_account_transactions')
           .update(updateCari)
@@ -259,14 +262,14 @@ export default function InvoicesPage() {
           contact_name: contactEntry?.customer_name || null,
           customer_id: transactionType === 'receivable' ? contactId : null,
           supplier_id: transactionType === 'payable' ? contactId : null,
-          amount: amountTl,
+          amount: totalAmount,
           paid_amount: 0,
           status: 'unpaid',
-          currency: 'TRY',
+          currency: invoiceForm.currency,
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
           description: isForeign
-            ? `Fatura: ${invoiceForm.invoice_number} (${totalAmount.toLocaleString('tr-TR')} ${invoiceForm.currency} x ${exchangeRate})${invoiceForm.notes ? ' - ' + invoiceForm.notes : ''}`
+            ? `Fatura: ${invoiceForm.invoice_number} (Kur: ${exchangeRate} TL)${invoiceForm.notes ? ' - ' + invoiceForm.notes : ''}`
             : (invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`),
           reference_number: invoiceForm.invoice_number
         }
@@ -1216,14 +1219,14 @@ export default function InvoicesPage() {
                   )}
                 </div>
                 {invoiceForm.currency !== 'TRY' && invoiceForm.total_amount && invoiceForm.exchange_rate && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
                     <p className="text-sm text-blue-800 font-semibold">
-                      {parseFloat(invoiceForm.total_amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} {invoiceForm.currency}
-                      {' x '}
-                      {parseFloat(invoiceForm.exchange_rate).toLocaleString('tr-TR', {minimumFractionDigits: 4})}
-                      {' = '}
-                      <span className="text-lg">{(parseFloat(invoiceForm.total_amount) * parseFloat(invoiceForm.exchange_rate)).toLocaleString('tr-TR', {style: 'currency', currency: 'TRY'})}</span>
-                      {' (Cariye yansiyacak tutar)'}
+                      Cariye yansiyacak: {parseFloat(invoiceForm.total_amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} {invoiceForm.currency}
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      TL karsiligi: {(parseFloat(invoiceForm.total_amount) * parseFloat(invoiceForm.exchange_rate)).toLocaleString('tr-TR', {style: 'currency', currency: 'TRY'})}
+                      {' (Kur: '}{parseFloat(invoiceForm.exchange_rate).toLocaleString('tr-TR', {minimumFractionDigits: 4})}{')'}
+                      {' - Kur bilgisi aciklamada yer alacak'}
                     </p>
                   </div>
                 )}

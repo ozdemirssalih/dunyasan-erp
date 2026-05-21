@@ -424,7 +424,11 @@ export default function CurrentAccountsPage() {
                         </div>
                         <div className="text-right">
                           <p className={`font-bold ${isIncome ? 'text-blue-600' : isCash ? 'text-orange-600' : t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
-                            {(isIncome || t.transaction_type === 'receivable') ? '+' : '-'}{fmt(parseFloat(t.amount))}
+                            {(isIncome || t.transaction_type === 'receivable') ? '+' : '-'}
+                            {t.currency && t.currency !== 'TRY'
+                              ? `${parseFloat(t.amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} ${t.currency}`
+                              : fmt(parseFloat(t.amount))
+                            }
                           </p>
                           {!isCash && parseFloat(t.paid_amount || 0) > 0 && (
                             <p className="text-[10px] text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>

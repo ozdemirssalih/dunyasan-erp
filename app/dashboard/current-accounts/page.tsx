@@ -177,6 +177,7 @@ export default function CurrentAccountsPage() {
       reference_number: t.reference_number,
       paid_amount: null,
       status: null,
+      currency: t.currency || 'TRY',
       source: 'cash' as const,
       payment_method: t.payment_method,
       cash_account_name: (t as any).cash_account?.account_name || null,

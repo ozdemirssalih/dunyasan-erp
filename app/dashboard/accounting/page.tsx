@@ -926,6 +926,38 @@ export default function AccountingPageV2() {
     }
   }
 
+  const handleDeleteCheck = async (check: any) => {
+    if (!confirm(`"${check.check_number}" numarali ceki silmek istediginizden emin misiniz?\n\nCarideki ilgili kayitlar da silinecek.`)) return
+
+    try {
+      // Ilgili cash_transaction kaydini sil (CHK- referansli)
+      await supabase.from('cash_transactions')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('reference_number', `CHK-${check.check_number}`)
+
+      // Cek tahsil/odeme kayitlarini da sil (CHECK- referansli)
+      await supabase.from('cash_transactions')
+        .delete()
+        .eq('company_id', companyId)
+        .like('reference_number', `CHECK-${check.check_number}%`)
+
+      // Cek ciro kayitlarini sil (CHKOUT- referansli)
+      await supabase.from('cash_transactions')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('reference_number', `CHKOUT-${check.check_number}`)
+
+      // Ceki sil
+      await supabase.from('checks').delete().eq('id', check.id)
+
+      alert('Cek ve ilgili cari kayitlari silindi!')
+      loadData()
+    } catch (error: any) {
+      alert('Hata: ' + error.message)
+    }
+  }
+
   const handleCollectCheck = async () => {
     if (!collectingCheck || !collectAccountId) {
       return alert('Lütfen kasa seçin!')
@@ -2583,12 +2615,20 @@ export default function AccountingPageV2() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleUpdateCheckStatus(check)}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                          >
-                            Düzenle
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleUpdateCheckStatus(check)}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCheck(check)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

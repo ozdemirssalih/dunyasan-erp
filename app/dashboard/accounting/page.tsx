@@ -559,7 +559,61 @@ export default function AccountingPageV2() {
             return alert('Çek kaydı oluşturulamadı: ' + checkError.message)
           }
 
-          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}\n\nÇek Takip sekmesinden takip edebilirsiniz.`)
+          // Çeki kasa işlemi (ödeme/tahsilat) olarak kaydet → carideki borcu kapatır
+          const contactId = transactionForm.customer_id || transactionForm.supplier_id
+          const checkCashData: any = {
+            company_id: companyId,
+            transaction_type: isTahsilat ? 'income' : 'expense',
+            amount: amount,
+            currency: transactionForm.currency,
+            payment_method: 'check',
+            transaction_date: transactionForm.transaction_date,
+            description: `Çek: ${transactionForm.check_number}${transactionForm.description ? ' - ' + transactionForm.description : ''}`,
+            reference_number: `CHK-${transactionForm.check_number}`,
+            document_url: documentUrl,
+            created_by: user?.id,
+            customer_id: isTahsilat ? (contactId || null) : null,
+            supplier_id: !isTahsilat ? (contactId || null) : null,
+          }
+
+          const { error: cashErr } = await supabase.from('cash_transactions').insert(checkCashData)
+          if (cashErr) console.error('Çek kasa kaydı hatası:', cashErr)
+
+          // Carideki borcu/alacağı kapat (paid_amount güncelle)
+          if (contactId) {
+            try {
+              const targetType = isTahsilat ? 'receivable' : 'payable'
+              const { data: unpaidRecords } = await supabase
+                .from('current_account_transactions')
+                .select('id, amount, paid_amount')
+                .eq('company_id', companyId)
+                .eq('transaction_type', targetType)
+                .or(`customer_id.eq.${contactId},supplier_id.eq.${contactId},contact_id.eq.${contactId}`)
+                .neq('status', 'paid')
+                .order('transaction_date', { ascending: true })
+
+              let remainingAmount = amount
+              if (unpaidRecords) {
+                for (const record of unpaidRecords) {
+                  if (remainingAmount <= 0) break
+                  const currentPaid = parseFloat(record.paid_amount || 0)
+                  const recordAmount = parseFloat(record.amount)
+                  const owing = recordAmount - currentPaid
+                  const payThis = Math.min(remainingAmount, owing)
+                  const newPaid = currentPaid + payThis
+                  const newStatus = newPaid >= recordAmount ? 'paid' : 'partial'
+                  await supabase.from('current_account_transactions')
+                    .update({ paid_amount: newPaid, status: newStatus })
+                    .eq('id', record.id)
+                  remainingAmount -= payThis
+                }
+              }
+            } catch (catErr) {
+              console.error('Çek cari güncelleme hatası:', catErr)
+            }
+          }
+
+          alert(`✅ ${isTahsilat ? 'Gelen' : 'Giden'} çek kaydedildi ve cariye ödeme olarak yansıtıldı!\n\nÇek No: ${transactionForm.check_number}\nVade: ${new Date(transactionForm.check_due_date).toLocaleDateString('tr-TR')}\nTutar: ${amount} ${transactionForm.currency}`)
 
           setShowTransactionModal(false)
           setTransactionForm({

@@ -378,7 +378,7 @@ export default function CurrentAccountsPage() {
                     return (
                       <div key={t.id} className={`flex items-center justify-between p-3 rounded-lg text-sm ${isCash ? 'bg-blue-50' : 'bg-gray-50'}`}>
                         <div className="flex items-center gap-3">
-                          <div className={`w-2 h-8 rounded-full ${isIncome ? 'bg-blue-500' : isCash ? 'bg-orange-500' : t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <div className={`w-2 h-8 rounded-full ${isIncome ? 'bg-red-500' : isCash ? 'bg-green-500' : t.transaction_type === 'receivable' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                           <div>
                             <p className="font-semibold text-gray-800">{t.description || t.reference_number || '-'}</p>
                             {t.description && t.reference_number && t.description !== t.reference_number && (
@@ -424,8 +424,15 @@ export default function CurrentAccountsPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`font-bold ${isCash ? 'text-blue-600' : t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
-                            {isCash ? '+' : (t.transaction_type === 'receivable' ? '+' : '-')}
+                          <p className={`font-bold ${
+                            isCash
+                              ? (isIncome ? 'text-red-600' : 'text-green-600')
+                              : (t.transaction_type === 'receivable' ? 'text-green-600' : 'text-red-600')
+                          }`}>
+                            {isCash
+                              ? (isIncome ? '-' : '+')
+                              : (t.transaction_type === 'receivable' ? '+' : '-')
+                            }
                             {t.currency && t.currency !== 'TRY'
                               ? `${parseFloat(t.amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} ${t.currency}`
                               : fmt(parseFloat(t.amount))

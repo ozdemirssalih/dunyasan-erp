@@ -32,7 +32,9 @@ export default function InvoicesPage() {
     discount_amount: '',
     status: 'draft',
     notes: '',
-    category: ''
+    category: '',
+    currency: 'TRY',
+    exchange_rate: ''
   })
   const [invoiceCategories, setInvoiceCategories] = useState<any[]>([])
   const [showCategoryModal, setShowCategoryModal] = useState(false)
@@ -150,6 +152,15 @@ export default function InvoicesPage() {
     }
 
     try {
+      const isForeign = invoiceForm.currency !== 'TRY'
+      const exchangeRate = isForeign ? (parseFloat(invoiceForm.exchange_rate) || 1) : 1
+      const totalAmount = parseFloat(invoiceForm.total_amount)
+      const amountTl = isForeign ? totalAmount * exchangeRate : totalAmount
+
+      if (isForeign && !invoiceForm.exchange_rate) {
+        return alert('Doviz faturalarinda TL kuru zorunludur!')
+      }
+
       const data = {
         invoice_number: invoiceForm.invoice_number,
         invoice_type: invoiceForm.invoice_type,
@@ -157,12 +168,15 @@ export default function InvoicesPage() {
         supplier_id: invoiceForm.supplier_id || null,
         invoice_date: invoiceForm.invoice_date,
         due_date: invoiceForm.due_date || null,
-        total_amount: parseFloat(invoiceForm.total_amount),
+        total_amount: totalAmount,
         tax_amount: parseFloat(invoiceForm.tax_amount) || 0,
         discount_amount: parseFloat(invoiceForm.discount_amount) || 0,
         status: invoiceForm.status,
         notes: invoiceForm.notes || null,
         category: invoiceForm.category || null,
+        currency: invoiceForm.currency,
+        exchange_rate: exchangeRate,
+        amount_tl: amountTl,
         company_id: companyId
       }
 
@@ -183,7 +197,7 @@ export default function InvoicesPage() {
         const transTypeEdit = customerTransactionsEdit.includes(invoiceForm.invoice_type) ? 'receivable' : 'payable'
         const editContactId = invoiceForm.customer_id || invoiceForm.supplier_id
         const updateCari: any = {
-          amount: parseFloat(invoiceForm.total_amount),
+          amount: amountTl,
           transaction_type: transTypeEdit,
           contact_id: editContactId,
           customer_id: transTypeEdit === 'receivable' ? editContactId : null,
@@ -245,13 +259,15 @@ export default function InvoicesPage() {
           contact_name: contactEntry?.customer_name || null,
           customer_id: transactionType === 'receivable' ? contactId : null,
           supplier_id: transactionType === 'payable' ? contactId : null,
-          amount: parseFloat(invoiceForm.total_amount),
+          amount: amountTl,
           paid_amount: 0,
           status: 'unpaid',
           currency: 'TRY',
           transaction_date: invoiceForm.invoice_date,
           due_date: invoiceForm.due_date || null,
-          description: invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`,
+          description: isForeign
+            ? `Fatura: ${invoiceForm.invoice_number} (${totalAmount.toLocaleString('tr-TR')} ${invoiceForm.currency} x ${exchangeRate})${invoiceForm.notes ? ' - ' + invoiceForm.notes : ''}`
+            : (invoiceForm.notes ? `Fatura: ${invoiceForm.invoice_number} - ${invoiceForm.notes}` : `Fatura: ${invoiceForm.invoice_number}`),
           reference_number: invoiceForm.invoice_number
         }
 
@@ -283,7 +299,9 @@ export default function InvoicesPage() {
         discount_amount: '',
         status: 'draft',
         notes: '',
-        category: ''
+        category: '',
+        currency: 'TRY',
+        exchange_rate: ''
       })
       setEditingId(null)
       loadData()
@@ -311,7 +329,9 @@ export default function InvoicesPage() {
       discount_amount: invoice.discount_amount?.toString() || '',
       status: invoice.status,
       notes: invoice.notes || '',
-      category: invoice.category || ''
+      category: invoice.category || '',
+      currency: invoice.currency || 'TRY',
+      exchange_rate: invoice.exchange_rate && invoice.exchange_rate !== 1 ? invoice.exchange_rate.toString() : ''
     })
     setShowInvoiceModal(true)
   }
@@ -640,7 +660,9 @@ export default function InvoicesPage() {
                   discount_amount: '',
                   status: 'draft',
                   notes: '',
-                  category: ''
+                  category: '',
+                  currency: 'TRY',
+                  exchange_rate: ''
                 })
                 setShowInvoiceModal(true)
               }}
@@ -702,7 +724,14 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
                     <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
-                      {formatCurrency(parseFloat(invoice.total_amount))}
+                      {invoice.currency && invoice.currency !== 'TRY' ? (
+                        <div>
+                          <span>{parseFloat(invoice.total_amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} {invoice.currency}</span>
+                          <p className="text-[10px] text-gray-400 font-normal">Kur: {parseFloat(invoice.exchange_rate || 1).toLocaleString('tr-TR', {minimumFractionDigits: 4})} | TL: {formatCurrency(parseFloat(invoice.amount_tl || invoice.total_amount))}</p>
+                        </div>
+                      ) : (
+                        formatCurrency(parseFloat(invoice.total_amount))
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {invoice.document_url ? (
@@ -913,7 +942,14 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
                       <td className="px-6 py-4 text-sm text-right font-semibold text-gray-900">
-                        {formatCurrency(parseFloat(invoice.total_amount))}
+                        {invoice.currency && invoice.currency !== 'TRY' ? (
+                          <div>
+                            <span>{parseFloat(invoice.total_amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} {invoice.currency}</span>
+                            <p className="text-[10px] text-gray-400 font-normal">Kur: {parseFloat(invoice.exchange_rate || 1).toLocaleString('tr-TR', {minimumFractionDigits: 4})} | TL: {formatCurrency(parseFloat(invoice.amount_tl || invoice.total_amount))}</p>
+                          </div>
+                        ) : (
+                          formatCurrency(parseFloat(invoice.total_amount))
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(invoice.status)}`}>
@@ -1153,7 +1189,44 @@ export default function InvoicesPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Para Birimi *</label>
+                    <select
+                      value={invoiceForm.currency}
+                      onChange={(e) => setInvoiceForm({...invoiceForm, currency: e.target.value, exchange_rate: e.target.value === 'TRY' ? '' : invoiceForm.exchange_rate})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                    >
+                      <option value="TRY">TL (TRY)</option>
+                      <option value="USD">Dolar (USD)</option>
+                      <option value="EUR">Euro (EUR)</option>
+                    </select>
+                  </div>
+                  {invoiceForm.currency !== 'TRY' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">TL Kuru *</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        placeholder={invoiceForm.currency === 'USD' ? 'Ör: 38.50' : 'Ör: 41.20'}
+                        value={invoiceForm.exchange_rate}
+                        onChange={(e) => setInvoiceForm({...invoiceForm, exchange_rate: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900"
+                      />
+                    </div>
+                  )}
                 </div>
+                {invoiceForm.currency !== 'TRY' && invoiceForm.total_amount && invoiceForm.exchange_rate && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800 font-semibold">
+                      {parseFloat(invoiceForm.total_amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})} {invoiceForm.currency}
+                      {' x '}
+                      {parseFloat(invoiceForm.exchange_rate).toLocaleString('tr-TR', {minimumFractionDigits: 4})}
+                      {' = '}
+                      <span className="text-lg">{(parseFloat(invoiceForm.total_amount) * parseFloat(invoiceForm.exchange_rate)).toLocaleString('tr-TR', {style: 'currency', currency: 'TRY'})}</span>
+                      {' (Cariye yansiyacak tutar)'}
+                    </p>
+                  </div>
+                )}
 
 
                 <div>

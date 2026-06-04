@@ -1029,9 +1029,9 @@ export default function QuotationsPage() {
                           <td style={{ padding: '5px 6px', textAlign: 'center', color: '#666', fontWeight: 600 }}>{item.sira}</td>
                           <td style={{ padding: '5px 6px', fontFamily: 'Consolas, monospace', fontWeight: 600, color: '#003366' }}>{item.parca_kodu || '—'}</td>
                           <td style={{ padding: '5px 6px', fontWeight: 600, textTransform: 'uppercase', fontSize: '9.5px' }}>{item.parca_adi}</td>
-                          <td style={{ padding: '5px 6px', fontSize: '9px', color: '#555', maxWidth: '200px', wordBreak: 'break-word' as const }}>{item.malzeme || '—'}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700 }}>{item.miktar}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'center', color: '#666' }}>{item.birim}</td>
+                          <td style={{ padding: '5px 6px', fontSize: '9.5px', color: '#1a1a2e', fontWeight: 700, maxWidth: '200px', wordBreak: 'break-word' as const }}>{item.malzeme || '—'}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: '#1a1a2e' }}>{item.miktar}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'center', color: '#1a1a2e', fontWeight: 700 }}>{item.birim}</td>
                           <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'Consolas, monospace', color: '#2c5f8a', fontWeight: 600 }}>
                             {sym} {item.birim_fiyat?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                           </td>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { ArrowLeft, TrendingUp, Calendar, Factory, User, FileText, Upload, Download, Trash2, Plus, X } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, TrendingUp, Calendar, Factory, User, FileText, Upload, Download, Trash2, Plus, X, Wallet, DollarSign, Briefcase, Clock } from 'lucide-react'
 
 interface Employee {
   id: string
@@ -67,6 +68,16 @@ export default function EmployeeDetailPage() {
     totalScrap: 0,
     efficiency: 0,
     totalDays: 0
+  })
+
+  const [hrData, setHrData] = useState({
+    leaves: [] as any[],
+    advances: [] as any[],
+    payments: [] as any[],
+    totalAdvanceOpen: 0,
+    totalSalaryPaidYear: 0,
+    usedAnnualLeave: 0,
+    annualLeaveDays: 14
   })
 
   // Upload modal
@@ -154,10 +165,52 @@ export default function EmployeeDetailPage() {
 
       // Load employee records (PDF documents)
       await loadRecords(profile.company_id)
+
+      // Load HR data: leaves, advances, salary payments
+      await loadHRData(profile.company_id)
     } catch (error) {
       console.error('Error loading employee data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadHRData = async (cId: string) => {
+    try {
+      const [lvRes, advRes, payRes] = await Promise.all([
+        supabase.from('employee_leaves').select('*').eq('company_id', cId).eq('employee_id', employeeId).order('start_date', { ascending: false }),
+        supabase.from('salary_advances').select('*').eq('company_id', cId).eq('employee_id', employeeId).order('advance_date', { ascending: false }),
+        supabase.from('salary_payments').select('*').eq('company_id', cId).eq('employee_id', employeeId).order('payment_date', { ascending: false })
+      ])
+
+      const leaves = lvRes.data || []
+      const advances = advRes.data || []
+      const payments = payRes.data || []
+      const currentYear = new Date().getFullYear()
+
+      const usedAnnualLeave = leaves
+        .filter((l: any) => l.leave_type === 'annual' && l.status === 'approved' && new Date(l.start_date).getFullYear() === currentYear)
+        .reduce((s: number, l: any) => s + Number(l.total_days), 0)
+
+      const totalAdvanceOpen = advances
+        .filter((a: any) => a.status === 'open')
+        .reduce((s: number, a: any) => s + Number(a.remaining_amount || a.amount), 0)
+
+      const totalSalaryPaidYear = payments
+        .filter((p: any) => p.period_year === currentYear)
+        .reduce((s: number, p: any) => s + Number(p.net_amount), 0)
+
+      const { data: empAnnual } = await supabase.from('employees').select('annual_leave_days').eq('id', employeeId).single()
+
+      setHrData({
+        leaves, advances, payments,
+        totalAdvanceOpen,
+        totalSalaryPaidYear,
+        usedAnnualLeave,
+        annualLeaveDays: (empAnnual as any)?.annual_leave_days || 14
+      })
+    } catch (e) {
+      console.error('HR data load error:', e)
     }
   }
 
@@ -410,6 +463,125 @@ export default function EmployeeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* HR Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Link href="/dashboard/hr/leaves" className="bg-white rounded-xl shadow-md p-5 border-l-4 border-purple-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <Clock className="w-6 h-6 text-purple-500" />
+            <span className="text-xs text-gray-500">{hrData.leaves.length} kayıt</span>
+          </div>
+          <p className="text-xs text-gray-600">Yıllık İzin (Kalan/Toplam)</p>
+          <p className={`text-2xl font-bold ${(hrData.annualLeaveDays - hrData.usedAnnualLeave) < 5 ? 'text-red-600' : 'text-purple-700'}`}>
+            {hrData.annualLeaveDays - hrData.usedAnnualLeave} / {hrData.annualLeaveDays}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">{hrData.usedAnnualLeave} gün kullanıldı</p>
+        </Link>
+
+        <Link href="/dashboard/hr/advances" className="bg-white rounded-xl shadow-md p-5 border-l-4 border-orange-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <Wallet className="w-6 h-6 text-orange-500" />
+            <span className="text-xs text-gray-500">{hrData.advances.length} kayıt</span>
+          </div>
+          <p className="text-xs text-gray-600">Açık Avans</p>
+          <p className="text-2xl font-bold text-orange-700">{hrData.totalAdvanceOpen.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</p>
+          <p className="text-xs text-gray-500 mt-1">{hrData.advances.filter((a: any) => a.status === 'open').length} açık</p>
+        </Link>
+
+        <Link href="/dashboard/hr/salaries" className="bg-white rounded-xl shadow-md p-5 border-l-4 border-green-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <DollarSign className="w-6 h-6 text-green-500" />
+            <span className="text-xs text-gray-500">{hrData.payments.length} kayıt</span>
+          </div>
+          <p className="text-xs text-gray-600">Bu Yıl Ödenen Maaş</p>
+          <p className="text-2xl font-bold text-green-700">{hrData.totalSalaryPaidYear.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</p>
+          <p className="text-xs text-gray-500 mt-1">Son: {hrData.payments[0] ? new Date(hrData.payments[0].payment_date).toLocaleDateString('tr-TR') : 'Yok'}</p>
+        </Link>
+
+        <div className="bg-white rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between mb-2">
+            <Briefcase className="w-6 h-6 text-blue-500" />
+          </div>
+          <p className="text-xs text-gray-600">Kıdem</p>
+          <p className="text-2xl font-bold text-blue-700">
+            {employee?.hire_date ? (() => {
+              const diff = new Date().getTime() - new Date(employee.hire_date).getTime()
+              const years = diff / (1000 * 60 * 60 * 24 * 365.25)
+              return years.toFixed(1) + ' yıl'
+            })() : '-'}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">{employee?.hire_date ? new Date(employee.hire_date).toLocaleDateString('tr-TR') : '-'}</p>
+        </div>
+      </div>
+
+      {/* İzin / Avans / Maaş Detayları */}
+      {(hrData.leaves.length > 0 || hrData.advances.length > 0 || hrData.payments.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="bg-white rounded-xl shadow-md p-5">
+            <h3 className="text-lg font-bold mb-3 flex items-center gap-2 text-gray-800">
+              <Clock className="w-5 h-5 text-purple-500" /> Son İzinler
+            </h3>
+            {hrData.leaves.length === 0 ? <p className="text-sm text-gray-500 italic">Kayıt yok</p> : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {hrData.leaves.slice(0, 5).map((l: any) => (
+                  <div key={l.id} className="p-2 rounded bg-purple-50 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{l.leave_type === 'annual' ? 'Yıllık' : l.leave_type === 'sick' ? 'Hastalık' : l.leave_type}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${l.status === 'approved' ? 'bg-green-100 text-green-700' : l.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {l.status === 'approved' ? 'Onaylı' : l.status === 'rejected' ? 'Red' : 'Bekliyor'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{new Date(l.start_date).toLocaleDateString('tr-TR')} → {new Date(l.end_date).toLocaleDateString('tr-TR')} ({l.total_days} gün)</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-5">
+            <h3 className="text-lg font-bold mb-3 flex items-center gap-2 text-gray-800">
+              <Wallet className="w-5 h-5 text-orange-500" /> Avanslar
+            </h3>
+            {hrData.advances.length === 0 ? <p className="text-sm text-gray-500 italic">Kayıt yok</p> : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {hrData.advances.slice(0, 5).map((a: any) => (
+                  <div key={a.id} className="p-2 rounded bg-orange-50 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{Number(a.amount).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${a.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {a.status === 'paid' ? 'Mahsup' : 'Açık'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{new Date(a.advance_date).toLocaleDateString('tr-TR')} · Kalan: {Number(a.remaining_amount || a.amount).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-5">
+            <h3 className="text-lg font-bold mb-3 flex items-center gap-2 text-gray-800">
+              <DollarSign className="w-5 h-5 text-green-500" /> Maaş Ödemeleri
+            </h3>
+            {hrData.payments.length === 0 ? <p className="text-sm text-gray-500 italic">Kayıt yok</p> : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {hrData.payments.slice(0, 5).map((p: any) => {
+                  const months = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
+                  return (
+                    <div key={p.id} className="p-2 rounded bg-green-50 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{months[p.period_month - 1]} {p.period_year}</span>
+                        <span className="font-bold text-green-700">{Number(p.net_amount).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">{new Date(p.payment_date).toLocaleDateString('tr-TR')}{Number(p.advance_deduction) > 0 ? ` · Avans: -${Number(p.advance_deduction).toLocaleString('tr-TR')} ₺` : ''}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">

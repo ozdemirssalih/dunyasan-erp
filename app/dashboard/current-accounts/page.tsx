@@ -2,7 +2,27 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search, Plus, X } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search, Plus, X, Edit2, Trash2, Tag, Check } from 'lucide-react'
+
+// Türkiye'deki yaygın bankalar
+const BANKS = [
+  'Garanti BBVA', 'Yapı Kredi', 'İş Bankası', 'Akbank', 'Halkbank',
+  'Ziraat Bankası', 'VakıfBank', 'Denizbank', 'TEB', 'ING Bank',
+  'QNB Finansbank', 'Şekerbank', 'HSBC', 'Albaraka Türk', 'Kuveyt Türk',
+  'Türkiye Finans', 'Ziraat Katılım', 'Vakıf Katılım', 'Emlak Katılım',
+  'Odeabank', 'Anadolubank', 'Burgan Bank', 'Fibabanka', 'ICBC Turkey',
+  'Citibank', 'Türk Eximbank', 'Diğer'
+]
+
+// Yaygın sektörler
+const SECTORS = [
+  'Savunma Sanayi', 'Havacılık', 'Otomotiv', 'Makine İmalatı', 'Elektronik',
+  'İnşaat', 'Tekstil', 'Gıda', 'Sağlık', 'Eğitim', 'Yazılım / IT',
+  'Lojistik / Nakliye', 'Enerji', 'Madencilik', 'Kimya / Petrokimya',
+  'Mobilya', 'Plastik', 'Metal', 'Tarım / Hayvancılık', 'Turizm',
+  'Finans / Bankacılık', 'Telekom', 'Medya / Reklam', 'Perakende',
+  'Toptan Ticaret', 'Hizmet', 'Personel', 'Diğer'
+]
 
 export default function CurrentAccountsPage() {
   const [contacts, setContacts] = useState<any[]>([])
@@ -11,13 +31,75 @@ export default function CurrentAccountsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'positive' | 'negative'>('all')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [bankFilter, setBankFilter] = useState('all')
   const [selectedContact, setSelectedContact] = useState<any>(null)
   const [contactTransactions, setContactTransactions] = useState<any[]>([])
   const [showNewModal, setShowNewModal] = useState(false)
   const [editingContact, setEditingContact] = useState<any>(null)
-  const [newForm, setNewForm] = useState({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
+  const [newForm, setNewForm] = useState({
+    contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '',
+    bank_name: '', iban: '', bank_account_no: '', bank_branch: ''
+  })
 
-  useEffect(() => { loadData() }, [])
+  // Kategori yönetimi
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName] = useState('')
+
+  useEffect(() => { loadData(); loadCategories() }, [])
+
+  const loadCategories = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+    if (!profile?.company_id) return
+    const { data } = await supabase.from('contact_categories').select('id, name').eq('company_id', profile.company_id).order('name')
+    setCategories(data || [])
+  }
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim() || !companyId) return
+    const { error } = await supabase.from('contact_categories').insert({ company_id: companyId, name: newCategoryName.trim() })
+    if (error) return alert('Hata: ' + error.message)
+    setNewCategoryName('')
+    await loadCategories()
+  }
+
+  const handleSaveCategoryEdit = async (categoryId: string) => {
+    const oldCat = categories.find(c => c.id === categoryId)
+    if (!oldCat || !editingCategoryName.trim() || oldCat.name === editingCategoryName.trim()) {
+      setEditingCategoryId(null)
+      return
+    }
+    const newName = editingCategoryName.trim()
+    // Kategoriyi güncelle
+    const { error: catErr } = await supabase.from('contact_categories').update({ name: newName }).eq('id', categoryId)
+    if (catErr) return alert('Hata: ' + catErr.message)
+    // Bu sektöre sahip tüm cari hesapları güncelle
+    await supabase.from('contacts').update({ sector: newName }).eq('sector', oldCat.name)
+    setEditingCategoryId(null)
+    setEditingCategoryName('')
+    await loadCategories()
+    await loadData()
+  }
+
+  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    const count = contacts.filter(c => c.sector === categoryName).length
+    const msg = count > 0
+      ? `"${categoryName}" kategorisini silmek istediğine emin misin?\n\n${count} cari hesabın sektörü boşaltılacak.`
+      : `"${categoryName}" kategorisini silmek istediğine emin misin?`
+    if (!confirm(msg)) return
+    // Kategoriyi sil
+    await supabase.from('contact_categories').delete().eq('id', categoryId)
+    // İlgili contactları null yap
+    if (count > 0) {
+      await supabase.from('contacts').update({ sector: null }).eq('sector', categoryName)
+    }
+    await loadCategories()
+    await loadData()
+  }
 
   const loadData = async () => {
     try {
@@ -108,6 +190,10 @@ export default function CurrentAccountsPage() {
       address: contact.address || '',
       tax_number: contact.tax_number || '',
       sector: contact.sector || '',
+      bank_name: contact.bank_name || '',
+      iban: contact.iban || '',
+      bank_account_no: contact.bank_account_no || '',
+      bank_branch: contact.bank_branch || '',
     })
     setShowNewModal(true)
   }
@@ -192,13 +278,19 @@ export default function CurrentAccountsPage() {
   // Sektöre göre gruplandırma
   const groups = Array.from(new Set(contacts.map(c => c.sector || 'Diğer').filter(Boolean))).sort()
 
+  // Banka listesi (mevcutlardan + ön tanımlılar)
+  const usedBanks = Array.from(new Set(contacts.map(c => c.bank_name).filter(Boolean))).sort()
+
   const filtered = contacts.filter(c => {
     const matchSearch = searchQuery === '' || c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchBalance = balanceFilter === 'all' ||
       (balanceFilter === 'positive' && c.balance > 0) ||
       (balanceFilter === 'negative' && c.balance < 0)
     const matchGroup = groupFilter === 'all' || (c.sector || 'Diğer') === groupFilter
-    return matchSearch && matchBalance && matchGroup
+    const matchBank = bankFilter === 'all' ||
+      (bankFilter === 'none' && !c.bank_name) ||
+      (c.bank_name === bankFilter)
+    return matchSearch && matchBalance && matchGroup && matchBank
   })
 
   const totalReceivables = contacts.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0)
@@ -217,51 +309,188 @@ export default function CurrentAccountsPage() {
           <h2 className="text-3xl font-bold text-gray-800">Cari Hesaplar</h2>
           <p className="text-gray-600">{contacts.length} cari hesap</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold">
-          <Plus className="w-4 h-4" /> Yeni Cari
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg font-semibold">
+            <Tag className="w-4 h-4" /> Kategoriler
+          </button>
+          <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+            <Plus className="w-4 h-4" /> Yeni Cari
+          </button>
+        </div>
       </div>
+
+      {/* Kategori Yönetim Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowCategoryModal(false); setEditingCategoryId(null) }}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Tag className="w-5 h-5 text-purple-600" /> Sektör / Kategori Yönetimi
+              </h3>
+              <button onClick={() => setShowCategoryModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+
+            {/* Yeni kategori ekle */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+              <label className="block text-xs font-semibold text-purple-700 mb-2">Yeni Kategori Ekle</label>
+              <div className="flex gap-2">
+                <input
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddCategory() }}
+                  placeholder="Örn: KESİCİ TAKIM, HAMMADDE..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  disabled={!newCategoryName.trim()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold"
+                >
+                  Ekle
+                </button>
+              </div>
+            </div>
+
+            {/* Liste */}
+            <div className="flex-1 overflow-y-auto -mx-6 px-6">
+              {categories.length === 0 ? (
+                <p className="text-center text-gray-500 py-8 text-sm">Henüz kategori yok</p>
+              ) : (
+                <div className="space-y-1">
+                  {categories.map(cat => {
+                    const count = contacts.filter(c => c.sector === cat.name).length
+                    const isEditing = editingCategoryId === cat.id
+                    return (
+                      <div key={cat.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                        {isEditing ? (
+                          <>
+                            <input
+                              value={editingCategoryName}
+                              onChange={e => setEditingCategoryName(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleSaveCategoryEdit(cat.id) }}
+                              autoFocus
+                              className="flex-1 px-3 py-1.5 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-300"
+                            />
+                            <button onClick={() => handleSaveCategoryEdit(cat.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Kaydet">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => { setEditingCategoryId(null); setEditingCategoryName('') }} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="İptal">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="flex-1 text-sm font-medium text-gray-800">{cat.name}</span>
+                            <span className="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full">{count} cari</span>
+                            <button
+                              onClick={() => { setEditingCategoryId(cat.id); setEditingCategoryName(cat.name) }}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                              title="Adı değiştir"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200">
+              💡 Kategori adını değiştirdiğinde o sektörü kullanan tüm cari hesaplar otomatik güncellenir.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Yeni Cari Modal */}
       {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowNewModal(false); setEditingContact(null); setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' }) }}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowNewModal(false); setEditingContact(null); setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' }) }}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-800">{editingContact ? 'Cari Hesap Düzenle' : 'Yeni Cari Hesap'}</h3>
               <button onClick={() => setShowNewModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Temel Bilgiler */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Firma / Kişi Adı *</label>
-                <input value={newForm.contact_name} onChange={e => setNewForm({...newForm, contact_name: e.target.value})} placeholder="Firma veya kişi adı" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-                  <input value={newForm.phone} onChange={e => setNewForm({...newForm, phone: e.target.value})} placeholder="0532..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                <h4 className="text-sm font-bold text-gray-600 uppercase mb-2 pb-1 border-b border-gray-200">Temel Bilgiler</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Firma / Kişi Adı *</label>
+                    <input value={newForm.contact_name} onChange={e => setNewForm({...newForm, contact_name: e.target.value})} placeholder="Firma veya kişi adı" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                      <input value={newForm.phone} onChange={e => setNewForm({...newForm, phone: e.target.value})} placeholder="0532..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">E-posta</label>
+                      <input value={newForm.email} onChange={e => setNewForm({...newForm, email: e.target.value})} placeholder="info@..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
+                    <input value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="Adres" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
+                      <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sektör / Kategori
+                        <button type="button" onClick={() => setShowCategoryModal(true)} className="ml-2 text-xs text-blue-600 hover:underline">+ Yönet</button>
+                      </label>
+                      <select value={newForm.sector} onChange={e => setNewForm({...newForm, sector: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white">
+                        <option value="">Seçiniz...</option>
+                        {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">E-posta</label>
-                  <input value={newForm.email} onChange={e => setNewForm({...newForm, email: e.target.value})} placeholder="info@..." className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                </div>
               </div>
+
+              {/* Banka Bilgileri */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
-                <input value={newForm.address} onChange={e => setNewForm({...newForm, address: e.target.value})} placeholder="Adres" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
-                  <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                <h4 className="text-sm font-bold text-gray-600 uppercase mb-2 pb-1 border-b border-gray-200">🏦 Banka Bilgileri</h4>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Banka</label>
+                      <select value={newForm.bank_name} onChange={e => setNewForm({...newForm, bank_name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white">
+                        <option value="">Seçiniz...</option>
+                        {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                        {usedBanks.filter(b => !BANKS.includes(b)).map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Şube</label>
+                      <input value={newForm.bank_branch} onChange={e => setNewForm({...newForm, bank_branch: e.target.value})} placeholder="Örn: Ankara Şubesi" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+                    <input value={newForm.iban} onChange={e => setNewForm({...newForm, iban: e.target.value.toUpperCase()})} placeholder="TR..." maxLength={32} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hesap No (opsiyonel)</label>
+                    <input value={newForm.bank_account_no} onChange={e => setNewForm({...newForm, bank_account_no: e.target.value})} placeholder="Hesap numarası" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sektör</label>
-                  <input value={newForm.sector} onChange={e => setNewForm({...newForm, sector: e.target.value})} placeholder="Ör: Savunma, Otomotiv..." list="sector-list" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                  <datalist id="sector-list">
-                    {groups.filter(g => g !== 'Diğer').map(g => <option key={g} value={g} />)}
-                  </datalist>
-                </div>
               </div>
+
               <button
                 onClick={async () => {
                   if (!newForm.contact_name || !companyId) return alert('Firma/kişi adı zorunludur!')
@@ -270,6 +499,10 @@ export default function CurrentAccountsPage() {
                     phone: newForm.phone || null, email: newForm.email || null,
                     address: newForm.address || null, tax_number: newForm.tax_number || null,
                     sector: newForm.sector || null,
+                    bank_name: newForm.bank_name || null,
+                    iban: newForm.iban || null,
+                    bank_account_no: newForm.bank_account_no || null,
+                    bank_branch: newForm.bank_branch || null,
                   }
                   if (editingContact) {
                     const { error } = await supabase.from('contacts').update(payload).eq('id', editingContact.id)
@@ -282,7 +515,7 @@ export default function CurrentAccountsPage() {
                   }
                   setShowNewModal(false)
                   setEditingContact(null)
-                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '' })
+                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' })
                   loadData()
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
@@ -485,8 +718,8 @@ export default function CurrentAccountsPage() {
 
           {/* Filtreler */}
           <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="relative lg:col-span-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
@@ -505,8 +738,21 @@ export default function CurrentAccountsPage() {
                 <option value="positive">Alacaklı (+)</option>
                 <option value="negative">Borçlu (-)</option>
               </select>
+              <select
+                value={bankFilter}
+                onChange={(e) => setBankFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">Tüm Bankalar</option>
+                <option value="none">— Bankası Yok —</option>
+                {usedBanks.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
-            <p className="text-xs text-gray-500 mt-2">{filtered.length} / {contacts.length} cari gösteriliyor{groupFilter !== 'all' && <span className="ml-1 text-blue-600 font-semibold">• {groupFilter}</span>}</p>
+            <p className="text-xs text-gray-500 mt-2">
+              {filtered.length} / {contacts.length} cari gösteriliyor
+              {groupFilter !== 'all' && <span className="ml-1 text-blue-600 font-semibold">• Sektör: {groupFilter}</span>}
+              {bankFilter !== 'all' && <span className="ml-1 text-purple-600 font-semibold">• Banka: {bankFilter === 'none' ? 'Yok' : bankFilter}</span>}
+            </p>
           </div>
 
           {/* Cari Hesap Listesi */}

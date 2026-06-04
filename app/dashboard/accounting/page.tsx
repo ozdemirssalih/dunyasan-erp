@@ -89,6 +89,7 @@ export default function AccountingPageV2() {
   }
   const [upcomingChecksEndDate, setUpcomingChecksEndDate] = useState<string>(getDefaultEndDate())
   const [monthlySummaryYear, setMonthlySummaryYear] = useState<number>(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
 
   const [checkForm, setCheckForm] = useState({
     check_number: '',
@@ -2331,34 +2332,117 @@ export default function AccountingPageV2() {
                     const isCurrent = idx === currentMonthIdx && monthlySummaryYear === currentYearNow
                     const isPast = monthlySummaryYear < currentYearNow || (monthlySummaryYear === currentYearNow && idx < currentMonthIdx)
                     const hasAmount = amount > 0
+                    const isSelected = selectedMonth === idx
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={idx}
-                        className={`rounded-lg p-3 border transition-all ${
-                          isCurrent
-                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-600 text-white shadow-lg ring-2 ring-blue-300'
-                            : hasAmount
-                              ? (isPast ? 'bg-gray-100 border-gray-300' : 'bg-red-50 border-red-200')
-                              : 'bg-gray-50 border-gray-200'
+                        onClick={() => setSelectedMonth(isSelected ? null : idx)}
+                        disabled={!hasAmount}
+                        className={`rounded-lg p-3 border transition-all text-left ${
+                          !hasAmount ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-md hover:scale-105'
+                        } ${
+                          isSelected
+                            ? 'bg-gradient-to-br from-purple-600 to-purple-700 border-purple-700 text-white shadow-lg ring-2 ring-purple-300'
+                            : isCurrent
+                              ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-600 text-white shadow-lg ring-2 ring-blue-300'
+                              : hasAmount
+                                ? (isPast ? 'bg-gray-100 border-gray-300' : 'bg-red-50 border-red-200')
+                                : 'bg-gray-50 border-gray-200'
                         }`}
                       >
-                        <div className={`text-xs font-semibold mb-1 ${isCurrent ? 'text-white' : 'text-gray-700'}`}>
+                        <div className={`text-xs font-semibold mb-1 ${isSelected || isCurrent ? 'text-white' : 'text-gray-700'}`}>
                           {monthName}
                         </div>
                         <div className={`text-sm font-bold ${
-                          isCurrent ? 'text-white' : hasAmount ? (isPast ? 'text-gray-600' : 'text-red-700') : 'text-gray-400'
+                          isSelected || isCurrent ? 'text-white' : hasAmount ? (isPast ? 'text-gray-600' : 'text-red-700') : 'text-gray-400'
                         }`}>
                           {hasAmount
                             ? amount >= 1000
                               ? (amount / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 0 }) + 'K'
                               : amount.toLocaleString('tr-TR', { maximumFractionDigits: 0 })
                             : '—'}
-                          {hasAmount && <span className={`text-xs font-normal ml-0.5 ${isCurrent ? 'text-blue-100' : ''}`}>₺</span>}
+                          {hasAmount && <span className={`text-xs font-normal ml-0.5 ${isSelected || isCurrent ? 'text-purple-100' : ''}`}>₺</span>}
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
+
+                {/* Seçili ayın çek detayı */}
+                {selectedMonth !== null && (() => {
+                  const monthChecks = checks
+                    .filter(c => {
+                      if (c.check_type !== 'outgoing') return false
+                      if (c.status !== 'pending') return false
+                      const due = new Date(c.due_date)
+                      return due.getFullYear() === monthlySummaryYear && due.getMonth() === selectedMonth
+                    })
+                    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+                  const monthTotal = monthChecks.reduce((s, c) => s + parseFloat(c.amount || 0), 0)
+                  return (
+                    <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-lg overflow-hidden">
+                      <div className="bg-purple-100 px-4 py-3 flex items-center justify-between border-b border-purple-200">
+                        <h5 className="font-bold text-purple-900">
+                          📋 {monthNames[selectedMonth]} {monthlySummaryYear} — Ödenecek Çekler ({monthChecks.length})
+                        </h5>
+                        <button onClick={() => setSelectedMonth(null)} className="text-purple-700 hover:bg-purple-200 rounded p-1">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {monthChecks.length > 0 ? (
+                        <div className="max-h-80 overflow-y-auto">
+                          <table className="w-full">
+                            <thead className="bg-white sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Banka</th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tedarikçi</th>
+                                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Tutar</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-purple-100">
+                              {monthChecks.map(c => {
+                                const today = new Date()
+                                today.setHours(0, 0, 0, 0)
+                                const due = new Date(c.due_date)
+                                const days = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                                const isUrgent = days >= 0 && days <= 7
+                                const isOverdue = days < 0
+                                return (
+                                  <tr key={c.id} className="hover:bg-white">
+                                    <td className="px-3 py-2 text-sm">
+                                      <div className="font-medium text-gray-900">{new Date(c.due_date).toLocaleDateString('tr-TR')}</div>
+                                      <div className={`text-xs ${isOverdue ? 'text-red-700 font-bold' : isUrgent ? 'text-red-600' : 'text-gray-500'}`}>
+                                        {isOverdue ? `${Math.abs(days)} gün gecikmiş` : days === 0 ? 'Bugün!' : days === 1 ? 'Yarın' : `${days} gün`}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-sm font-medium text-gray-900">{c.check_number}</td>
+                                    <td className="px-3 py-2 text-sm text-gray-700">{c.bank_name || '-'}</td>
+                                    <td className="px-3 py-2 text-sm text-gray-700">{c.supplier_name || '-'}</td>
+                                    <td className="px-3 py-2 text-sm font-bold text-red-600 text-right">
+                                      {formatCurrency(c.amount, c.currency)}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center text-gray-500 text-sm">Bu ayda ödenecek çek yok</div>
+                      )}
+                      <div className="bg-purple-100 border-t-2 border-purple-300 px-4 py-3 flex items-center justify-between">
+                        <span className="font-bold text-purple-900">{monthNames[selectedMonth]} {monthlySummaryYear} Toplam:</span>
+                        <span className="text-xl font-bold text-purple-700">
+                          {monthTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                   <span className="text-sm text-gray-600">Toplam {monthlySummaryYear} yılı bekleyen giden çek:</span>
                   <span className="text-lg font-bold text-red-700">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, Plus, Edit, Trash2, Search } from 'lucide-react'
+import { Building2, Plus, Edit, Trash2, Search, Printer } from 'lucide-react'
 
 interface Supplier {
   id: string
@@ -75,6 +75,117 @@ export default function SuppliersPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePrintApprovedList = () => {
+    const today = new Date().toLocaleDateString('tr-TR')
+    const list = filteredSuppliers.length > 0 ? filteredSuppliers : suppliers
+    const rows = list.map((s, i) => `
+      <tr>
+        <td style="text-align:center;">${i + 1}</td>
+        <td><strong>${(s.company_name || '').toUpperCase()}</strong></td>
+        <td>${s.category || '-'}</td>
+        <td>${s.contact_person || '-'}</td>
+        <td>${s.phone || '-'}</td>
+        <td>${s.tax_number || '-'}</td>
+        <td style="text-align:center;">✓</td>
+      </tr>
+    `).join('')
+
+    const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Onaylı Tedarikçi Listesi - DF18</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #000; margin: 0; padding: 0; }
+
+    .doc-header { border: 2px solid #000; margin-bottom: 12px; }
+    .doc-header table { width: 100%; border-collapse: collapse; }
+    .doc-header td { border: 1px solid #000; padding: 6px 8px; vertical-align: middle; }
+    .logo-cell { width: 25%; text-align: center; font-weight: bold; font-size: 14px; }
+    .title-cell { width: 50%; text-align: center; font-weight: bold; font-size: 14px; text-transform: uppercase; padding: 10px !important; }
+    .meta-cell { width: 25%; font-size: 9px; }
+    .meta-row { display: flex; justify-content: space-between; padding: 1px 0; }
+    .meta-row strong { font-weight: 600; }
+
+    table.data { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    table.data th { background: #d9e2f3; border: 1px solid #000; padding: 6px 4px; font-size: 10px; font-weight: bold; text-align: left; }
+    table.data td { border: 1px solid #000; padding: 5px 6px; font-size: 9.5px; vertical-align: middle; }
+    table.data tr:nth-child(even) td { background: #f5f5f5; }
+
+    .footer { margin-top: 20px; display: flex; justify-content: space-between; font-size: 9px; }
+    .signature { width: 200px; }
+    .signature-line { border-top: 1px solid #000; margin-top: 35px; padding-top: 4px; text-align: center; font-weight: 600; }
+
+    .summary { margin-top: 10px; font-size: 10px; font-weight: 600; text-align: right; padding-right: 4px; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="doc-header">
+    <table>
+      <tr>
+        <td rowspan="3" class="logo-cell">DÜNYASAN</td>
+        <td rowspan="3" class="title-cell">ONAYLI TEDARİKÇİ LİSTESİ</td>
+        <td class="meta-cell"><div class="meta-row"><strong>Doküman No:</strong><span>DF18</span></div></td>
+      </tr>
+      <tr>
+        <td class="meta-cell"><div class="meta-row"><strong>Yayın Tarihi:</strong><span>02.03.2026</span></div></td>
+      </tr>
+      <tr>
+        <td class="meta-cell"><div class="meta-row"><strong>Revizyon No:</strong><span>00</span></div></td>
+      </tr>
+    </table>
+  </div>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th style="width:5%; text-align:center;">No</th>
+        <th style="width:35%;">Firma Adı</th>
+        <th style="width:18%;">Kategori</th>
+        <th style="width:15%;">Yetkili Kişi</th>
+        <th style="width:12%;">Telefon</th>
+        <th style="width:10%;">Vergi No</th>
+        <th style="width:5%; text-align:center;">Onay</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+
+  <div class="summary">Toplam Onaylı Tedarikçi: ${list.length}</div>
+
+  <div class="footer">
+    <div>Baskı Tarihi: ${today}</div>
+    <div class="signature">
+      <div class="signature-line">Hazırlayan / Onaylayan</div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  </script>
+</body>
+</html>`
+
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) {
+      alert('Pop-up engellendi. Lütfen pop-up izni verin.')
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
   }
 
   const filterSuppliers = () => {
@@ -223,16 +334,26 @@ export default function SuppliersPage() {
           <h2 className="text-3xl font-bold text-gray-800">Tedarikçiler</h2>
           <p className="text-gray-600">Tedarikçilerinizi yönetin</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setShowModal(true)
-          }}
-          className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="font-semibold">Yeni Tedarikçi</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePrintApprovedList}
+            className="flex items-center space-x-2 px-5 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors shadow-lg"
+            title="DF18 - Onaylı Tedarikçi Listesi"
+          >
+            <Printer className="w-5 h-5" />
+            <span className="font-semibold">Onaylı Liste Yazdır</span>
+          </button>
+          <button
+            onClick={() => {
+              resetForm()
+              setShowModal(true)
+            }}
+            className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="font-semibold">Yeni Tedarikçi</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ClipboardList, Plus, Edit3, Trash2, Search, Check, X, Download, Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { ClipboardList, Plus, Edit3, Trash2, Search, Check, X, Download, Filter, ChevronDown, ChevronUp, Star, Award, TrendingUp, MessageSquare } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 import { supabase } from '@/lib/supabase/client'
 
@@ -72,6 +72,7 @@ interface Supplier {
 }
 
 export default function PurchasingPage() {
+  const [activeTab, setActiveTab] = useState<'orders' | 'evaluation'>('orders')
   const [records, setRecords] = useState<PurchasingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -80,6 +81,19 @@ export default function PurchasingPage() {
   // Dropdown data
   const [products, setProducts] = useState<ProductItem[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+
+  // Tedarikçi değerlendirme state
+  const [evaluations, setEvaluations] = useState<any[]>([])
+  const [showEvalModal, setShowEvalModal] = useState(false)
+  const [evalSupplier, setEvalSupplier] = useState<any>(null)
+  const [evalForm, setEvalForm] = useState({
+    quality_score: 3, delivery_score: 3, price_score: 3, service_score: 3, documentation_score: 3,
+    period_year: new Date().getFullYear(),
+    period_quarter: Math.floor(new Date().getMonth() / 3) + 1,
+    notes: ''
+  })
+  const [evalSearch, setEvalSearch] = useState('')
+  const [showEvalHistory, setShowEvalHistory] = useState<string | null>(null)
 
   // Modal states
   const [showModal, setShowModal] = useState(false)
@@ -185,6 +199,14 @@ export default function PurchasingPage() {
 
       setProducts([...whProducts, ...invProducts, ...toolProducts])
       setSuppliers(suppRes.data || [])
+
+      // Tedarikçi değerlendirmelerini yükle
+      const { data: evalData } = await supabase
+        .from('supplier_evaluations')
+        .select('*')
+        .eq('company_id', fetchedCompanyId)
+        .order('created_at', { ascending: false })
+      setEvaluations(evalData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -342,6 +364,83 @@ export default function PurchasingPage() {
     }
   }
 
+  // Tedarikçi değerlendirme handlers
+  const openEvalModal = (supplier: any, existing?: any) => {
+    setEvalSupplier(supplier)
+    if (existing) {
+      setEvalForm({
+        quality_score: existing.quality_score || 3,
+        delivery_score: existing.delivery_score || 3,
+        price_score: existing.price_score || 3,
+        service_score: existing.service_score || 3,
+        documentation_score: existing.documentation_score || 3,
+        period_year: existing.period_year || new Date().getFullYear(),
+        period_quarter: existing.period_quarter || Math.floor(new Date().getMonth() / 3) + 1,
+        notes: existing.notes || ''
+      })
+    } else {
+      setEvalForm({
+        quality_score: 3, delivery_score: 3, price_score: 3, service_score: 3, documentation_score: 3,
+        period_year: new Date().getFullYear(),
+        period_quarter: Math.floor(new Date().getMonth() / 3) + 1,
+        notes: ''
+      })
+    }
+    setShowEvalModal(true)
+  }
+
+  const handleSaveEvaluation = async () => {
+    if (!evalSupplier || !companyId) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const scores = [evalForm.quality_score, evalForm.delivery_score, evalForm.price_score, evalForm.service_score, evalForm.documentation_score]
+      const overall = scores.reduce((s, v) => s + v, 0) / scores.length
+      const payload = {
+        company_id: companyId,
+        supplier_id: evalSupplier.id,
+        evaluation_date: new Date().toISOString().split('T')[0],
+        period: 'quarterly',
+        period_year: evalForm.period_year,
+        period_quarter: evalForm.period_quarter,
+        quality_score: evalForm.quality_score,
+        delivery_score: evalForm.delivery_score,
+        price_score: evalForm.price_score,
+        service_score: evalForm.service_score,
+        documentation_score: evalForm.documentation_score,
+        overall_score: overall,
+        notes: evalForm.notes || null,
+        created_by: user?.id
+      }
+      const { error } = await supabase.from('supplier_evaluations').insert(payload)
+      if (error) throw error
+      alert('✅ Değerlendirme kaydedildi')
+      setShowEvalModal(false)
+      setEvalSupplier(null)
+      await loadData()
+    } catch (e: any) {
+      alert('Hata: ' + e?.message)
+    }
+  }
+
+  const handleDeleteEvaluation = async (id: string) => {
+    if (!confirm('Bu değerlendirmeyi silmek istediğinize emin misiniz?')) return
+    try {
+      const { error } = await supabase.from('supplier_evaluations').delete().eq('id', id)
+      if (error) throw error
+      await loadData()
+    } catch (e: any) {
+      alert('Hata: ' + e?.message)
+    }
+  }
+
+  // Tedarikçi için ortalama puan ve son değerlendirme
+  const getSupplierStats = (supplierId: string) => {
+    const list = evaluations.filter(e => e.supplier_id === supplierId)
+    if (list.length === 0) return { avg: null, count: 0, last: null }
+    const avg = list.reduce((s, e) => s + parseFloat(e.overall_score || 0), 0) / list.length
+    return { avg, count: list.length, last: list[0] }
+  }
+
   const exportToCSV = () => {
     const headers = [
       'Sıra', 'Sipariş Tarihi', 'Firma Adı', 'Satınalma Sorumlusu', 'Parça Kodu',
@@ -461,38 +560,67 @@ export default function PurchasingPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold text-gray-800">Satınalma Takip</h2>
-            <p className="text-gray-600">Satınalma siparişlerini takip edin ve yönetin</p>
+            <h2 className="text-3xl font-bold text-gray-800">Satınalma</h2>
+            <p className="text-gray-600">{activeTab === 'orders' ? 'Satınalma siparişlerini takip edin ve yönetin' : 'Tedarikçi performansını değerlendirin'}</p>
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={exportToCSV}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              <span>CSV İndir</span>
-            </button>
-            <button
-              onClick={async () => {
-                setEditingId(null)
-                const nums = await generateNextNumbers()
-                setFormData({
-                  ...emptyForm,
-                  satinalma_sorumlusu: currentUser,
-                  po_numarasi: nums.po_numarasi,
-                  malzeme_talep_no: nums.malzeme_talep_no,
-                  satinalma_teklif_no: nums.satinalma_teklif_no,
-                })
-                setShowModal(true)
-              }}
-              className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Yeni Kayıt</span>
-            </button>
-          </div>
+          {activeTab === 'orders' && (
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={exportToCSV}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>CSV İndir</span>
+              </button>
+              <button
+                onClick={async () => {
+                  setEditingId(null)
+                  const nums = await generateNextNumbers()
+                  setFormData({
+                    ...emptyForm,
+                    satinalma_sorumlusu: currentUser,
+                    po_numarasi: nums.po_numarasi,
+                    malzeme_talep_no: nums.malzeme_talep_no,
+                    satinalma_teklif_no: nums.satinalma_teklif_no,
+                  })
+                  setShowModal(true)
+                }}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Yeni Kayıt</span>
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-2 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`px-6 py-3 font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'orders' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            Satınalma Kayıtları
+          </button>
+          <button
+            onClick={() => setActiveTab('evaluation')}
+            className={`px-6 py-3 font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'evaluation' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            Tedarikçi Değerlendirme
+            {evaluations.length > 0 && (
+              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">{evaluations.length}</span>
+            )}
+          </button>
+        </div>
+
+        {/* ORDERS TAB CONTENT */}
+        {activeTab === 'orders' && <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
@@ -742,6 +870,297 @@ export default function PurchasingPage() {
         {filteredRecords.length > 0 && (
           <div className="text-sm text-gray-500 text-right">
             {filteredRecords.length} / {totalRecords} kayıt gösteriliyor
+          </div>
+        )}
+        </>}
+
+        {/* EVALUATION TAB CONTENT */}
+        {activeTab === 'evaluation' && (() => {
+          const filteredSuppliers = suppliers.filter(s =>
+            !evalSearch || s.company_name.toLowerCase().includes(evalSearch.toLowerCase())
+          )
+          const ratedSuppliers = suppliers.filter(s => getSupplierStats(s.id).count > 0)
+          const totalAvg = ratedSuppliers.length > 0
+            ? ratedSuppliers.reduce((sum, s) => sum + (getSupplierStats(s.id).avg || 0), 0) / ratedSuppliers.length
+            : 0
+          const topSupplier = ratedSuppliers
+            .map(s => ({ s, avg: getSupplierStats(s.id).avg || 0 }))
+            .sort((a, b) => b.avg - a.avg)[0]
+          return (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500">
+                  <p className="text-sm text-gray-500">Toplam Tedarikçi</p>
+                  <p className="text-2xl font-bold text-gray-800">{suppliers.length}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+                  <p className="text-sm text-gray-500">Değerlendirilen</p>
+                  <p className="text-2xl font-bold text-blue-600">{ratedSuppliers.length}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
+                  <p className="text-sm text-gray-500">Toplam Değerlendirme</p>
+                  <p className="text-2xl font-bold text-yellow-600">{evaluations.length}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                  <p className="text-sm text-gray-500">Ortalama Puan</p>
+                  <p className="text-2xl font-bold text-green-600">{totalAvg > 0 ? totalAvg.toFixed(2) : '-'} / 5</p>
+                </div>
+              </div>
+
+              {/* En iyi tedarikçi */}
+              {topSupplier && (
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4 flex items-center gap-4">
+                  <div className="p-3 bg-yellow-400 rounded-lg">
+                    <Award className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-yellow-700 font-semibold uppercase">🏆 En İyi Performans</p>
+                    <p className="text-lg font-bold text-gray-800">{topSupplier.s.company_name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-yellow-600">{topSupplier.avg.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500">/ 5.00</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Search */}
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Tedarikçi ara..."
+                    value={evalSearch}
+                    onChange={e => setEvalSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Suppliers Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredSuppliers.map(s => {
+                  const stats = getSupplierStats(s.id)
+                  const isExpanded = showEvalHistory === s.id
+                  const history = evaluations.filter(e => e.supplier_id === s.id)
+                  const lastEval = stats.last
+                  return (
+                    <div key={s.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-gray-800 text-sm truncate" title={s.company_name}>{s.company_name}</h3>
+                            <p className="text-xs text-gray-500 mt-1">{stats.count} değerlendirme</p>
+                          </div>
+                          {stats.avg !== null && (
+                            <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              stats.avg >= 4.5 ? 'bg-green-100 text-green-700' :
+                              stats.avg >= 3.5 ? 'bg-blue-100 text-blue-700' :
+                              stats.avg >= 2.5 ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              ⭐ {stats.avg.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Kategori puanları (son değerlendirmeden) */}
+                        {lastEval && (
+                          <div className="space-y-1.5 mb-3">
+                            {[
+                              { label: 'Kalite', score: lastEval.quality_score },
+                              { label: 'Teslimat', score: lastEval.delivery_score },
+                              { label: 'Fiyat', score: lastEval.price_score },
+                              { label: 'Hizmet', score: lastEval.service_score },
+                              { label: 'Belge', score: lastEval.documentation_score },
+                            ].map(({ label, score }) => (
+                              <div key={label} className="flex items-center justify-between text-xs">
+                                <span className="text-gray-600 w-16">{label}</span>
+                                <div className="flex-1 mx-2 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      score >= 4 ? 'bg-green-500' : score >= 3 ? 'bg-blue-500' : score >= 2 ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${(score / 5) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-gray-700 font-semibold w-6 text-right">{score}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => openEvalModal(s)}
+                            className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1"
+                          >
+                            <Star className="w-3.5 h-3.5" /> Değerlendir
+                          </button>
+                          {stats.count > 0 && (
+                            <button
+                              onClick={() => setShowEvalHistory(isExpanded ? null : s.id)}
+                              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg flex items-center gap-1"
+                            >
+                              <TrendingUp className="w-3.5 h-3.5" />
+                              {isExpanded ? 'Gizle' : 'Geçmiş'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Geçmiş */}
+                      {isExpanded && history.length > 0 && (
+                        <div className="border-t border-gray-200 bg-gray-50 p-3 max-h-64 overflow-y-auto">
+                          <p className="text-xs font-semibold text-gray-600 mb-2">Geçmiş Değerlendirmeler:</p>
+                          <div className="space-y-2">
+                            {history.map(h => (
+                              <div key={h.id} className="bg-white p-2 rounded text-xs border border-gray-200">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-semibold text-gray-700">
+                                    {h.period_year} - Q{h.period_quarter}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-purple-600">⭐ {parseFloat(h.overall_score).toFixed(2)}</span>
+                                    <button onClick={() => handleDeleteEvaluation(h.id)} className="text-red-500 hover:bg-red-50 rounded p-1">
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="text-gray-500">{new Date(h.evaluation_date).toLocaleDateString('tr-TR')}</p>
+                                {h.notes && <p className="text-gray-700 mt-1 italic">"{h.notes}"</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {filteredSuppliers.length === 0 && (
+                <div className="text-center py-12 bg-white rounded-xl shadow-sm">
+                  <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Tedarikçi bulunamadı</p>
+                </div>
+              )}
+            </>
+          )
+        })()}
+
+        {/* Evaluation Modal */}
+        {showEvalModal && evalSupplier && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-5 text-white sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs opacity-80 uppercase font-semibold">Tedarikçi Değerlendirme</p>
+                    <h3 className="text-lg font-bold mt-1">{evalSupplier.company_name}</h3>
+                  </div>
+                  <button onClick={() => setShowEvalModal(false)} className="text-white hover:bg-white/10 rounded-lg p-2">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Yıl</label>
+                    <input
+                      type="number" value={evalForm.period_year}
+                      onChange={e => setEvalForm({ ...evalForm, period_year: parseInt(e.target.value) || new Date().getFullYear() })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Çeyrek</label>
+                    <select
+                      value={evalForm.period_quarter}
+                      onChange={e => setEvalForm({ ...evalForm, period_quarter: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value={1}>Q1 (Oca-Mar)</option>
+                      <option value={2}>Q2 (Nis-Haz)</option>
+                      <option value={3}>Q3 (Tem-Eyl)</option>
+                      <option value={4}>Q4 (Eki-Ara)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { key: 'quality_score', label: '🎯 Kalite', desc: 'Ürün/hizmet kalitesi' },
+                    { key: 'delivery_score', label: '🚚 Teslimat', desc: 'Zamanında teslimat' },
+                    { key: 'price_score', label: '💰 Fiyat', desc: 'Fiyat rekabetçiliği' },
+                    { key: 'service_score', label: '🤝 İletişim/Servis', desc: 'İletişim kalitesi' },
+                    { key: 'documentation_score', label: '📄 Belge Uygunluğu', desc: 'Doküman/sertifika' },
+                  ].map(({ key, label, desc }) => {
+                    const val = (evalForm as any)[key]
+                    return (
+                      <div key={key} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm">{label}</p>
+                            <p className="text-xs text-gray-500">{desc}</p>
+                          </div>
+                          <span className={`text-2xl font-bold ${
+                            val >= 4 ? 'text-green-600' : val >= 3 ? 'text-blue-600' : val >= 2 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {val}
+                          </span>
+                        </div>
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              onClick={() => setEvalForm({ ...evalForm, [key]: n })}
+                              className={`flex-1 py-1.5 rounded text-sm font-bold transition-colors ${
+                                val >= n
+                                  ? n >= 4 ? 'bg-green-500 text-white' : n >= 3 ? 'bg-blue-500 text-white' : n >= 2 ? 'bg-yellow-500 text-white' : 'bg-red-500 text-white'
+                                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                              }`}
+                            >
+                              ⭐
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    <MessageSquare className="w-3 h-3 inline mr-1" /> Notlar
+                  </label>
+                  <textarea
+                    value={evalForm.notes}
+                    onChange={e => setEvalForm({ ...evalForm, notes: e.target.value })}
+                    rows={3}
+                    placeholder="Performans hakkında notlar..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+
+                {/* Genel ortalama önizleme */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-3 flex items-center justify-between">
+                  <span className="font-bold text-gray-700">📊 Genel Ortalama:</span>
+                  <span className="text-2xl font-bold text-purple-700">
+                    {((evalForm.quality_score + evalForm.delivery_score + evalForm.price_score + evalForm.service_score + evalForm.documentation_score) / 5).toFixed(2)} / 5
+                  </span>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setShowEvalModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold">İptal</button>
+                  <button onClick={handleSaveEvaluation} className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold">Kaydet</button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

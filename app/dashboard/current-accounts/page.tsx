@@ -48,39 +48,17 @@ export default function CurrentAccountsPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
 
-  // Döviz kurları (TRY karşılığı)
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
-    TRY: 1, USD: 32.50, EUR: 35.20, GBP: 41.10
-  })
+  useEffect(() => { loadData(); loadCategories() }, [])
 
-  useEffect(() => { loadData(); loadCategories(); fetchExchangeRates() }, [])
-
-  // Kur güncellendiğinde bakiye yeniden hesaplansın
-  useEffect(() => {
-    if (companyId) loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exchangeRates])
-
-  const fetchExchangeRates = async () => {
-    try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/TRY')
-      const data = await response.json()
-      if (data?.rates) {
-        setExchangeRates({
-          TRY: 1,
-          USD: 1 / data.rates.USD,
-          EUR: 1 / data.rates.EUR,
-          GBP: 1 / data.rates.GBP,
-        })
-      }
-    } catch (err) {
-      console.warn('Döviz kurları yüklenemedi, varsayılan değerler kullanılıyor', err)
-    }
+  // Para birimi sembolleri
+  const currencySymbol = (c?: string | null) => {
+    const k = (c || 'TRY').toUpperCase()
+    return k === 'TRY' ? '₺' : k === 'USD' ? '$' : k === 'EUR' ? '€' : k === 'GBP' ? '£' : k + ' '
   }
-
-  const toTRY = (amount: number, currency?: string | null) => {
-    const rate = currency ? (exchangeRates[currency.toUpperCase()] ?? 1) : 1
-    return amount * rate
+  const fmtByCurrency = (n: number, currency?: string | null) => {
+    const sym = currencySymbol(currency)
+    const formatted = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+    return `${sym}${formatted}`
   }
 
   const loadCategories = async () => {
@@ -162,48 +140,60 @@ export default function CurrentAccountsPage() {
       const allCari = allCariRes.data || []
       const allCash = allCashRes.data || []
 
-      // Her contact için bakiye hesapla
-      // Mantık: Fatura TOPLAM tutarları vs Kasa TOPLAM ödemeleri karşılaştırılır
+      // Her contact için bakiye hesapla — para birimi bazında ayrı tutulur (çevirim yapılmaz)
+      // Mantık: Fatura toplam tutarları vs Kasa toplam ödemeleri karşılaştırılır
       // paid_amount KULLANILMAZ çünkü çift düşmeye neden olur
-      // FX işlemleri (USD/EUR/GBP) güncel kur ile TL'ye çevrilir
       const contactsWithBalance = (contactsData || []).map((contact) => {
         const isContact = (r: any) => r.customer_id === contact.id || r.supplier_id === contact.id || r.contact_id === contact.id
-        const tlAmount = (r: any) => toTRY(parseFloat(r.amount || 0), r.currency)
+        const cur = (r: any) => (r.currency || 'TRY').toUpperCase()
 
-        // Fatura tutarları (TL karşılığı, paid_amount kullanılmaz)
-        const totalReceivableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'receivable')
-          .reduce((s, r) => s + tlAmount(r), 0)
-        const totalPayableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'payable')
-          .reduce((s, r) => s + tlAmount(r), 0)
+        // Para birimi bazlı toplamlar
+        const balanceByCurrency: Record<string, number> = {}
+        const receivableByCurrency: Record<string, number> = {}
+        const payableByCurrency: Record<string, number> = {}
 
-        // Kasa ödemeleri (TL karşılığı)
-        const totalCashIncome = allCash.filter(r => isContact(r) && r.transaction_type === 'income')
-          .reduce((s, r) => s + tlAmount(r), 0)
-        const totalCashExpense = allCash.filter(r => isContact(r) && r.transaction_type === 'expense')
-          .reduce((s, r) => s + tlAmount(r), 0)
+        // Fatura: receivable +, payable -
+        allCari.filter(isContact).forEach(r => {
+          const c = cur(r)
+          const amt = parseFloat(r.amount || 0)
+          balanceByCurrency[c] = (balanceByCurrency[c] || 0) + (r.transaction_type === 'receivable' ? amt : -amt)
+          if (r.transaction_type === 'receivable') receivableByCurrency[c] = (receivableByCurrency[c] || 0) + amt
+          else payableByCurrency[c] = (payableByCurrency[c] || 0) + amt
+        })
 
-        // Net alacak = fatura alacağı - gelen tahsilat (kalan alacak, negatifse fazla tahsilat)
-        const netReceivable = totalReceivableInvoice - totalCashIncome
-        // Net borç = fatura borcu - giden ödeme (kalan borç, negatifse fazla ödeme yaptık = alacaklıyız)
-        const netPayable = totalPayableInvoice - totalCashExpense
+        // Kasa: income (tahsilat) -, expense (ödeme) +  (cari açısından tersi)
+        allCash.filter(isContact).forEach(r => {
+          const c = cur(r)
+          const amt = parseFloat(r.amount || 0)
+          balanceByCurrency[c] = (balanceByCurrency[c] || 0) + (r.transaction_type === 'income' ? -amt : amt)
+          if (r.transaction_type === 'income') receivableByCurrency[c] = (receivableByCurrency[c] || 0) - amt
+          else payableByCurrency[c] = (payableByCurrency[c] || 0) - amt
+        })
 
-        // Bakiye: pozitif = bize borçlu, negatif = biz borçluyuz
-        // netReceivable pozitif = müşteri bize borçlu, netPayable pozitif = biz tedarikçiye borçluyuz
-        const balance = netReceivable - netPayable
+        // Net alacak/borç (negatif olan tarafları sıfırla)
+        const totalReceivableByCurrency: Record<string, number> = {}
+        const totalPayableByCurrency: Record<string, number> = {}
+        Object.keys(balanceByCurrency).forEach(c => {
+          const b = balanceByCurrency[c]
+          if (b > 0) totalReceivableByCurrency[c] = b
+          if (b < 0) totalPayableByCurrency[c] = Math.abs(b)
+        })
 
-        const totalReceivable = Math.max(netReceivable, 0)
-        const totalPayable = Math.max(netPayable, 0)
-        // Fazla ödeme durumları
-        const excessReceivable = netPayable < 0 ? Math.abs(netPayable) : 0  // Biz fazla ödedik = alacaklıyız
-        const excessPayable = netReceivable < 0 ? Math.abs(netReceivable) : 0  // Fazla tahsilat = biz borçluyuz
+        // Geri uyumluluk için TL tek değerleri (filtreler ve liste tablosu hala kullanıyor)
+        const balance = balanceByCurrency['TRY'] || 0
+        const totalReceivable = totalReceivableByCurrency['TRY'] || 0
+        const totalPayable = totalPayableByCurrency['TRY'] || 0
 
-        const txCount = allCari.filter(r => isContact(r)).length + allCash.filter(r => isContact(r)).length
+        const txCount = allCari.filter(isContact).length + allCash.filter(isContact).length
 
         return {
           ...contact,
-          balance: balance,
-          totalReceivable: totalReceivable + excessReceivable,
-          totalPayable: totalPayable + excessPayable,
+          balance,
+          totalReceivable,
+          totalPayable,
+          balanceByCurrency,
+          totalReceivableByCurrency,
+          totalPayableByCurrency,
           transactionCount: txCount
         }
       })
@@ -328,9 +318,19 @@ export default function CurrentAccountsPage() {
     return matchSearch && matchBalance && matchGroup && matchBank
   })
 
-  const totalReceivables = contacts.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0)
-  const totalPayables = contacts.reduce((s, c) => s + (c.balance < 0 ? Math.abs(c.balance) : 0), 0)
-  const netBalance = contacts.reduce((s, c) => s + c.balance, 0)
+  // Para birimi bazında toplamlar (TL conversion yok)
+  const receivablesByCurrency: Record<string, number> = {}
+  const payablesByCurrency: Record<string, number> = {}
+  const netByCurrency: Record<string, number> = {}
+  contacts.forEach(c => {
+    const bbc = c.balanceByCurrency || {}
+    Object.entries(bbc).forEach(([cur, v]: any) => {
+      const num = parseFloat(v)
+      netByCurrency[cur] = (netByCurrency[cur] || 0) + num
+      if (num > 0) receivablesByCurrency[cur] = (receivablesByCurrency[cur] || 0) + num
+      else if (num < 0) payablesByCurrency[cur] = (payablesByCurrency[cur] || 0) + Math.abs(num)
+    })
+  })
 
   const fmt = (n: number) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' TL'
 
@@ -562,14 +562,22 @@ export default function CurrentAccountsPage() {
         </div>
       )}
 
-      {/* Özet Kartlar */}
+      {/* Özet Kartlar — para birimi bazında */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-2">
             <span className="text-green-100 text-sm">Toplam Alacak</span>
             <TrendingUp className="w-5 h-5 text-green-100" />
           </div>
-          <div className="text-3xl font-bold">{fmt(totalReceivables)}</div>
+          {Object.keys(receivablesByCurrency).length === 0 ? (
+            <div className="text-3xl font-bold">₺0,00</div>
+          ) : (
+            <div className="space-y-1">
+              {Object.entries(receivablesByCurrency).map(([cur, val]) => (
+                <div key={cur} className="text-2xl font-bold">{fmtByCurrency(val, cur)}</div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
@@ -577,16 +585,36 @@ export default function CurrentAccountsPage() {
             <span className="text-red-100 text-sm">Toplam Borç</span>
             <TrendingDown className="w-5 h-5 text-red-100" />
           </div>
-          <div className="text-3xl font-bold">{fmt(totalPayables)}</div>
+          {Object.keys(payablesByCurrency).length === 0 ? (
+            <div className="text-3xl font-bold">₺0,00</div>
+          ) : (
+            <div className="space-y-1">
+              {Object.entries(payablesByCurrency).map(([cur, val]) => (
+                <div key={cur} className="text-2xl font-bold">{fmtByCurrency(val, cur)}</div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className={`bg-gradient-to-br ${netBalance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl shadow-lg p-6 text-white`}>
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-2">
             <span className="text-white text-sm opacity-90">Net Bakiye</span>
             <DollarSign className="w-5 h-5 opacity-90" />
           </div>
-          <div className="text-3xl font-bold">{fmt(netBalance)}</div>
-          <p className="text-white text-xs mt-2 opacity-90">{netBalance >= 0 ? 'Alacak fazlası' : 'Borç fazlası'}</p>
+          {Object.keys(netByCurrency).filter(c => Math.abs(netByCurrency[c]) >= 0.005).length === 0 ? (
+            <div className="text-3xl font-bold">₺0,00</div>
+          ) : (
+            <div className="space-y-1">
+              {Object.entries(netByCurrency).map(([cur, val]) => {
+                if (Math.abs(val) < 0.005) return null
+                return (
+                  <div key={cur} className="text-2xl font-bold">
+                    {fmtByCurrency(val, cur)} <span className="text-xs font-normal opacity-80">{val >= 0 ? '(alacak)' : '(borç)'}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -598,7 +626,7 @@ export default function CurrentAccountsPage() {
           </button>
 
           <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
               <div>
                 <h3 className="text-2xl font-bold text-gray-800">{selectedContact.contact_name}</h3>
                 <div className="flex gap-4 text-sm text-gray-500 mt-1">
@@ -607,18 +635,45 @@ export default function CurrentAccountsPage() {
                   {selectedContact.tax_number && <span>VKN: {selectedContact.tax_number}</span>}
                 </div>
               </div>
-              <div className={`text-3xl font-bold ${selectedContact.balance > 0 ? 'text-green-600' : selectedContact.balance < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                {fmt(selectedContact.balance)}
+              <div className="text-right">
+                <p className="text-xs text-gray-500 mb-1">Bakiye</p>
+                <div className="flex flex-col items-end gap-0.5">
+                  {Object.keys(selectedContact.balanceByCurrency || {}).length === 0 ? (
+                    <span className="text-2xl font-bold text-gray-400">₺0,00</span>
+                  ) : (
+                    Object.entries(selectedContact.balanceByCurrency).map(([c, bal]: any) => {
+                      const v = parseFloat(bal)
+                      if (Math.abs(v) < 0.005) return null
+                      return (
+                        <span key={c} className={`text-xl font-bold ${v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                          {fmtByCurrency(v, c)}
+                        </span>
+                      )
+                    })
+                  )}
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-green-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-green-700">Toplam Alacak</p>
-                <p className="text-lg font-bold text-green-800">{fmt(selectedContact.totalReceivable)}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-xs text-green-700 mb-1">Toplam Alacak</p>
+                {Object.keys(selectedContact.totalReceivableByCurrency || {}).length === 0 ? (
+                  <p className="text-lg font-bold text-green-800">₺0,00</p>
+                ) : (
+                  Object.entries(selectedContact.totalReceivableByCurrency).map(([c, val]: any) => (
+                    <p key={c} className="text-base font-bold text-green-800">{fmtByCurrency(parseFloat(val), c)}</p>
+                  ))
+                )}
               </div>
-              <div className="bg-red-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-red-700">Toplam Borç</p>
-                <p className="text-lg font-bold text-red-800">{fmt(selectedContact.totalPayable)}</p>
+              <div className="bg-red-50 rounded-lg p-3">
+                <p className="text-xs text-red-700 mb-1">Toplam Borç</p>
+                {Object.keys(selectedContact.totalPayableByCurrency || {}).length === 0 ? (
+                  <p className="text-lg font-bold text-red-800">₺0,00</p>
+                ) : (
+                  Object.entries(selectedContact.totalPayableByCurrency).map(([c, val]: any) => (
+                    <p key={c} className="text-base font-bold text-red-800">{fmtByCurrency(parseFloat(val), c)}</p>
+                  ))
+                )}
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center">
                 <p className="text-xs text-gray-700">İşlem Sayısı</p>
@@ -706,11 +761,6 @@ export default function CurrentAccountsPage() {
                               : fmt(parseFloat(t.amount))
                             }
                           </p>
-                          {t.currency && t.currency !== 'TRY' && (
-                            <p className="text-[10px] text-gray-500">
-                              ≈ {fmt(toTRY(parseFloat(t.amount), t.currency))}
-                            </p>
-                          )}
                           {!isCash && parseFloat(t.paid_amount || 0) > 0 && (
                             <p className="text-[10px] text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>
                           )}
@@ -821,12 +871,40 @@ export default function CurrentAccountsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium text-green-600">{c.totalReceivable > 0 ? fmt(c.totalReceivable) : '-'}</td>
-                    <td className="px-6 py-4 text-right text-sm font-medium text-red-600">{c.totalPayable > 0 ? fmt(c.totalPayable) : '-'}</td>
+                    <td className="px-6 py-4 text-right text-sm font-medium text-green-600">
+                      {Object.keys(c.totalReceivableByCurrency || {}).length === 0 ? '-' : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {Object.entries(c.totalReceivableByCurrency).map(([cur, val]: any) => (
+                            <span key={cur}>{fmtByCurrency(parseFloat(val), cur)}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium text-red-600">
+                      {Object.keys(c.totalPayableByCurrency || {}).length === 0 ? '-' : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {Object.entries(c.totalPayableByCurrency).map(([cur, val]: any) => (
+                            <span key={cur}>{fmtByCurrency(parseFloat(val), cur)}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-right">
-                      <span className={`font-bold ${c.balance > 0 ? 'text-green-600' : c.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                        {fmt(c.balance)}
-                      </span>
+                      {Object.keys(c.balanceByCurrency || {}).length === 0 ? (
+                        <span className="text-gray-500 font-bold">₺0,00</span>
+                      ) : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {Object.entries(c.balanceByCurrency).map(([cur, bal]: any) => {
+                            const v = parseFloat(bal)
+                            if (Math.abs(v) < 0.005) return null
+                            return (
+                              <span key={cur} className={`font-bold ${v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                {fmtByCurrency(v, cur)}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center text-sm text-gray-500">{c.transactionCount}</td>
                     <td className="px-6 py-4 text-center">

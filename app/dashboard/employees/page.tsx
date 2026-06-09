@@ -324,7 +324,13 @@ export default function EmployeesPage() {
       </head>
       <body>
         <div class="header">
-          <h1>DÜNYASAN — Personel Listesi</h1>
+          <div>
+            <h1>DÜNYASAN — Personel Listesi</h1>
+            <div style="font-size: 10px; color: #555; margin-top: 4px;">
+              <strong>Doküman No:</strong> DF42 &nbsp;|&nbsp;
+              <strong>Doküman Tarihi:</strong> 06.03.2026/00
+            </div>
+          </div>
           <div class="meta">
             <div><strong>Tarih:</strong> ${today}</div>
             <div><strong>Kategori:</strong> ${filterLabel}</div>

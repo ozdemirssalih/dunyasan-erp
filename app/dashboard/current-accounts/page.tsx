@@ -48,7 +48,40 @@ export default function CurrentAccountsPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
 
-  useEffect(() => { loadData(); loadCategories() }, [])
+  // Döviz kurları (TRY karşılığı)
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    TRY: 1, USD: 32.50, EUR: 35.20, GBP: 41.10
+  })
+
+  useEffect(() => { loadData(); loadCategories(); fetchExchangeRates() }, [])
+
+  // Kur güncellendiğinde bakiye yeniden hesaplansın
+  useEffect(() => {
+    if (companyId) loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exchangeRates])
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/TRY')
+      const data = await response.json()
+      if (data?.rates) {
+        setExchangeRates({
+          TRY: 1,
+          USD: 1 / data.rates.USD,
+          EUR: 1 / data.rates.EUR,
+          GBP: 1 / data.rates.GBP,
+        })
+      }
+    } catch (err) {
+      console.warn('Döviz kurları yüklenemedi, varsayılan değerler kullanılıyor', err)
+    }
+  }
+
+  const toTRY = (amount: number, currency?: string | null) => {
+    const rate = currency ? (exchangeRates[currency.toUpperCase()] ?? 1) : 1
+    return amount * rate
+  }
 
   const loadCategories = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -120,10 +153,10 @@ export default function CurrentAccountsPage() {
         .eq('is_active', true)
         .order('contact_name')
 
-      // Tüm cari ve kasa verilerini batch olarak çek
+      // Tüm cari ve kasa verilerini batch olarak çek (currency dahil — FX işlemler için)
       const [allCariRes, allCashRes] = await Promise.all([
-        supabase.from('current_account_transactions').select('amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid),
-        supabase.from('cash_transactions').select('amount, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid)
+        supabase.from('current_account_transactions').select('amount, currency, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid),
+        supabase.from('cash_transactions').select('amount, currency, transaction_type, customer_id, supplier_id, contact_id').eq('company_id', cid)
       ])
 
       const allCari = allCariRes.data || []
@@ -132,20 +165,22 @@ export default function CurrentAccountsPage() {
       // Her contact için bakiye hesapla
       // Mantık: Fatura TOPLAM tutarları vs Kasa TOPLAM ödemeleri karşılaştırılır
       // paid_amount KULLANILMAZ çünkü çift düşmeye neden olur
+      // FX işlemleri (USD/EUR/GBP) güncel kur ile TL'ye çevrilir
       const contactsWithBalance = (contactsData || []).map((contact) => {
         const isContact = (r: any) => r.customer_id === contact.id || r.supplier_id === contact.id || r.contact_id === contact.id
+        const tlAmount = (r: any) => toTRY(parseFloat(r.amount || 0), r.currency)
 
-        // Fatura tutarları (ham amount, paid_amount kullanılmaz)
+        // Fatura tutarları (TL karşılığı, paid_amount kullanılmaz)
         const totalReceivableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'receivable')
-          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+          .reduce((s, r) => s + tlAmount(r), 0)
         const totalPayableInvoice = allCari.filter(r => isContact(r) && r.transaction_type === 'payable')
-          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+          .reduce((s, r) => s + tlAmount(r), 0)
 
-        // Kasa ödemeleri
+        // Kasa ödemeleri (TL karşılığı)
         const totalCashIncome = allCash.filter(r => isContact(r) && r.transaction_type === 'income')
-          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+          .reduce((s, r) => s + tlAmount(r), 0)
         const totalCashExpense = allCash.filter(r => isContact(r) && r.transaction_type === 'expense')
-          .reduce((s, r) => s + parseFloat(r.amount || 0), 0)
+          .reduce((s, r) => s + tlAmount(r), 0)
 
         // Net alacak = fatura alacağı - gelen tahsilat (kalan alacak, negatifse fazla tahsilat)
         const netReceivable = totalReceivableInvoice - totalCashIncome
@@ -671,6 +706,11 @@ export default function CurrentAccountsPage() {
                               : fmt(parseFloat(t.amount))
                             }
                           </p>
+                          {t.currency && t.currency !== 'TRY' && (
+                            <p className="text-[10px] text-gray-500">
+                              ≈ {fmt(toTRY(parseFloat(t.amount), t.currency))}
+                            </p>
+                          )}
                           {!isCash && parseFloat(t.paid_amount || 0) > 0 && (
                             <p className="text-[10px] text-gray-500">Kalan: {fmt(parseFloat(t.amount) - parseFloat(t.paid_amount || 0))}</p>
                           )}

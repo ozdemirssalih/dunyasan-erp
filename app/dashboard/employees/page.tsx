@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Users, Plus, Phone, Mail, Briefcase, Calendar, Trash2, Edit, BadgeCheck, DollarSign, Eye } from 'lucide-react'
+import { Users, Plus, Phone, Mail, Briefcase, Calendar, Trash2, Edit, BadgeCheck, DollarSign, Eye, Printer, Filter } from 'lucide-react'
 import Link from 'next/link'
 import PermissionGuard from '@/components/PermissionGuard'
 
@@ -24,10 +24,20 @@ interface Employee {
   birth_date?: string
   status: string
   notes?: string
+  staff_category?: string
   created_at: string
   efficiency_rate?: number
   total_productions?: number
 }
+
+const STAFF_CATEGORIES = [
+  { value: 'ana_personel', label: 'Ana Personel', color: 'bg-blue-100 text-blue-700' },
+  { value: 'idari_personel', label: 'İdari Personel', color: 'bg-purple-100 text-purple-700' },
+  { value: 'stajyer', label: 'Stajyer', color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'cirak', label: 'Çırak', color: 'bg-orange-100 text-orange-700' },
+]
+
+const getCategoryInfo = (value?: string) => STAFF_CATEGORIES.find(c => c.value === value)
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -50,9 +60,11 @@ export default function EmployeesPage() {
     emergency_contact_phone: '',
     birth_date: '',
     status: 'active',
+    staff_category: '',
     notes: ''
   })
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<string>('')
 
   useEffect(() => {
     loadEmployees()
@@ -134,6 +146,7 @@ export default function EmployeesPage() {
       emergency_contact_phone: '',
       birth_date: '',
       status: 'active',
+      staff_category: '',
       notes: ''
     })
     setEditingEmployee(null)
@@ -158,6 +171,7 @@ export default function EmployeesPage() {
         emergency_contact_phone: (employee as any).emergency_contact_phone || '',
         birth_date: (employee as any).birth_date || '',
         status: employee.status,
+        staff_category: employee.staff_category || '',
         notes: employee.notes || ''
       })
     } else {
@@ -190,6 +204,7 @@ export default function EmployeesPage() {
         emergency_contact_phone: formData.emergency_contact_phone || null,
         birth_date: formData.birth_date || null,
         status: formData.status,
+        staff_category: formData.staff_category || null,
         notes: formData.notes || null
       }
 
@@ -253,8 +268,114 @@ export default function EmployeesPage() {
     }
   }
 
-  const activeEmployees = employees.filter(e => e.status === 'active')
-  const inactiveEmployees = employees.filter(e => e.status === 'inactive')
+  const filteredEmployees = categoryFilter
+    ? employees.filter(e => e.staff_category === categoryFilter)
+    : employees
+  const activeEmployees = filteredEmployees.filter(e => e.status === 'active')
+  const inactiveEmployees = filteredEmployees.filter(e => e.status === 'inactive')
+
+  const handlePrintAll = () => {
+    const printWin = window.open('', '_blank', 'width=1000,height=700')
+    if (!printWin) return
+
+    const today = new Date().toLocaleDateString('tr-TR')
+    const rows = filteredEmployees.map((emp, i) => {
+      const cat = getCategoryInfo(emp.staff_category)?.label || '-'
+      return `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${emp.employee_code || ''}</td>
+          <td>${emp.full_name || ''}</td>
+          <td>${cat}</td>
+          <td>${emp.department || '-'}</td>
+          <td>${emp.position || '-'}</td>
+          <td>${emp.phone || '-'}</td>
+          <td>${emp.hire_date ? new Date(emp.hire_date).toLocaleDateString('tr-TR') : '-'}</td>
+          <td>${emp.status === 'active' ? 'Aktif' : 'Pasif'}</td>
+        </tr>
+      `
+    }).join('')
+
+    const filterLabel = categoryFilter ? getCategoryInfo(categoryFilter)?.label || '' : 'Tümü'
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>Personel Listesi - ${today}</title>
+        <style>
+          @page { size: A4 landscape; margin: 1.2cm; }
+          * { box-sizing: border-box; }
+          body { font-family: 'Helvetica', Arial, sans-serif; color: #111; margin: 0; padding: 0; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1e40af; padding-bottom: 12px; margin-bottom: 16px; }
+          .header h1 { margin: 0; font-size: 22px; color: #1e40af; }
+          .meta { font-size: 11px; color: #555; text-align: right; }
+          .summary { display: flex; gap: 12px; margin-bottom: 14px; }
+          .summary-box { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: #f9fafb; }
+          .summary-box .label { font-size: 10px; color: #555; text-transform: uppercase; }
+          .summary-box .value { font-size: 18px; font-weight: 700; color: #111; }
+          table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+          thead { background: #1e40af; color: #fff; }
+          th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+          tbody tr:nth-child(even) { background: #f5f7fb; }
+          .footer { margin-top: 18px; font-size: 10px; color: #666; display: flex; justify-content: space-between; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>DÜNYASAN — Personel Listesi</h1>
+          <div class="meta">
+            <div><strong>Tarih:</strong> ${today}</div>
+            <div><strong>Kategori:</strong> ${filterLabel}</div>
+            <div><strong>Toplam:</strong> ${filteredEmployees.length} kişi</div>
+          </div>
+        </div>
+
+        <div class="summary">
+          <div class="summary-box"><div class="label">Toplam</div><div class="value">${filteredEmployees.length}</div></div>
+          <div class="summary-box"><div class="label">Aktif</div><div class="value">${activeEmployees.length}</div></div>
+          <div class="summary-box"><div class="label">Pasif</div><div class="value">${inactiveEmployees.length}</div></div>
+          ${STAFF_CATEGORIES.map(c => `
+            <div class="summary-box">
+              <div class="label">${c.label}</div>
+              <div class="value">${filteredEmployees.filter(e => e.staff_category === c.value).length}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Personel Kodu</th>
+              <th>Ad Soyad</th>
+              <th>Kategori</th>
+              <th>Departman</th>
+              <th>Pozisyon</th>
+              <th>Telefon</th>
+              <th>İşe Giriş</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div class="footer">
+          <div>Bu liste ${today} tarihinde sistem tarafından otomatik oluşturulmuştur.</div>
+          <div>Hazırlayan: __________________</div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `)
+    printWin.document.close()
+  }
 
   if (loading) {
     return (
@@ -268,18 +389,41 @@ export default function EmployeesPage() {
     <PermissionGuard module="employees" permission="view">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Personel Yönetimi</h2>
             <p className="text-gray-600">Şirket personelinizi yönetin ve takip edin</p>
           </div>
-          <button
-            onClick={() => handleOpenModal()}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="font-semibold">Yeni Personel</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2 shadow-sm">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="bg-transparent text-sm focus:outline-none"
+              >
+                <option value="">Tüm Kategoriler</option>
+                {STAFF_CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handlePrintAll}
+              className="flex items-center space-x-2 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors shadow-lg"
+              title="Tüm personeli PDF olarak yazdır"
+            >
+              <Printer className="w-5 h-5" />
+              <span className="font-semibold">PDF İndir</span>
+            </button>
+            <button
+              onClick={() => handleOpenModal()}
+              className="flex items-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">Yeni Personel</span>
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -317,7 +461,7 @@ export default function EmployeesPage() {
 
         {/* Employees Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {employees.map((employee) => {
+          {filteredEmployees.map((employee) => {
             const isBirthday = (() => {
               if (!(employee as any).birth_date) return false
               const today = new Date()
@@ -352,11 +496,21 @@ export default function EmployeesPage() {
                       {employee.full_name} {isBirthday && '🎉'}
                     </h3>
                     <p className="text-xs text-gray-500">#{employee.employee_code}</p>
-                    {employee.status === 'inactive' && (
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded-full">
-                        Pasif
-                      </span>
-                    )}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {employee.staff_category && (() => {
+                        const cat = getCategoryInfo(employee.staff_category)
+                        return cat ? (
+                          <span className={`inline-block px-2 py-0.5 text-xs rounded-full font-semibold ${cat.color}`}>
+                            {cat.label}
+                          </span>
+                        ) : null
+                      })()}
+                      {employee.status === 'inactive' && (
+                        <span className="inline-block px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded-full">
+                          Pasif
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex space-x-1">
@@ -470,11 +624,15 @@ export default function EmployeesPage() {
           )})}
         </div>
 
-        {employees.length === 0 && (
+        {filteredEmployees.length === 0 && (
           <div className="text-center py-16">
             <Users className="w-24 h-24 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg mb-2">Henüz personel eklenmemiş</p>
-            <p className="text-gray-400 text-sm mb-6">İlk personelinizi ekleyerek başlayın</p>
+            <p className="text-gray-500 text-lg mb-2">
+              {categoryFilter ? 'Bu kategoride personel bulunamadı' : 'Henüz personel eklenmemiş'}
+            </p>
+            <p className="text-gray-400 text-sm mb-6">
+              {categoryFilter ? 'Farklı bir kategori seçin veya yeni personel ekleyin' : 'İlk personelinizi ekleyerek başlayın'}
+            </p>
             <button
               onClick={() => handleOpenModal()}
               className="inline-flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -533,6 +691,23 @@ export default function EmployeesPage() {
                       <option value="inactive">Pasif</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Personel Kategorisi */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Personel Kategorisi
+                  </label>
+                  <select
+                    value={formData.staff_category}
+                    onChange={(e) => setFormData({ ...formData, staff_category: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Seçin...</option>
+                    {STAFF_CATEGORIES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Full Name */}

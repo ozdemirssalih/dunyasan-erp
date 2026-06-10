@@ -7,7 +7,7 @@ import {
   Factory, Plus, X, ChevronRight, CheckCircle2, AlertTriangle, Clock,
   Play, Pause, ArrowRight, GripVertical, Trash2, Edit3, Eye, Layers,
   Package, ShieldCheck, Truck, RefreshCw, Activity, TrendingDown,
-  PackageOpen, Settings, ListChecks
+  PackageOpen, Settings, ListChecks, Printer, Stamp
 } from 'lucide-react'
 
 // =====================================================
@@ -1187,11 +1187,184 @@ function OrderDetail({
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
   const activeStep = stepLogs.find(l => l.status === 'in_progress')
 
+  const handlePrint = () => {
+    const printWin = window.open('', '_blank', 'width=1100,height=800')
+    if (!printWin) return
+    const today = new Date().toLocaleDateString('tr-TR')
+    const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('tr-TR') : '-'
+    const val = (v: any) => (v === null || v === undefined || v === '') ? '-' : v
+
+    const sectionsHtml = [
+      { title: 'Parça Bilgileri', items: [
+        ['Parça No', val(order.parca_no)], ['Parça Adı', val(order.parca_adi)],
+        ['IEM No', val(order.iem_no)], ['Revizyon No', val(order.revizyon_no)],
+        ['FAI', val(order.fai)], ['Seri', val(order.seri)],
+        ['Delta FAI', val(order.delta_fai)], ['Dosya No', val(order.dosya_no)],
+      ]},
+      { title: 'Proje & Müşteri', items: [
+        ['Proje / Ürün', val(order.project_name)], ['Müşteri', val(order.customer_name)],
+        ['Planlanan Miktar', val(order.planned_quantity)],
+      ]},
+      { title: 'Malzeme & Teknik', items: [
+        ['Malzeme', val(order.malzeme)], ['Alaşım & Spec', val(order.alasim_spec)],
+        ['Ekipman', val(order.ekipman)],
+      ]},
+      { title: 'Operasyon & Üretim', items: [
+        ['Operasyon No', val(order.operasyon_no)], ['İş Merkezi', val(order.is_merkezi)],
+        ['Uygun Miktar', val(order.uygun_miktar)], ['Ret Miktar', val(order.ret_miktar)],
+        ['Uygunsuzluk No', val(order.uygunsuzluk_no)],
+      ]},
+      { title: 'Tarihler', items: [
+        ['Teslim Tarihi', fmtDate(order.teslim_tarihi)],
+        ['Başlama Tarihi', fmtDate(order.baslama_tarihi)],
+        ['Bitiş Tarihi', fmtDate(order.bitis_tarihi)],
+      ]},
+      { title: 'Doğrulama', items: [
+        ['Durum', order.dogrulama ? 'Doğrulandı ✓' : 'Bekliyor'],
+        ['Doğrulayan', val(order.dogrulayan)],
+      ]},
+    ].map(sec => `
+      <div class="section">
+        <h3>${sec.title}</h3>
+        <table class="kv">
+          <tbody>
+            ${sec.items.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `).join('')
+
+    const stepsHtml = stepLogs.map((log, idx) => {
+      const info = STEP_TYPES.find(t => t.value === log.step_type) || STEP_TYPES[2]
+      const isCompleted = log.status === 'completed'
+      return `
+        <tr>
+          <td class="ord">${log.step_order}</td>
+          <td class="nm">
+            <div class="step-name">${log.step_name}</div>
+            ${log.station_name ? `<div class="station">${log.station_name}</div>` : ''}
+            <div class="type-tag">${info.label}</div>
+          </td>
+          <td class="num">${log.in_quantity || '-'}</td>
+          <td class="num green">${isCompleted ? log.accepted_quantity : ''}</td>
+          <td class="num red">${isCompleted && log.scrap_quantity > 0 ? log.scrap_quantity : ''}</td>
+          <td class="num orange">${isCompleted && log.rework_quantity > 0 ? log.rework_quantity : ''}</td>
+          <td class="op">${log.operator_name || ''}</td>
+          <td class="op">${log.machine_name || ''}</td>
+          <td class="kase">
+            <div class="kase-box">
+              <div class="kase-label">Kaşe / İmza</div>
+            </div>
+          </td>
+        </tr>
+      `
+    }).join('')
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html><head><meta charset="UTF-8"><title>İş Emri - ${order.order_number}</title>
+      <style>
+        @page { size: A4; margin: 1cm; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Helvetica', Arial, sans-serif; color: #111; margin: 0; padding: 0; font-size: 11px; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #1e40af; padding-bottom: 10px; margin-bottom: 14px; }
+        .header h1 { margin: 0; font-size: 20px; color: #1e40af; }
+        .header .meta { font-size: 10px; color: #555; text-align: right; line-height: 1.5; }
+        .order-num { font-size: 14px; font-weight: 700; color: #1e40af; }
+        .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #dbeafe; color: #1e40af; margin-left: 6px; }
+        .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+        .summary-box { border: 1px solid #ddd; border-radius: 6px; padding: 8px; text-align: center; background: #f9fafb; }
+        .summary-box .label { font-size: 9px; color: #555; text-transform: uppercase; }
+        .summary-box .value { font-size: 16px; font-weight: 700; }
+        .section { margin-bottom: 12px; page-break-inside: avoid; }
+        .section h3 { font-size: 11px; color: #1e40af; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.kv { width: 100%; border-collapse: collapse; }
+        table.kv td { padding: 3px 6px; border-bottom: 1px dotted #e5e7eb; font-size: 10px; }
+        table.kv td.k { font-weight: 600; color: #555; width: 22%; }
+        table.kv td.v { color: #111; }
+        .flow-title { margin-top: 16px; font-size: 13px; font-weight: 700; color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 4px; margin-bottom: 8px; }
+        table.flow { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+        table.flow thead { background: #1e40af; color: white; }
+        table.flow th, table.flow td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: middle; }
+        table.flow .num { text-align: center; font-weight: 600; }
+        table.flow .green { color: #16a34a; }
+        table.flow .red { color: #dc2626; }
+        table.flow .orange { color: #ea580c; }
+        table.flow .step-name { font-weight: 600; }
+        table.flow .station { font-size: 8.5px; color: #555; display: inline-block; padding: 1px 5px; background: #f1f5f9; border-radius: 3px; margin-top: 2px; }
+        table.flow .type-tag { font-size: 8px; color: #666; margin-top: 2px; }
+        table.flow .ord { text-align: center; font-weight: 700; width: 26px; background: #f1f5f9; }
+        table.flow .kase { width: 130px; padding: 4px; }
+        .kase-box { height: 60px; border: 1.5px dashed #94a3b8; border-radius: 4px; position: relative; background: #fafbfc; }
+        .kase-box .kase-label { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); font-size: 7.5px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; }
+        .footer { margin-top: 18px; font-size: 9px; color: #666; display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding-top: 6px; }
+        .notes-block { background: #fef9c3; border: 1px solid #fde047; border-radius: 4px; padding: 6px 8px; margin-top: 10px; font-size: 10px; }
+        .notes-block .lbl { font-weight: 700; color: #854d0e; font-size: 9px; }
+      </style></head><body>
+
+      <div class="header">
+        <div>
+          <h1>DÜNYASAN — İŞ EMRİ</h1>
+          <div class="order-num">${order.order_number}<span class="status-pill">${status.label}</span></div>
+        </div>
+        <div class="meta">
+          <div><b>Çıktı Tarihi:</b> ${today}</div>
+          <div><b>Rota:</b> ${order.route_name || '-'}</div>
+          <div><b>Öncelik:</b> ${PRIORITY_MAP[order.priority]?.label || '-'}</div>
+        </div>
+      </div>
+
+      <div class="summary-row">
+        <div class="summary-box"><div class="label">Planlanan</div><div class="value">${order.planned_quantity}</div></div>
+        <div class="summary-box"><div class="label">Depo Girişi</div><div class="value">${order.warehouse_in_quantity || 0}</div></div>
+        <div class="summary-box"><div class="label">Toplam Hurda</div><div class="value" style="color:#dc2626">${order.total_scrap_quantity || 0}</div></div>
+        <div class="summary-box"><div class="label">Kabul Edilen</div><div class="value" style="color:#16a34a">${order.final_accepted_quantity || 0}</div></div>
+      </div>
+
+      ${sectionsHtml}
+
+      ${order.notes ? `<div class="notes-block"><div class="lbl">NOTLAR</div>${order.notes}</div>` : ''}
+
+      <div class="flow-title">ÜRETİM AKIŞI</div>
+      <table class="flow">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Adım / İstasyon</th>
+            <th>Giriş</th>
+            <th>Kabul</th>
+            <th>Hurda</th>
+            <th>Yeniden</th>
+            <th>Operatör</th>
+            <th>Makine</th>
+            <th>Kaşe / İmza</th>
+          </tr>
+        </thead>
+        <tbody>${stepsHtml}</tbody>
+      </table>
+
+      <div class="footer">
+        <div>Hazırlayan: __________________</div>
+        <div>Onaylayan: __________________</div>
+        <div>Çıktı: ${today}</div>
+      </div>
+
+      <script>window.onload = function() { setTimeout(function(){ window.print(); }, 300); };</script>
+      </body></html>
+    `)
+    printWin.document.close()
+  }
+
   return (
     <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
-        ← İş Emirleri Listesi
-      </button>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
+          ← İş Emirleri Listesi
+        </button>
+        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 shadow">
+          <Printer className="w-4 h-4" /> PDF Yazdır
+        </button>
+      </div>
 
       {/* Header */}
       <div className="bg-white rounded-xl shadow-md p-6">
@@ -1340,6 +1513,20 @@ function OrderDetail({
                         </>}
                       </div>
                     </div>
+
+                    {/* Kaşe / İmza Alanı */}
+                    <div className="hidden md:flex flex-col items-center justify-center min-w-[120px] h-[70px] border-2 border-dashed border-gray-400 rounded-md bg-white px-2 relative">
+                      {isCompleted && log.operator_name ? (
+                        <div className="text-[10px] text-gray-700 text-center leading-tight">
+                          <div className="font-semibold">{log.operator_name}</div>
+                          {log.completed_at && <div className="text-gray-500 mt-0.5">{new Date(log.completed_at).toLocaleDateString('tr-TR')}</div>}
+                        </div>
+                      ) : (
+                        <Stamp className="w-5 h-5 text-gray-300" />
+                      )}
+                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-1.5 text-[8px] text-gray-400 uppercase tracking-wider">Kaşe / İmza</span>
+                    </div>
+
                     {isCurrent && (
                       <button
                         onClick={() => setActiveStepLogId(isExpanded ? null : log.id)}

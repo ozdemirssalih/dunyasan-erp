@@ -87,6 +87,14 @@ interface FlowOrder {
   bitis_tarihi?: string | null
   dogrulama?: boolean
   dogrulayan?: string | null
+  valid_documents?: ValidDocument[]
+}
+
+interface ValidDocument {
+  name: string
+  doc_no: string
+  revision: string
+  date: string
 }
 
 interface StepLog {
@@ -177,6 +185,23 @@ const generateOrderNumber = () => {
   return `IE-${y}${m}${d}-${r}`
 }
 
+const generateIemNo = () => {
+  const now = new Date()
+  const y = now.getFullYear().toString().slice(2)
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const r = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `IEM-${y}${m}${d}-${r}`
+}
+
+const generateDosyaNo = () => {
+  const now = new Date()
+  const y = now.getFullYear().toString().slice(2)
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const r = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `DOS-${y}${m}-${r}`
+}
+
 // =====================================================
 // PAGE
 // =====================================================
@@ -213,8 +238,8 @@ export default function ProductionFlowPage() {
     fai: '', seri: '', delta_fai: '', dosya_no: '',
     // Proje & Müşteri
     project_id: '', customer_id: '', planned_quantity: '',
-    // Malzeme & Teknik
-    malzeme: '', alasim_spec: '', ekipman: '',
+    // Malzeme & Teknik (ekipman buradan çıktı)
+    malzeme: '', alasim_spec: '',
     // Operasyon & Üretim
     operasyon_no: '', is_merkezi: '', uygun_miktar: '', ret_miktar: '', uygunsuzluk_no: '',
     // Tarihler
@@ -223,15 +248,18 @@ export default function ProductionFlowPage() {
     dogrulama: false, dogrulayan: '',
     // Notlar
     notes: '',
-    // Akış (rota + öncelik + plan tarihleri)
+    // Akış (rota + öncelik + plan tarihleri + ekipman)
     route_id: '', priority: 'normal' as Priority,
     planned_start_date: new Date().toISOString().split('T')[0],
     planned_end_date: '',
+    ekipman: '',
+    // Geçerli Doküman Listesi
+    valid_documents: [] as ValidDocument[],
   }
   const [orderForm, setOrderForm] = useState(emptyOrderForm)
   const [routeForm, setRouteForm] = useState({
     project_id: '', route_name: '', description: '',
-    steps: [] as { step_name: string; step_type: StepType; station_name: string; is_qc_step: boolean; expected_duration_minutes: string }[],
+    steps: [] as { step_name: string; step_type: StepType; station_name: string; is_qc_step: boolean; expected_duration_minutes: string; notes: string }[],
   })
 
   useEffect(() => { init() }, [])
@@ -335,6 +363,7 @@ export default function ProductionFlowPage() {
         station_name: s.station_name || '',
         is_qc_step: s.is_qc_step,
         expected_duration_minutes: '',
+        notes: '',
       })),
     })
     setShowRouteModal(true)
@@ -357,6 +386,7 @@ export default function ProductionFlowPage() {
         station_name: s.station_name || '',
         is_qc_step: s.is_qc_step,
         expected_duration_minutes: s.expected_duration_minutes?.toString() || '',
+        notes: s.notes || '',
       })),
     })
     setShowRouteModal(true)
@@ -398,6 +428,7 @@ export default function ProductionFlowPage() {
         station_name: s.station_name || null,
         is_qc_step: s.is_qc_step,
         expected_duration_minutes: s.expected_duration_minutes ? parseInt(s.expected_duration_minutes) : null,
+        notes: s.notes || null,
       }))
       const { error: stepErr } = await supabase.from('product_route_steps').insert(stepsPayload)
       if (stepErr) throw stepErr
@@ -422,7 +453,7 @@ export default function ProductionFlowPage() {
   const addStepToRoute = () => {
     setRouteForm({
       ...routeForm,
-      steps: [...routeForm.steps, { step_name: '', step_type: 'operation', station_name: '', is_qc_step: false, expected_duration_minutes: '' }],
+      steps: [...routeForm.steps, { step_name: '', step_type: 'operation', station_name: '', is_qc_step: false, expected_duration_minutes: '', notes: '' }],
     })
   }
   const removeStepFromRoute = (idx: number) => {
@@ -440,7 +471,11 @@ export default function ProductionFlowPage() {
   // ORDER CRUD
   // =====================================================
   const openNewOrder = () => {
-    setOrderForm(emptyOrderForm)
+    setOrderForm({
+      ...emptyOrderForm,
+      iem_no: generateIemNo(),
+      dosya_no: generateDosyaNo(),
+    })
     setShowOrderModal(true)
   }
 
@@ -508,6 +543,7 @@ export default function ProductionFlowPage() {
         priority: orderForm.priority,
         planned_start_date: orderForm.planned_start_date || null,
         planned_end_date: orderForm.planned_end_date || null,
+        valid_documents: orderForm.valid_documents || [],
         created_by: user?.id,
       }).select().single()
       if (orderErr) throw orderErr
@@ -526,6 +562,7 @@ export default function ProductionFlowPage() {
         step_name: rs.step_name,
         step_type: rs.step_type,
         station_name: rs.station_name,
+        notes: rs.notes || null,
         status: 'pending',
         created_by: user?.id,
       }))
@@ -926,18 +963,15 @@ export default function ProductionFlowPage() {
                   </div>
                 </div>
 
-                {/* Malzeme & Teknik */}
+                {/* Malzeme & Teknik (ekipman çıkarıldı, akış bölümüne taşındı) */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">🧱 Malzeme & Teknik</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Field label="Malzeme">
                       <input type="text" value={orderForm.malzeme} onChange={e => setOrderForm({ ...orderForm, malzeme: e.target.value })} placeholder="Örn: Al 7075-T7351" className={inputCls} />
                     </Field>
                     <Field label="Alaşım & Spec">
                       <input type="text" value={orderForm.alasim_spec} onChange={e => setOrderForm({ ...orderForm, alasim_spec: e.target.value })} placeholder="Örn: AMS-QQ-A-250/12" className={inputCls} />
-                    </Field>
-                    <Field label="Ekipman">
-                      <input type="text" value={orderForm.ekipman} onChange={e => setOrderForm({ ...orderForm, ekipman: e.target.value })} className={inputCls} />
                     </Field>
                   </div>
                 </div>
@@ -999,12 +1033,59 @@ export default function ProductionFlowPage() {
                   <textarea value={orderForm.notes} onChange={e => setOrderForm({ ...orderForm, notes: e.target.value })} rows={2} placeholder="Ek notlar..." className={inputCls} />
                 </Field>
 
+                {/* ===== GEÇERLİ DOKÜMAN LİSTESİ ===== */}
+                <div>
+                  <div className="flex items-center justify-between mb-3 border-b pb-1">
+                    <h4 className="text-sm font-bold text-gray-700">📑 Geçerli Doküman Listesi</h4>
+                    <button
+                      type="button"
+                      onClick={() => setOrderForm({ ...orderForm, valid_documents: [...orderForm.valid_documents, { name: '', doc_no: '', revision: '', date: '' }] })}
+                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Doküman Ekle
+                    </button>
+                  </div>
+                  {orderForm.valid_documents.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Henüz doküman eklenmedi (teknik resim, FAI belgesi, kalite planı, vb.)</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-gray-500 uppercase">
+                        <div className="col-span-4">Doküman Adı</div>
+                        <div className="col-span-3">Doküman No</div>
+                        <div className="col-span-2">Revizyon</div>
+                        <div className="col-span-2">Tarih</div>
+                        <div className="col-span-1"></div>
+                      </div>
+                      {orderForm.valid_documents.map((doc, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2">
+                          <input value={doc.name} onChange={e => {
+                            const nd = [...orderForm.valid_documents]; nd[idx].name = e.target.value; setOrderForm({ ...orderForm, valid_documents: nd })
+                          }} placeholder="Teknik Resim" className="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                          <input value={doc.doc_no} onChange={e => {
+                            const nd = [...orderForm.valid_documents]; nd[idx].doc_no = e.target.value; setOrderForm({ ...orderForm, valid_documents: nd })
+                          }} placeholder="DR-12345" className="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                          <input value={doc.revision} onChange={e => {
+                            const nd = [...orderForm.valid_documents]; nd[idx].revision = e.target.value; setOrderForm({ ...orderForm, valid_documents: nd })
+                          }} placeholder="A" className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                          <input type="date" value={doc.date} onChange={e => {
+                            const nd = [...orderForm.valid_documents]; nd[idx].date = e.target.value; setOrderForm({ ...orderForm, valid_documents: nd })
+                          }} className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                          <button onClick={() => setOrderForm({ ...orderForm, valid_documents: orderForm.valid_documents.filter((_, i) => i !== idx) })}
+                            className="col-span-1 p-1.5 text-red-500 hover:bg-red-50 rounded flex items-center justify-center">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* ===== AKIŞ BİLGİLERİ (sonda) ===== */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border-2 border-blue-200">
                   <h4 className="text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
                     <RefreshCw className="w-5 h-5" /> Üretim Akışı Bilgileri
                   </h4>
-                  <p className="text-xs text-blue-700 mb-4">Bu iş emri hangi rotayı izleyecek ve nasıl planlanacak?</p>
+                  <p className="text-xs text-blue-700 mb-4">Bu iş emri hangi rotayı izleyecek, nasıl planlanacak ve hangi ekipman kullanılacak?</p>
                   <div className="space-y-3">
                     <Field label="Rota / İş Akışı *">
                       <select value={orderForm.route_id} onChange={e => setOrderForm({ ...orderForm, route_id: e.target.value })} className={inputCls}>
@@ -1016,6 +1097,9 @@ export default function ProductionFlowPage() {
                       {orderForm.project_id && routes.filter(r => r.project_id === orderForm.project_id).length === 0 && (
                         <p className="text-xs text-orange-700 mt-1">⚠ Bu ürün için rota tanımlanmamış. Önce Rotalar sekmesinden oluştur.</p>
                       )}
+                    </Field>
+                    <Field label="Ekipman">
+                      <input type="text" value={orderForm.ekipman} onChange={e => setOrderForm({ ...orderForm, ekipman: e.target.value })} placeholder="Örn: CNC-01, Test Fikstürü #4" className={inputCls} />
                     </Field>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <Field label="Öncelik">
@@ -1104,6 +1188,10 @@ export default function ProductionFlowPage() {
                               const ns = [...routeForm.steps]; ns[idx].expected_duration_minutes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
                             }} placeholder="Süre (dk)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
                           </div>
+                          <textarea value={step.notes} onChange={e => {
+                            const ns = [...routeForm.steps]; ns[idx].notes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                          }} placeholder="Adım notu (talimat, dikkat edilecek noktalar, vb.)" rows={2}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-yellow-50/50" />
                         </div>
                         <button onClick={() => removeStepFromRoute(idx)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -1193,6 +1281,7 @@ function OrderDetail({
     const today = new Date().toLocaleDateString('tr-TR')
     const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('tr-TR') : '-'
     const val = (v: any) => (v === null || v === undefined || v === '') ? '-' : v
+    const esc = (s: any) => String(s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
     const sectionsHtml = [
       { title: 'Parça Bilgileri', items: [
@@ -1207,17 +1296,12 @@ function OrderDetail({
       ]},
       { title: 'Malzeme & Teknik', items: [
         ['Malzeme', val(order.malzeme)], ['Alaşım & Spec', val(order.alasim_spec)],
-        ['Ekipman', val(order.ekipman)],
       ]},
-      { title: 'Operasyon & Üretim', items: [
-        ['Operasyon No', val(order.operasyon_no)], ['İş Merkezi', val(order.is_merkezi)],
-        ['Uygun Miktar', val(order.uygun_miktar)], ['Ret Miktar', val(order.ret_miktar)],
-        ['Uygunsuzluk No', val(order.uygunsuzluk_no)],
-      ]},
+      // Operasyon & Üretim bölümü çıktıdan kaldırıldı
       { title: 'Tarihler', items: [
-        ['Teslim Tarihi', fmtDate(order.teslim_tarihi)],
         ['Başlama Tarihi', fmtDate(order.baslama_tarihi)],
         ['Bitiş Tarihi', fmtDate(order.bitis_tarihi)],
+        ['Teslim Tarihi', fmtDate(order.teslim_tarihi)],
       ]},
       { title: 'Doğrulama', items: [
         ['Durum', order.dogrulama ? 'Doğrulandı ✓' : 'Bekliyor'],
@@ -1228,29 +1312,75 @@ function OrderDetail({
         <h3>${sec.title}</h3>
         <table class="kv">
           <tbody>
-            ${sec.items.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('')}
+            ${sec.items.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${esc(v)}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
     `).join('')
 
+    // Geçerli Doküman Listesi
+    const validDocs = order.valid_documents || []
+    const validDocsHtml = validDocs.length > 0 ? `
+      <div class="section">
+        <h3>📑 Geçerli Doküman Listesi</h3>
+        <table class="docs">
+          <thead>
+            <tr>
+              <th>Doküman Adı</th>
+              <th>Doküman No</th>
+              <th>Revizyon</th>
+              <th>Tarih</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${validDocs.map(d => `
+              <tr>
+                <td>${esc(d.name) || '-'}</td>
+                <td>${esc(d.doc_no) || '-'}</td>
+                <td>${esc(d.revision) || '-'}</td>
+                <td>${d.date ? fmtDate(d.date) : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : ''
+
+    // Akış (Ekipman & Rota & Öncelik)
+    const akisHtml = `
+      <div class="section">
+        <h3>🔄 Üretim Akışı Bilgileri</h3>
+        <table class="kv">
+          <tbody>
+            <tr><td class="k">Rota</td><td class="v">${esc(val(order.route_name))}</td></tr>
+            <tr><td class="k">Ekipman</td><td class="v">${esc(val(order.ekipman))}</td></tr>
+            <tr><td class="k">Öncelik</td><td class="v">${PRIORITY_MAP[order.priority]?.label || '-'}</td></tr>
+            <tr><td class="k">Plan Başlangıç</td><td class="v">${fmtDate(order.planned_start_date)}</td></tr>
+            <tr><td class="k">Plan Bitiş</td><td class="v">${fmtDate(order.planned_end_date)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `
+
     const stepsHtml = stepLogs.map((log, idx) => {
       const info = STEP_TYPES.find(t => t.value === log.step_type) || STEP_TYPES[2]
       const isCompleted = log.status === 'completed'
+      const stepNote = (log as any).notes
       return `
         <tr>
           <td class="ord">${log.step_order}</td>
           <td class="nm">
-            <div class="step-name">${log.step_name}</div>
-            ${log.station_name ? `<div class="station">${log.station_name}</div>` : ''}
+            <div class="step-name">${esc(log.step_name)}</div>
+            ${log.station_name ? `<div class="station">${esc(log.station_name)}</div>` : ''}
             <div class="type-tag">${info.label}</div>
+            ${stepNote ? `<div class="step-note">📝 ${esc(stepNote)}</div>` : ''}
           </td>
           <td class="num">${log.in_quantity || '-'}</td>
           <td class="num green">${isCompleted ? log.accepted_quantity : ''}</td>
           <td class="num red">${isCompleted && log.scrap_quantity > 0 ? log.scrap_quantity : ''}</td>
           <td class="num orange">${isCompleted && log.rework_quantity > 0 ? log.rework_quantity : ''}</td>
-          <td class="op">${log.operator_name || ''}</td>
-          <td class="op">${log.machine_name || ''}</td>
+          <td class="op">${esc(log.operator_name || '')}</td>
+          <td class="op">${esc(log.machine_name || '')}</td>
           <td class="kase">
             <div class="kase-box">
               <div class="kase-label">Kaşe / İmza</div>
@@ -1272,17 +1402,17 @@ function OrderDetail({
         .header .meta { font-size: 10px; color: #555; text-align: right; line-height: 1.5; }
         .order-num { font-size: 14px; font-weight: 700; color: #1e40af; }
         .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #dbeafe; color: #1e40af; margin-left: 6px; }
-        .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
-        .summary-box { border: 1px solid #ddd; border-radius: 6px; padding: 8px; text-align: center; background: #f9fafb; }
-        .summary-box .label { font-size: 9px; color: #555; text-transform: uppercase; }
-        .summary-box .value { font-size: 16px; font-weight: 700; }
+        .doc-no { font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px; margin-left: 6px; }
         .section { margin-bottom: 12px; page-break-inside: avoid; }
         .section h3 { font-size: 11px; color: #1e40af; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
         table.kv { width: 100%; border-collapse: collapse; }
         table.kv td { padding: 3px 6px; border-bottom: 1px dotted #e5e7eb; font-size: 10px; }
         table.kv td.k { font-weight: 600; color: #555; width: 22%; }
         table.kv td.v { color: #111; }
-        .flow-title { margin-top: 16px; font-size: 13px; font-weight: 700; color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 4px; margin-bottom: 8px; }
+        table.docs { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; }
+        table.docs thead { background: #f1f5f9; }
+        table.docs th, table.docs td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; }
+        .flow-title { margin-top: 14px; font-size: 13px; font-weight: 700; color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 4px; margin-bottom: 8px; }
         table.flow { width: 100%; border-collapse: collapse; font-size: 9.5px; }
         table.flow thead { background: #1e40af; color: white; }
         table.flow th, table.flow td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: middle; }
@@ -1293,6 +1423,7 @@ function OrderDetail({
         table.flow .step-name { font-weight: 600; }
         table.flow .station { font-size: 8.5px; color: #555; display: inline-block; padding: 1px 5px; background: #f1f5f9; border-radius: 3px; margin-top: 2px; }
         table.flow .type-tag { font-size: 8px; color: #666; margin-top: 2px; }
+        table.flow .step-note { font-size: 8.5px; color: #854d0e; background: #fef9c3; padding: 2px 4px; margin-top: 3px; border-left: 2px solid #fbbf24; border-radius: 2px; }
         table.flow .ord { text-align: center; font-weight: 700; width: 26px; background: #f1f5f9; }
         table.flow .kase { width: 130px; padding: 4px; }
         .kase-box { height: 60px; border: 1.5px dashed #94a3b8; border-radius: 4px; position: relative; background: #fafbfc; }
@@ -1305,32 +1436,33 @@ function OrderDetail({
       <div class="header">
         <div>
           <h1>DÜNYASAN — İŞ EMRİ</h1>
-          <div class="order-num">${order.order_number}<span class="status-pill">${status.label}</span></div>
+          <div class="order-num">
+            ${order.order_number}
+            <span class="status-pill">${status.label}</span>
+            <span class="doc-no">Doküman No: DF03</span>
+          </div>
         </div>
         <div class="meta">
           <div><b>Çıktı Tarihi:</b> ${today}</div>
-          <div><b>Rota:</b> ${order.route_name || '-'}</div>
+          <div><b>Rota:</b> ${esc(order.route_name || '-')}</div>
           <div><b>Öncelik:</b> ${PRIORITY_MAP[order.priority]?.label || '-'}</div>
         </div>
       </div>
 
-      <div class="summary-row">
-        <div class="summary-box"><div class="label">Planlanan</div><div class="value">${order.planned_quantity}</div></div>
-        <div class="summary-box"><div class="label">Depo Girişi</div><div class="value">${order.warehouse_in_quantity || 0}</div></div>
-        <div class="summary-box"><div class="label">Toplam Hurda</div><div class="value" style="color:#dc2626">${order.total_scrap_quantity || 0}</div></div>
-        <div class="summary-box"><div class="label">Kabul Edilen</div><div class="value" style="color:#16a34a">${order.final_accepted_quantity || 0}</div></div>
-      </div>
-
       ${sectionsHtml}
 
-      ${order.notes ? `<div class="notes-block"><div class="lbl">NOTLAR</div>${order.notes}</div>` : ''}
+      ${akisHtml}
+
+      ${validDocsHtml}
+
+      ${order.notes ? `<div class="notes-block"><div class="lbl">İŞ EMRİ NOTLARI</div>${esc(order.notes)}</div>` : ''}
 
       <div class="flow-title">ÜRETİM AKIŞI</div>
       <table class="flow">
         <thead>
           <tr>
             <th>#</th>
-            <th>Adım / İstasyon</th>
+            <th>Adım / İstasyon / Not</th>
             <th>Giriş</th>
             <th>Kabul</th>
             <th>Hurda</th>
@@ -1414,11 +1546,10 @@ function OrderDetail({
           ['Planlanan Miktar', order.planned_quantity?.toString()],
         ]} />
 
-        {/* Malzeme & Teknik */}
+        {/* Malzeme & Teknik (ekipman akış bölümüne taşındı) */}
         <DetailSection title="🧱 Malzeme & Teknik" items={[
           ['Malzeme', order.malzeme],
           ['Alaşım & Spec', order.alasim_spec],
-          ['Ekipman', order.ekipman],
         ]} />
 
         {/* Operasyon & Üretim */}
@@ -1450,13 +1581,41 @@ function OrderDetail({
           </div>
         )}
 
+        {/* Geçerli Doküman Listesi */}
+        {order.valid_documents && order.valid_documents.length > 0 && (
+          <div>
+            <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">📑 Geçerli Doküman Listesi</h4>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Doküman Adı</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Doküman No</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Revizyon</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tarih</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {order.valid_documents.map((doc, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2">{doc.name || '-'}</td>
+                    <td className="px-3 py-2">{doc.doc_no || '-'}</td>
+                    <td className="px-3 py-2">{doc.revision || '-'}</td>
+                    <td className="px-3 py-2">{doc.date ? new Date(doc.date).toLocaleDateString('tr-TR') : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Akış Bilgileri */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
           <h4 className="text-sm font-bold text-blue-900 mb-3 flex items-center gap-2 border-b border-blue-200 pb-1">
             <RefreshCw className="w-4 h-4" /> Üretim Akışı
           </h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <DetailCell label="Rota" value={order.route_name} />
+            <DetailCell label="Ekipman" value={order.ekipman} />
             <DetailCell label="Öncelik" value={PRIORITY_MAP[order.priority]?.label} />
             <DetailCell label="Plan Başlangıç" value={order.planned_start_date ? new Date(order.planned_start_date).toLocaleDateString('tr-TR') : null} />
             <DetailCell label="Plan Bitiş" value={order.planned_end_date ? new Date(order.planned_end_date).toLocaleDateString('tr-TR') : null} />
@@ -1512,6 +1671,11 @@ function OrderDetail({
                           {log.operator_name && <span className="text-gray-500">• {log.operator_name}</span>}
                         </>}
                       </div>
+                      {(log as any).notes && (
+                        <div className="text-[11px] text-yellow-800 bg-yellow-50 border-l-2 border-yellow-400 px-2 py-1 rounded mt-1">
+                          📝 {(log as any).notes}
+                        </div>
+                      )}
                     </div>
 
                     {/* Kaşe / İmza Alanı */}

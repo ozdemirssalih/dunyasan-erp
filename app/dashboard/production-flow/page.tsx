@@ -65,6 +65,28 @@ interface FlowOrder {
   created_at: string
   project_name?: string
   route_name?: string
+  // Work-order fields
+  parca_no?: string | null
+  parca_adi?: string | null
+  iem_no?: string | null
+  revizyon_no?: string | null
+  fai?: string | null
+  seri?: string | null
+  delta_fai?: string | null
+  dosya_no?: string | null
+  malzeme?: string | null
+  alasim_spec?: string | null
+  ekipman?: string | null
+  operasyon_no?: string | null
+  is_merkezi?: string | null
+  uygun_miktar?: number
+  ret_miktar?: number
+  uygunsuzluk_no?: string | null
+  teslim_tarihi?: string | null
+  baslama_tarihi?: string | null
+  bitis_tarihi?: string | null
+  dogrulama?: boolean
+  dogrulayan?: string | null
 }
 
 interface StepLog {
@@ -185,11 +207,28 @@ export default function ProductionFlowPage() {
   const [orderSearch, setOrderSearch] = useState('')
 
   // Forms
-  const [orderForm, setOrderForm] = useState({
-    project_id: '', route_id: '', customer_id: '',
-    planned_quantity: '', planned_start_date: new Date().toISOString().split('T')[0],
-    planned_end_date: '', priority: 'normal' as Priority, notes: '',
-  })
+  const emptyOrderForm = {
+    // Parça bilgileri
+    parca_no: '', parca_adi: '', iem_no: '', revizyon_no: '',
+    fai: '', seri: '', delta_fai: '', dosya_no: '',
+    // Proje & Müşteri
+    project_id: '', customer_id: '', planned_quantity: '',
+    // Malzeme & Teknik
+    malzeme: '', alasim_spec: '', ekipman: '',
+    // Operasyon & Üretim
+    operasyon_no: '', is_merkezi: '', uygun_miktar: '', ret_miktar: '', uygunsuzluk_no: '',
+    // Tarihler
+    teslim_tarihi: '', baslama_tarihi: '', bitis_tarihi: '',
+    // Doğrulama
+    dogrulama: false, dogrulayan: '',
+    // Notlar
+    notes: '',
+    // Akış (rota + öncelik + plan tarihleri)
+    route_id: '', priority: 'normal' as Priority,
+    planned_start_date: new Date().toISOString().split('T')[0],
+    planned_end_date: '',
+  }
+  const [orderForm, setOrderForm] = useState(emptyOrderForm)
   const [routeForm, setRouteForm] = useState({
     project_id: '', route_name: '', description: '',
     steps: [] as { step_name: string; step_type: StepType; station_name: string; is_qc_step: boolean; expected_duration_minutes: string }[],
@@ -401,11 +440,7 @@ export default function ProductionFlowPage() {
   // ORDER CRUD
   // =====================================================
   const openNewOrder = () => {
-    setOrderForm({
-      project_id: '', route_id: '', customer_id: '',
-      planned_quantity: '', planned_start_date: new Date().toISOString().split('T')[0],
-      planned_end_date: '', priority: 'normal', notes: '',
-    })
+    setOrderForm(emptyOrderForm)
     setShowOrderModal(true)
   }
 
@@ -421,9 +456,12 @@ export default function ProductionFlowPage() {
   }, [orderForm.project_id])
 
   const saveOrder = async () => {
-    if (!orderForm.project_id || !orderForm.route_id || !orderForm.planned_quantity || !companyId) {
-      return alert('Ürün, rota ve miktar zorunlu!')
-    }
+    if (!orderForm.parca_adi) return alert('Parça adı zorunlu!')
+    if (!orderForm.project_id) return alert('Proje seçimi zorunlu!')
+    if (!orderForm.route_id) return alert('Rota seçimi zorunlu!')
+    if (!orderForm.planned_quantity) return alert('Planlanan miktar zorunlu!')
+    if (!companyId) return
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
       const customerName = customers.find(c => c.id === orderForm.customer_id)?.contact_name || null
@@ -432,15 +470,44 @@ export default function ProductionFlowPage() {
       const { data: orderData, error: orderErr } = await supabase.from('production_flow_orders').insert({
         company_id: companyId,
         order_number: generateOrderNumber(),
+        // Parça bilgileri
+        parca_no: orderForm.parca_no || null,
+        parca_adi: orderForm.parca_adi || null,
+        iem_no: orderForm.iem_no || null,
+        revizyon_no: orderForm.revizyon_no || null,
+        fai: orderForm.fai || null,
+        seri: orderForm.seri || null,
+        delta_fai: orderForm.delta_fai || null,
+        dosya_no: orderForm.dosya_no || null,
+        // Proje & Müşteri
         project_id: orderForm.project_id,
-        route_id: orderForm.route_id,
         customer_id: orderForm.customer_id || null,
         customer_name: customerName,
         planned_quantity: parseFloat(orderForm.planned_quantity),
+        // Malzeme & Teknik
+        malzeme: orderForm.malzeme || null,
+        alasim_spec: orderForm.alasim_spec || null,
+        ekipman: orderForm.ekipman || null,
+        // Operasyon & Üretim
+        operasyon_no: orderForm.operasyon_no || null,
+        is_merkezi: orderForm.is_merkezi || null,
+        uygun_miktar: parseFloat(orderForm.uygun_miktar || '0'),
+        ret_miktar: parseFloat(orderForm.ret_miktar || '0'),
+        uygunsuzluk_no: orderForm.uygunsuzluk_no || null,
+        // Tarihler
+        teslim_tarihi: orderForm.teslim_tarihi || null,
+        baslama_tarihi: orderForm.baslama_tarihi || null,
+        bitis_tarihi: orderForm.bitis_tarihi || null,
+        // Doğrulama
+        dogrulama: orderForm.dogrulama,
+        dogrulayan: orderForm.dogrulayan || null,
+        // Notlar
+        notes: orderForm.notes || null,
+        // Akış
+        route_id: orderForm.route_id,
         priority: orderForm.priority,
         planned_start_date: orderForm.planned_start_date || null,
         planned_end_date: orderForm.planned_end_date || null,
-        notes: orderForm.notes || null,
         created_by: user?.id,
       }).select().single()
       if (orderErr) throw orderErr
@@ -795,60 +862,185 @@ export default function ProductionFlowPage() {
           </div>
         )}
 
-        {/* ===== YENİ İŞ EMRİ MODAL ===== */}
+        {/* ===== YENİ İŞ EMRİ MODAL (work-orders form + akış bilgileri) ===== */}
         {showOrderModal && (
-          <Modal title="Yeni İş Emri" onClose={() => setShowOrderModal(false)}>
-            <div className="space-y-4">
-              <Field label="Ürün / Parça *">
-                <select value={orderForm.project_id} onChange={e => setOrderForm({ ...orderForm, project_id: e.target.value, route_id: '' })} className={inputCls}>
-                  <option value="">Seçin...</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.project_name}</option>)}
-                </select>
-              </Field>
-              <Field label="Rota *">
-                <select value={orderForm.route_id} onChange={e => setOrderForm({ ...orderForm, route_id: e.target.value })} className={inputCls}>
-                  <option value="">Seçin...</option>
-                  {routes.filter(r => !orderForm.project_id || r.project_id === orderForm.project_id).map(r => (
-                    <option key={r.id} value={r.id}>{r.route_name} ({r.step_count} adım)</option>
-                  ))}
-                </select>
-                {orderForm.project_id && routes.filter(r => r.project_id === orderForm.project_id).length === 0 && (
-                  <p className="text-xs text-orange-600 mt-1">Bu ürün için rota tanımlanmamış. Önce Rotalar sekmesinden rota oluştur.</p>
-                )}
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Planlanan Miktar *">
-                  <input type="number" value={orderForm.planned_quantity} onChange={e => setOrderForm({ ...orderForm, planned_quantity: e.target.value })} className={inputCls} placeholder="örn. 1000" />
-                </Field>
-                <Field label="Öncelik">
-                  <select value={orderForm.priority} onChange={e => setOrderForm({ ...orderForm, priority: e.target.value as Priority })} className={inputCls}>
-                    {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                </Field>
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowOrderModal(false)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              {/* Sticky header */}
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
+                <h3 className="text-xl font-bold text-gray-800">Yeni İş Emri</h3>
+                <button onClick={() => setShowOrderModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <Field label="Müşteri (opsiyonel)">
-                <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value })} className={inputCls}>
-                  <option value="">Seçin...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.contact_name}</option>)}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Planlanan Başlangıç">
-                  <input type="date" value={orderForm.planned_start_date} onChange={e => setOrderForm({ ...orderForm, planned_start_date: e.target.value })} className={inputCls} />
+
+              <div className="p-6 space-y-5">
+                {/* Parça Bilgileri */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">📋 Parça Bilgileri</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Field label="Parça No">
+                      <input type="text" value={orderForm.parca_no} onChange={e => setOrderForm({ ...orderForm, parca_no: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Parça Adı *">
+                      <input type="text" value={orderForm.parca_adi} onChange={e => setOrderForm({ ...orderForm, parca_adi: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="IEM No">
+                      <input type="text" value={orderForm.iem_no} onChange={e => setOrderForm({ ...orderForm, iem_no: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Revizyon No">
+                      <input type="text" value={orderForm.revizyon_no} onChange={e => setOrderForm({ ...orderForm, revizyon_no: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="FAI">
+                      <input type="text" value={orderForm.fai} onChange={e => setOrderForm({ ...orderForm, fai: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Seri">
+                      <input type="text" value={orderForm.seri} onChange={e => setOrderForm({ ...orderForm, seri: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Delta FAI">
+                      <input type="text" value={orderForm.delta_fai} onChange={e => setOrderForm({ ...orderForm, delta_fai: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Dosya No">
+                      <input type="text" value={orderForm.dosya_no} onChange={e => setOrderForm({ ...orderForm, dosya_no: e.target.value })} className={inputCls} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Proje & Müşteri */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">🏭 Proje & Müşteri</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Field label="Proje / Ürün *">
+                      <select value={orderForm.project_id} onChange={e => setOrderForm({ ...orderForm, project_id: e.target.value, route_id: '' })} className={inputCls}>
+                        <option value="">Seçin...</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.project_name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Müşteri">
+                      <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value })} className={inputCls}>
+                        <option value="">Seçin...</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.contact_name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Planlanan Miktar *">
+                      <input type="number" value={orderForm.planned_quantity} onChange={e => setOrderForm({ ...orderForm, planned_quantity: e.target.value })} className={inputCls} placeholder="örn. 1000" />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Malzeme & Teknik */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">🧱 Malzeme & Teknik</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Field label="Malzeme">
+                      <input type="text" value={orderForm.malzeme} onChange={e => setOrderForm({ ...orderForm, malzeme: e.target.value })} placeholder="Örn: Al 7075-T7351" className={inputCls} />
+                    </Field>
+                    <Field label="Alaşım & Spec">
+                      <input type="text" value={orderForm.alasim_spec} onChange={e => setOrderForm({ ...orderForm, alasim_spec: e.target.value })} placeholder="Örn: AMS-QQ-A-250/12" className={inputCls} />
+                    </Field>
+                    <Field label="Ekipman">
+                      <input type="text" value={orderForm.ekipman} onChange={e => setOrderForm({ ...orderForm, ekipman: e.target.value })} className={inputCls} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Operasyon & Üretim */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">⚙️ Operasyon & Üretim</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Field label="Operasyon No">
+                      <input type="text" value={orderForm.operasyon_no} onChange={e => setOrderForm({ ...orderForm, operasyon_no: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="İş Merkezi">
+                      <input type="text" value={orderForm.is_merkezi} onChange={e => setOrderForm({ ...orderForm, is_merkezi: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Uygun Miktar">
+                      <input type="number" value={orderForm.uygun_miktar} onChange={e => setOrderForm({ ...orderForm, uygun_miktar: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Ret Miktar">
+                      <input type="number" value={orderForm.ret_miktar} onChange={e => setOrderForm({ ...orderForm, ret_miktar: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Uygunsuzluk No">
+                      <input type="text" value={orderForm.uygunsuzluk_no} onChange={e => setOrderForm({ ...orderForm, uygunsuzluk_no: e.target.value })} className={inputCls} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Tarihler */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">📅 Tarihler</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Field label="Teslim Tarihi">
+                      <input type="date" value={orderForm.teslim_tarihi} onChange={e => setOrderForm({ ...orderForm, teslim_tarihi: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Başlama Tarihi">
+                      <input type="date" value={orderForm.baslama_tarihi} onChange={e => setOrderForm({ ...orderForm, baslama_tarihi: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="Bitiş Tarihi">
+                      <input type="date" value={orderForm.bitis_tarihi} onChange={e => setOrderForm({ ...orderForm, bitis_tarihi: e.target.value })} className={inputCls} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Doğrulama */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">✅ Doğrulama</h4>
+                  <div className="grid grid-cols-2 gap-3 items-end">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={orderForm.dogrulama} onChange={e => setOrderForm({ ...orderForm, dogrulama: e.target.checked })} className="w-5 h-5 text-green-600 rounded" />
+                      <span className="text-sm font-medium text-gray-700">Doğrulandı</span>
+                    </label>
+                    <Field label="Doğrulayan">
+                      <input type="text" value={orderForm.dogrulayan} onChange={e => setOrderForm({ ...orderForm, dogrulayan: e.target.value })} placeholder="İsim" className={inputCls} />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* Notlar */}
+                <Field label="Notlar">
+                  <textarea value={orderForm.notes} onChange={e => setOrderForm({ ...orderForm, notes: e.target.value })} rows={2} placeholder="Ek notlar..." className={inputCls} />
                 </Field>
-                <Field label="Planlanan Bitiş">
-                  <input type="date" value={orderForm.planned_end_date} onChange={e => setOrderForm({ ...orderForm, planned_end_date: e.target.value })} className={inputCls} />
-                </Field>
+
+                {/* ===== AKIŞ BİLGİLERİ (sonda) ===== */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border-2 border-blue-200">
+                  <h4 className="text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5" /> Üretim Akışı Bilgileri
+                  </h4>
+                  <p className="text-xs text-blue-700 mb-4">Bu iş emri hangi rotayı izleyecek ve nasıl planlanacak?</p>
+                  <div className="space-y-3">
+                    <Field label="Rota / İş Akışı *">
+                      <select value={orderForm.route_id} onChange={e => setOrderForm({ ...orderForm, route_id: e.target.value })} className={inputCls}>
+                        <option value="">Seçin...</option>
+                        {routes.filter(r => !orderForm.project_id || r.project_id === orderForm.project_id).map(r => (
+                          <option key={r.id} value={r.id}>{r.route_name} ({r.step_count} adım)</option>
+                        ))}
+                      </select>
+                      {orderForm.project_id && routes.filter(r => r.project_id === orderForm.project_id).length === 0 && (
+                        <p className="text-xs text-orange-700 mt-1">⚠ Bu ürün için rota tanımlanmamış. Önce Rotalar sekmesinden oluştur.</p>
+                      )}
+                    </Field>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <Field label="Öncelik">
+                        <select value={orderForm.priority} onChange={e => setOrderForm({ ...orderForm, priority: e.target.value as Priority })} className={inputCls}>
+                          {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Planlanan Başlangıç">
+                        <input type="date" value={orderForm.planned_start_date} onChange={e => setOrderForm({ ...orderForm, planned_start_date: e.target.value })} className={inputCls} />
+                      </Field>
+                      <Field label="Planlanan Bitiş">
+                        <input type="date" value={orderForm.planned_end_date} onChange={e => setOrderForm({ ...orderForm, planned_end_date: e.target.value })} className={inputCls} />
+                      </Field>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <Field label="Notlar">
-                <textarea value={orderForm.notes} onChange={e => setOrderForm({ ...orderForm, notes: e.target.value })} className={inputCls} rows={2} />
-              </Field>
-              <div className="flex gap-3 pt-3">
-                <button onClick={() => setShowOrderModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-                <button onClick={saveOrder} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Oluştur</button>
+
+              {/* Sticky footer */}
+              <div className="sticky bottom-0 bg-gray-50 border-t px-6 py-4 flex gap-3 rounded-b-2xl">
+                <button onClick={() => setShowOrderModal(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100">İptal</button>
+                <button onClick={saveOrder} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">Oluştur</button>
               </div>
             </div>
-          </Modal>
+          </div>
         )}
 
         {/* ===== ROTA MODAL ===== */}
@@ -1009,7 +1201,7 @@ function OrderDetail({
               <h3 className="text-2xl font-bold text-gray-800">{order.order_number}</h3>
               <span className={`px-3 py-1 rounded-full text-sm font-semibold ${status.bg} ${status.text}`}>{status.label}</span>
             </div>
-            <p className="text-gray-600">{order.project_name} • {order.route_name}</p>
+            <p className="text-gray-600">{order.parca_adi || order.project_name} • {order.route_name}</p>
             {order.customer_name && <p className="text-sm text-gray-500">Müşteri: {order.customer_name}</p>}
           </div>
           {order.status === 'planned' && (
@@ -1023,6 +1215,79 @@ function OrderDetail({
           <MiniStat label="Depo Girişi" value={order.warehouse_in_quantity || 0} color="amber" />
           <MiniStat label="Toplam Hurda" value={order.total_scrap_quantity || 0} color="red" />
           <MiniStat label="Kabul Edilen" value={order.final_accepted_quantity || 0} color="green" />
+        </div>
+      </div>
+
+      {/* İş Emri Detayları — work-orders form düzeninde */}
+      <div className="bg-white rounded-xl shadow-md p-6 space-y-5">
+        <h3 className="text-lg font-bold text-gray-800 mb-2">İş Emri Detayları</h3>
+
+        {/* Parça Bilgileri */}
+        <DetailSection title="📋 Parça Bilgileri" items={[
+          ['Parça No', order.parca_no],
+          ['Parça Adı', order.parca_adi],
+          ['IEM No', order.iem_no],
+          ['Revizyon No', order.revizyon_no],
+          ['FAI', order.fai],
+          ['Seri', order.seri],
+          ['Delta FAI', order.delta_fai],
+          ['Dosya No', order.dosya_no],
+        ]} />
+
+        {/* Proje & Müşteri */}
+        <DetailSection title="🏭 Proje & Müşteri" items={[
+          ['Proje / Ürün', order.project_name],
+          ['Müşteri', order.customer_name],
+          ['Planlanan Miktar', order.planned_quantity?.toString()],
+        ]} />
+
+        {/* Malzeme & Teknik */}
+        <DetailSection title="🧱 Malzeme & Teknik" items={[
+          ['Malzeme', order.malzeme],
+          ['Alaşım & Spec', order.alasim_spec],
+          ['Ekipman', order.ekipman],
+        ]} />
+
+        {/* Operasyon & Üretim */}
+        <DetailSection title="⚙️ Operasyon & Üretim" items={[
+          ['Operasyon No', order.operasyon_no],
+          ['İş Merkezi', order.is_merkezi],
+          ['Uygun Miktar', order.uygun_miktar?.toString()],
+          ['Ret Miktar', order.ret_miktar?.toString()],
+          ['Uygunsuzluk No', order.uygunsuzluk_no],
+        ]} />
+
+        {/* Tarihler */}
+        <DetailSection title="📅 Tarihler" items={[
+          ['Teslim Tarihi', order.teslim_tarihi ? new Date(order.teslim_tarihi).toLocaleDateString('tr-TR') : null],
+          ['Başlama Tarihi', order.baslama_tarihi ? new Date(order.baslama_tarihi).toLocaleDateString('tr-TR') : null],
+          ['Bitiş Tarihi', order.bitis_tarihi ? new Date(order.bitis_tarihi).toLocaleDateString('tr-TR') : null],
+        ]} />
+
+        {/* Doğrulama */}
+        <DetailSection title="✅ Doğrulama" items={[
+          ['Durum', order.dogrulama ? 'Doğrulandı ✓' : 'Bekliyor'],
+          ['Doğrulayan', order.dogrulayan],
+        ]} />
+
+        {order.notes && (
+          <div className="bg-yellow-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500 mb-0.5">Notlar</p>
+            <p className="text-sm text-gray-800">{order.notes}</p>
+          </div>
+        )}
+
+        {/* Akış Bilgileri */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
+          <h4 className="text-sm font-bold text-blue-900 mb-3 flex items-center gap-2 border-b border-blue-200 pb-1">
+            <RefreshCw className="w-4 h-4" /> Üretim Akışı
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <DetailCell label="Rota" value={order.route_name} />
+            <DetailCell label="Öncelik" value={PRIORITY_MAP[order.priority]?.label} />
+            <DetailCell label="Plan Başlangıç" value={order.planned_start_date ? new Date(order.planned_start_date).toLocaleDateString('tr-TR') : null} />
+            <DetailCell label="Plan Bitiş" value={order.planned_end_date ? new Date(order.planned_end_date).toLocaleDateString('tr-TR') : null} />
+          </div>
         </div>
       </div>
 
@@ -1099,6 +1364,28 @@ function OrderDetail({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function DetailSection({ title, items }: { title: string; items: [string, any][] }) {
+  return (
+    <div>
+      <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">{title}</h4>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {items.map(([label, value], i) => (
+          <DetailCell key={i} label={label} value={value} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DetailCell({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="bg-gray-50 rounded-lg p-3">
+      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+      <p className="font-semibold text-gray-900 text-sm break-words">{value || '-'}</p>
     </div>
   )
 }

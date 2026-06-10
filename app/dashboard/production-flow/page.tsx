@@ -1,0 +1,1228 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'
+import PermissionGuard from '@/components/PermissionGuard'
+import {
+  Factory, Plus, X, ChevronRight, CheckCircle2, AlertTriangle, Clock,
+  Play, Pause, ArrowRight, GripVertical, Trash2, Edit3, Eye, Layers,
+  Package, ShieldCheck, Truck, RefreshCw, Activity, TrendingDown,
+  PackageOpen, Settings, ListChecks
+} from 'lucide-react'
+
+// =====================================================
+// TYPES
+// =====================================================
+type StepType = 'warehouse_in' | 'qc_incoming' | 'operation' | 'qc_intermediate' | 'qc_final' | 'packaging' | 'shipping'
+type OrderStatus = 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled'
+type StepStatus = 'pending' | 'in_progress' | 'completed' | 'on_hold'
+type Priority = 'low' | 'normal' | 'high' | 'urgent'
+
+interface ProductRoute {
+  id: string
+  company_id: string
+  project_id: string | null
+  route_name: string
+  description: string | null
+  is_active: boolean
+  created_at: string
+  project_name?: string
+  step_count?: number
+}
+
+interface RouteStep {
+  id: string
+  route_id: string
+  step_order: number
+  step_name: string
+  step_type: StepType
+  station_name: string | null
+  is_qc_step: boolean
+  expected_duration_minutes: number | null
+  notes: string | null
+}
+
+interface FlowOrder {
+  id: string
+  company_id: string
+  order_number: string
+  project_id: string | null
+  route_id: string | null
+  customer_id: string | null
+  customer_name: string | null
+  planned_quantity: number
+  warehouse_in_quantity: number
+  final_accepted_quantity: number
+  total_scrap_quantity: number
+  current_step_order: number
+  status: OrderStatus
+  priority: Priority
+  planned_start_date: string | null
+  planned_end_date: string | null
+  actual_start_date: string | null
+  actual_end_date: string | null
+  notes: string | null
+  created_at: string
+  project_name?: string
+  route_name?: string
+}
+
+interface StepLog {
+  id: string
+  order_id: string
+  route_step_id: string | null
+  step_order: number
+  step_name: string
+  step_type: StepType
+  station_name: string | null
+  in_quantity: number
+  accepted_quantity: number
+  scrap_quantity: number
+  rework_quantity: number
+  operator_id: string | null
+  operator_name: string | null
+  machine_id: string | null
+  machine_name: string | null
+  status: StepStatus
+  started_at: string | null
+  completed_at: string | null
+  qc_result: 'pass' | 'fail' | 'partial' | null
+  scrap_reason: string | null
+  scrap_destination: 'warehouse_reject' | 'non_compliant' | null
+  notes: string | null
+}
+
+// =====================================================
+// CONSTANTS
+// =====================================================
+const STEP_TYPES: { value: StepType; label: string; icon: any; color: string }[] = [
+  { value: 'warehouse_in', label: 'Depo Girişi', icon: PackageOpen, color: 'bg-amber-100 text-amber-700' },
+  { value: 'qc_incoming', label: 'Giriş Kalite Kontrol', icon: ShieldCheck, color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'operation', label: 'Operasyon', icon: Factory, color: 'bg-blue-100 text-blue-700' },
+  { value: 'qc_intermediate', label: 'Ara Kontrol', icon: ShieldCheck, color: 'bg-orange-100 text-orange-700' },
+  { value: 'qc_final', label: 'Son Kontrol', icon: ShieldCheck, color: 'bg-red-100 text-red-700' },
+  { value: 'packaging', label: 'Paketleme', icon: Package, color: 'bg-purple-100 text-purple-700' },
+  { value: 'shipping', label: 'Sevkiyat', icon: Truck, color: 'bg-green-100 text-green-700' },
+]
+
+const STATUS_MAP: Record<OrderStatus, { label: string; bg: string; text: string }> = {
+  planned: { label: 'Planlandı', bg: 'bg-gray-100', text: 'text-gray-700' },
+  in_progress: { label: 'Üretimde', bg: 'bg-blue-100', text: 'text-blue-700' },
+  on_hold: { label: 'Beklemede', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  completed: { label: 'Tamamlandı', bg: 'bg-green-100', text: 'text-green-700' },
+  cancelled: { label: 'İptal', bg: 'bg-red-100', text: 'text-red-700' },
+}
+
+const PRIORITY_MAP: Record<Priority, { label: string; bg: string; text: string }> = {
+  low: { label: 'Düşük', bg: 'bg-gray-100', text: 'text-gray-700' },
+  normal: { label: 'Normal', bg: 'bg-blue-100', text: 'text-blue-700' },
+  high: { label: 'Yüksek', bg: 'bg-orange-100', text: 'text-orange-700' },
+  urgent: { label: 'Acil', bg: 'bg-red-100', text: 'text-red-700' },
+}
+
+// Hızlı şablon: B6-154 örneğindeki gibi standart akış
+const TEMPLATE_STEPS: { step_name: string; step_type: StepType; station_name?: string; is_qc_step: boolean }[] = [
+  { step_name: 'Depo Girişi (Hammadde)', step_type: 'warehouse_in', is_qc_step: false },
+  { step_name: 'Giriş Kalite Kontrol', step_type: 'qc_incoming', is_qc_step: true },
+  { step_name: 'Freze İşlemi', step_type: 'operation', station_name: 'FR01', is_qc_step: false },
+  { step_name: 'Ara Kontrol', step_type: 'qc_intermediate', is_qc_step: true },
+  { step_name: 'Broş İşlemi', step_type: 'operation', is_qc_step: false },
+  { step_name: 'Giriş Kalite Kontrol', step_type: 'qc_incoming', is_qc_step: true },
+  { step_name: 'Freze İşlemi', step_type: 'operation', station_name: 'FR02', is_qc_step: false },
+  { step_name: 'Ara Kontrol', step_type: 'qc_intermediate', is_qc_step: true },
+  { step_name: 'Freze İşlemi', step_type: 'operation', station_name: 'FR03', is_qc_step: false },
+  { step_name: 'Ara Kontrol', step_type: 'qc_intermediate', is_qc_step: true },
+  { step_name: 'Tromel', step_type: 'operation', is_qc_step: false },
+  { step_name: 'Tesviye', step_type: 'operation', is_qc_step: false },
+  { step_name: 'Kumlama', step_type: 'operation', is_qc_step: false },
+  { step_name: 'Kaplama', step_type: 'operation', is_qc_step: false },
+  { step_name: 'Son Kontrol', step_type: 'qc_final', is_qc_step: true },
+  { step_name: 'Paketleme', step_type: 'packaging', is_qc_step: false },
+  { step_name: 'Müşteriye Sevk', step_type: 'shipping', is_qc_step: false },
+]
+
+// =====================================================
+// HELPERS
+// =====================================================
+const getStepTypeInfo = (type: StepType) => STEP_TYPES.find(t => t.value === type) || STEP_TYPES[2]
+
+const generateOrderNumber = () => {
+  const now = new Date()
+  const y = now.getFullYear().toString().slice(2)
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const r = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+  return `IE-${y}${m}${d}-${r}`
+}
+
+// =====================================================
+// PAGE
+// =====================================================
+export default function ProductionFlowPage() {
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'routes'>('dashboard')
+
+  const [routes, setRoutes] = useState<ProductRoute[]>([])
+  const [orders, setOrders] = useState<FlowOrder[]>([])
+  const [projects, setProjects] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
+
+  // Modals
+  const [showOrderModal, setShowOrderModal] = useState(false)
+  const [showRouteModal, setShowRouteModal] = useState(false)
+  const [editingRoute, setEditingRoute] = useState<ProductRoute | null>(null)
+
+  // Selected order detail
+  const [selectedOrder, setSelectedOrder] = useState<FlowOrder | null>(null)
+  const [orderStepLogs, setOrderStepLogs] = useState<StepLog[]>([])
+  const [activeStepLogId, setActiveStepLogId] = useState<string | null>(null)
+
+  // Filters
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | OrderStatus>('all')
+  const [orderSearch, setOrderSearch] = useState('')
+
+  // Forms
+  const [orderForm, setOrderForm] = useState({
+    project_id: '', route_id: '', customer_id: '',
+    planned_quantity: '', planned_start_date: new Date().toISOString().split('T')[0],
+    planned_end_date: '', priority: 'normal' as Priority, notes: '',
+  })
+  const [routeForm, setRouteForm] = useState({
+    project_id: '', route_name: '', description: '',
+    steps: [] as { step_name: string; step_type: StepType; station_name: string; is_qc_step: boolean; expected_duration_minutes: string }[],
+  })
+
+  useEffect(() => { init() }, [])
+
+  const init = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+      if (!profile?.company_id) return
+      setCompanyId(profile.company_id)
+      await Promise.all([loadRoutes(profile.company_id), loadOrders(profile.company_id), loadRefs(profile.company_id)])
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  const loadRefs = async (cid: string) => {
+    const [projRes, custRes, empRes, macRes] = await Promise.all([
+      supabase.from('projects').select('id, project_code, project_name').eq('company_id', cid).order('project_name'),
+      supabase.from('contacts').select('id, contact_name').eq('company_id', cid).eq('is_active', true).order('contact_name'),
+      supabase.from('employees').select('id, full_name, employee_code').eq('company_id', cid).eq('status', 'active').order('full_name'),
+      supabase.from('machines').select('id, machine_code, machine_name').eq('company_id', cid).order('machine_code'),
+    ])
+    setProjects(projRes.data || [])
+    setCustomers(custRes.data || [])
+    setEmployees(empRes.data || [])
+    setMachines(macRes.data || [])
+  }
+
+  const loadRoutes = async (cid: string) => {
+    const { data: routesData } = await supabase
+      .from('product_routes')
+      .select('*')
+      .eq('company_id', cid)
+      .order('created_at', { ascending: false })
+
+    const projectIds = (routesData || []).map(r => r.project_id).filter(Boolean)
+    const { data: projs } = projectIds.length > 0
+      ? await supabase.from('projects').select('id, project_name, project_code').in('id', projectIds)
+      : { data: [] }
+    const projMap = new Map((projs || []).map(p => [p.id, p]))
+
+    const { data: stepsCnt } = await supabase
+      .from('product_route_steps')
+      .select('route_id')
+      .in('route_id', (routesData || []).map(r => r.id))
+
+    const countMap: Record<string, number> = {}
+    ;(stepsCnt || []).forEach((s: any) => { countMap[s.route_id] = (countMap[s.route_id] || 0) + 1 })
+
+    setRoutes((routesData || []).map(r => ({
+      ...r,
+      project_name: r.project_id ? (projMap.get(r.project_id) as any)?.project_name : null,
+      step_count: countMap[r.id] || 0,
+    })))
+  }
+
+  const loadOrders = async (cid: string) => {
+    const { data: ordersData } = await supabase
+      .from('production_flow_orders')
+      .select('*')
+      .eq('company_id', cid)
+      .order('created_at', { ascending: false })
+
+    const projectIds = Array.from(new Set((ordersData || []).map(o => o.project_id).filter(Boolean)))
+    const routeIds = Array.from(new Set((ordersData || []).map(o => o.route_id).filter(Boolean)))
+
+    const [projsRes, routesRes] = await Promise.all([
+      projectIds.length > 0 ? supabase.from('projects').select('id, project_name, project_code').in('id', projectIds) : Promise.resolve({ data: [] }),
+      routeIds.length > 0 ? supabase.from('product_routes').select('id, route_name').in('id', routeIds) : Promise.resolve({ data: [] }),
+    ])
+    const projMap = new Map((projsRes.data || []).map((p: any) => [p.id, p]))
+    const routeMap = new Map((routesRes.data || []).map((r: any) => [r.id, r]))
+
+    setOrders((ordersData || []).map(o => ({
+      ...o,
+      project_name: o.project_id ? (projMap.get(o.project_id) as any)?.project_name : null,
+      route_name: o.route_id ? (routeMap.get(o.route_id) as any)?.route_name : null,
+    })))
+  }
+
+  const loadStepLogs = async (orderId: string) => {
+    const { data } = await supabase
+      .from('production_flow_step_logs')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('step_order', { ascending: true })
+    setOrderStepLogs(data || [])
+  }
+
+  // =====================================================
+  // ROUTE CRUD
+  // =====================================================
+  const openNewRoute = () => {
+    setEditingRoute(null)
+    setRouteForm({
+      project_id: '', route_name: '', description: '',
+      steps: TEMPLATE_STEPS.map(s => ({
+        step_name: s.step_name,
+        step_type: s.step_type,
+        station_name: s.station_name || '',
+        is_qc_step: s.is_qc_step,
+        expected_duration_minutes: '',
+      })),
+    })
+    setShowRouteModal(true)
+  }
+
+  const openEditRoute = async (route: ProductRoute) => {
+    setEditingRoute(route)
+    const { data: steps } = await supabase
+      .from('product_route_steps')
+      .select('*')
+      .eq('route_id', route.id)
+      .order('step_order')
+    setRouteForm({
+      project_id: route.project_id || '',
+      route_name: route.route_name,
+      description: route.description || '',
+      steps: (steps || []).map(s => ({
+        step_name: s.step_name,
+        step_type: s.step_type,
+        station_name: s.station_name || '',
+        is_qc_step: s.is_qc_step,
+        expected_duration_minutes: s.expected_duration_minutes?.toString() || '',
+      })),
+    })
+    setShowRouteModal(true)
+  }
+
+  const saveRoute = async () => {
+    if (!routeForm.route_name || !routeForm.project_id || !companyId) return alert('Ürün ve rota adı zorunlu!')
+    if (routeForm.steps.length === 0) return alert('En az 1 adım eklemelisin!')
+
+    try {
+      let routeId = editingRoute?.id
+      if (editingRoute) {
+        await supabase.from('product_routes').update({
+          project_id: routeForm.project_id,
+          route_name: routeForm.route_name,
+          description: routeForm.description || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', editingRoute.id)
+        // Replace steps
+        await supabase.from('product_route_steps').delete().eq('route_id', editingRoute.id)
+      } else {
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data, error } = await supabase.from('product_routes').insert({
+          company_id: companyId,
+          project_id: routeForm.project_id,
+          route_name: routeForm.route_name,
+          description: routeForm.description || null,
+          created_by: user?.id,
+        }).select().single()
+        if (error) throw error
+        routeId = data.id
+      }
+
+      const stepsPayload = routeForm.steps.map((s, idx) => ({
+        route_id: routeId,
+        step_order: idx + 1,
+        step_name: s.step_name,
+        step_type: s.step_type,
+        station_name: s.station_name || null,
+        is_qc_step: s.is_qc_step,
+        expected_duration_minutes: s.expected_duration_minutes ? parseInt(s.expected_duration_minutes) : null,
+      }))
+      const { error: stepErr } = await supabase.from('product_route_steps').insert(stepsPayload)
+      if (stepErr) throw stepErr
+
+      alert('✅ Rota kaydedildi!')
+      setShowRouteModal(false)
+      await loadRoutes(companyId)
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
+  }
+
+  const deleteRoute = async (route: ProductRoute) => {
+    if (!confirm(`"${route.route_name}" rotasını silmek istediğine emin misin?`)) return
+    try {
+      await supabase.from('product_routes').delete().eq('id', route.id)
+      await loadRoutes(companyId!)
+      alert('Rota silindi.')
+    } catch (err: any) { alert('Hata: ' + err.message) }
+  }
+
+  const addStepToRoute = () => {
+    setRouteForm({
+      ...routeForm,
+      steps: [...routeForm.steps, { step_name: '', step_type: 'operation', station_name: '', is_qc_step: false, expected_duration_minutes: '' }],
+    })
+  }
+  const removeStepFromRoute = (idx: number) => {
+    setRouteForm({ ...routeForm, steps: routeForm.steps.filter((_, i) => i !== idx) })
+  }
+  const moveStep = (idx: number, dir: -1 | 1) => {
+    const newSteps = [...routeForm.steps]
+    const target = idx + dir
+    if (target < 0 || target >= newSteps.length) return
+    ;[newSteps[idx], newSteps[target]] = [newSteps[target], newSteps[idx]]
+    setRouteForm({ ...routeForm, steps: newSteps })
+  }
+
+  // =====================================================
+  // ORDER CRUD
+  // =====================================================
+  const openNewOrder = () => {
+    setOrderForm({
+      project_id: '', route_id: '', customer_id: '',
+      planned_quantity: '', planned_start_date: new Date().toISOString().split('T')[0],
+      planned_end_date: '', priority: 'normal', notes: '',
+    })
+    setShowOrderModal(true)
+  }
+
+  // Auto-pick route when project selected
+  useEffect(() => {
+    if (orderForm.project_id) {
+      const matching = routes.find(r => r.project_id === orderForm.project_id && r.is_active)
+      if (matching && !orderForm.route_id) {
+        setOrderForm(prev => ({ ...prev, route_id: matching.id }))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderForm.project_id])
+
+  const saveOrder = async () => {
+    if (!orderForm.project_id || !orderForm.route_id || !orderForm.planned_quantity || !companyId) {
+      return alert('Ürün, rota ve miktar zorunlu!')
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const customerName = customers.find(c => c.id === orderForm.customer_id)?.contact_name || null
+
+      // Insert order
+      const { data: orderData, error: orderErr } = await supabase.from('production_flow_orders').insert({
+        company_id: companyId,
+        order_number: generateOrderNumber(),
+        project_id: orderForm.project_id,
+        route_id: orderForm.route_id,
+        customer_id: orderForm.customer_id || null,
+        customer_name: customerName,
+        planned_quantity: parseFloat(orderForm.planned_quantity),
+        priority: orderForm.priority,
+        planned_start_date: orderForm.planned_start_date || null,
+        planned_end_date: orderForm.planned_end_date || null,
+        notes: orderForm.notes || null,
+        created_by: user?.id,
+      }).select().single()
+      if (orderErr) throw orderErr
+
+      // Create step logs from route steps
+      const { data: routeSteps } = await supabase
+        .from('product_route_steps')
+        .select('*')
+        .eq('route_id', orderForm.route_id)
+        .order('step_order')
+
+      const logsPayload = (routeSteps || []).map(rs => ({
+        order_id: orderData.id,
+        route_step_id: rs.id,
+        step_order: rs.step_order,
+        step_name: rs.step_name,
+        step_type: rs.step_type,
+        station_name: rs.station_name,
+        status: 'pending',
+        created_by: user?.id,
+      }))
+      if (logsPayload.length > 0) {
+        await supabase.from('production_flow_step_logs').insert(logsPayload)
+      }
+
+      alert('✅ İş emri oluşturuldu!')
+      setShowOrderModal(false)
+      await loadOrders(companyId)
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
+  }
+
+  // =====================================================
+  // ORDER FLOW ACTIONS
+  // =====================================================
+  const openOrderDetail = async (order: FlowOrder) => {
+    setSelectedOrder(order)
+    await loadStepLogs(order.id)
+  }
+
+  const startOrder = async (order: FlowOrder) => {
+    if (!confirm(`"${order.order_number}" iş emrini başlatmak istiyor musun?\n\n${order.planned_quantity} adet ilk adımdan başlayacak.`)) return
+    try {
+      const firstLog = orderStepLogs[0]
+      if (!firstLog) return alert('Adım bulunamadı!')
+
+      await supabase.from('production_flow_orders').update({
+        status: 'in_progress',
+        actual_start_date: new Date().toISOString(),
+        warehouse_in_quantity: order.planned_quantity,
+        current_step_order: 1,
+      }).eq('id', order.id)
+
+      await supabase.from('production_flow_step_logs').update({
+        in_quantity: order.planned_quantity,
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+      }).eq('id', firstLog.id)
+
+      await loadOrders(companyId!)
+      await loadStepLogs(order.id)
+      setSelectedOrder({ ...order, status: 'in_progress' as OrderStatus, warehouse_in_quantity: order.planned_quantity, current_step_order: 1 })
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
+  }
+
+  const completeStep = async (log: StepLog, payload: {
+    accepted_quantity: number; scrap_quantity: number; rework_quantity: number;
+    operator_id?: string; machine_id?: string; qc_result?: 'pass' | 'fail' | 'partial';
+    scrap_reason?: string; scrap_destination?: 'warehouse_reject' | 'non_compliant'; notes?: string;
+  }) => {
+    if (!selectedOrder) return
+    try {
+      const total = payload.accepted_quantity + payload.scrap_quantity + payload.rework_quantity
+      if (total > log.in_quantity + 0.001) {
+        return alert(`Toplam (${total}) giriş miktarını (${log.in_quantity}) aşamaz!`)
+      }
+
+      const operatorName = payload.operator_id ? employees.find(e => e.id === payload.operator_id)?.full_name : null
+      const machineName = payload.machine_id ? machines.find(m => m.id === payload.machine_id)?.machine_name : null
+
+      await supabase.from('production_flow_step_logs').update({
+        accepted_quantity: payload.accepted_quantity,
+        scrap_quantity: payload.scrap_quantity,
+        rework_quantity: payload.rework_quantity,
+        operator_id: payload.operator_id || null,
+        operator_name: operatorName || null,
+        machine_id: payload.machine_id || null,
+        machine_name: machineName || null,
+        qc_result: payload.qc_result || null,
+        scrap_reason: payload.scrap_reason || null,
+        scrap_destination: payload.scrap_destination || null,
+        notes: payload.notes || null,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', log.id)
+
+      // Move to next step
+      const nextLog = orderStepLogs.find(l => l.step_order === log.step_order + 1)
+      if (nextLog) {
+        await supabase.from('production_flow_step_logs').update({
+          in_quantity: payload.accepted_quantity,
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+        }).eq('id', nextLog.id)
+
+        await supabase.from('production_flow_orders').update({
+          current_step_order: nextLog.step_order,
+          total_scrap_quantity: (selectedOrder.total_scrap_quantity || 0) + payload.scrap_quantity,
+          updated_at: new Date().toISOString(),
+        }).eq('id', selectedOrder.id)
+      } else {
+        // Last step done
+        await supabase.from('production_flow_orders').update({
+          status: 'completed',
+          actual_end_date: new Date().toISOString(),
+          final_accepted_quantity: payload.accepted_quantity,
+          total_scrap_quantity: (selectedOrder.total_scrap_quantity || 0) + payload.scrap_quantity,
+          updated_at: new Date().toISOString(),
+        }).eq('id', selectedOrder.id)
+      }
+
+      await loadOrders(companyId!)
+      await loadStepLogs(selectedOrder.id)
+      const updated = (await supabase.from('production_flow_orders').select('*').eq('id', selectedOrder.id).single()).data
+      if (updated) setSelectedOrder(updated as any)
+      setActiveStepLogId(null)
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
+  }
+
+  // =====================================================
+  // STATS
+  // =====================================================
+  const stats = {
+    total: orders.length,
+    active: orders.filter(o => o.status === 'in_progress').length,
+    planned: orders.filter(o => o.status === 'planned').length,
+    completed: orders.filter(o => o.status === 'completed').length,
+    totalScrap: orders.reduce((s, o) => s + (o.total_scrap_quantity || 0), 0),
+    totalPlanned: orders.reduce((s, o) => s + (o.planned_quantity || 0), 0),
+    scrapRate: 0,
+  }
+  stats.scrapRate = stats.totalPlanned > 0 ? (stats.totalScrap / stats.totalPlanned) * 100 : 0
+
+  const filteredOrders = orders.filter(o => {
+    if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false
+    if (orderSearch && !o.order_number.toLowerCase().includes(orderSearch.toLowerCase()) && !(o.project_name || '').toLowerCase().includes(orderSearch.toLowerCase())) return false
+    return true
+  })
+
+  if (loading) return <div className="flex items-center justify-center h-screen"><div className="text-gray-600">Yükleniyor...</div></div>
+
+  return (
+    <PermissionGuard module="production" permission="view">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800">Üretim Akışı</h2>
+            <p className="text-gray-600">İş emirleri, rota şablonları ve adım bazlı üretim takibi</p>
+          </div>
+          {activeTab === 'orders' && (
+            <button onClick={openNewOrder} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg">
+              <Plus className="w-5 h-5" /> Yeni İş Emri
+            </button>
+          )}
+          {activeTab === 'routes' && (
+            <button onClick={openNewRoute} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg">
+              <Plus className="w-5 h-5" /> Yeni Rota
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex gap-1">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: Activity },
+            { id: 'orders', label: 'İş Emirleri', icon: ListChecks },
+            { id: 'routes', label: 'Rotalar', icon: Layers },
+          ].map(tab => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setSelectedOrder(null); setActiveTab(tab.id as any) }}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                  activeTab === tab.id ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {tab.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ===== DASHBOARD ===== */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard title="Toplam İş Emri" value={stats.total} icon={Factory} color="blue" />
+              <StatCard title="Üretimde" value={stats.active} icon={Play} color="yellow" />
+              <StatCard title="Tamamlanan" value={stats.completed} icon={CheckCircle2} color="green" />
+              <StatCard title="Hurda Oranı" value={`%${stats.scrapRate.toFixed(2)}`} icon={TrendingDown} color="red" />
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Aktif İş Emirleri</h3>
+              {orders.filter(o => o.status === 'in_progress').length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Aktif iş emri yok</p>
+              ) : (
+                <div className="space-y-2">
+                  {orders.filter(o => o.status === 'in_progress').map(o => (
+                    <button
+                      key={o.id}
+                      onClick={() => { setActiveTab('orders'); openOrderDetail(o) }}
+                      className="w-full flex items-center justify-between p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
+                    >
+                      <div>
+                        <div className="font-bold text-gray-800">{o.order_number}</div>
+                        <div className="text-sm text-gray-600">{o.project_name || '-'} • {o.planned_quantity} adet</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">Adım {o.current_step_order}</div>
+                        <ChevronRight className="w-5 h-5 text-blue-600 inline" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== İŞ EMİRLERİ ===== */}
+        {activeTab === 'orders' && !selectedOrder && (
+          <>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-wrap gap-3 items-center">
+              <input
+                value={orderSearch}
+                onChange={e => setOrderSearch(e.target.value)}
+                placeholder="İş emri no veya ürün ara..."
+                className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              <select value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value as any)}
+                className="px-4 py-2 border border-gray-300 rounded-lg">
+                <option value="all">Tüm Durumlar</option>
+                {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">İş Emri</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Ürün</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Rota</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Planlanan</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Adım</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Hurda</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Durum</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Öncelik</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Detay</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredOrders.map(o => {
+                    const st = STATUS_MAP[o.status]
+                    const pr = PRIORITY_MAP[o.priority]
+                    return (
+                      <tr key={o.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => openOrderDetail(o)}>
+                        <td className="px-4 py-3 font-bold text-gray-800">{o.order_number}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{o.project_name || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{o.route_name || '-'}</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold">{o.planned_quantity}</td>
+                        <td className="px-4 py-3 text-right text-sm">{o.current_step_order}</td>
+                        <td className="px-4 py-3 text-right text-sm text-red-600 font-semibold">{o.total_scrap_quantity || 0}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${st.bg} ${st.text}`}>{st.label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${pr.bg} ${pr.text}`}>{pr.label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Eye className="w-4 h-4 text-blue-600 inline" />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {filteredOrders.length === 0 && <p className="text-center text-gray-400 py-12">İş emri bulunamadı</p>}
+            </div>
+          </>
+        )}
+
+        {/* ===== İŞ EMRİ DETAY (FLOW VIEW) ===== */}
+        {activeTab === 'orders' && selectedOrder && (
+          <OrderDetail
+            order={selectedOrder}
+            stepLogs={orderStepLogs}
+            employees={employees}
+            machines={machines}
+            activeStepLogId={activeStepLogId}
+            setActiveStepLogId={setActiveStepLogId}
+            onBack={() => { setSelectedOrder(null); setActiveStepLogId(null) }}
+            onStart={() => startOrder(selectedOrder)}
+            onCompleteStep={completeStep}
+          />
+        )}
+
+        {/* ===== ROTALAR ===== */}
+        {activeTab === 'routes' && (
+          <div className="space-y-3">
+            {routes.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-md p-12 text-center">
+                <Layers className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 mb-2">Henüz rota tanımlanmamış</p>
+                <p className="text-sm text-gray-400 mb-4">İş emri açabilmek için önce bir ürün için rota oluştur.</p>
+                <button onClick={openNewRoute} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <Plus className="w-4 h-4" /> İlk Rotanı Oluştur
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {routes.map(r => (
+                  <div key={r.id} className="bg-white rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-bold text-gray-800">{r.route_name}</h3>
+                        <p className="text-xs text-gray-500 mt-1">{r.project_name || '— ürün tanımlanmamış —'}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <button onClick={() => openEditRoute(r)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><Edit3 className="w-4 h-4" /></button>
+                        <button onClick={() => deleteRoute(r)} className="p-2 hover:bg-red-50 rounded text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                    {r.description && <p className="text-sm text-gray-600 mb-3">{r.description}</p>}
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Layers className="w-4 h-4 text-blue-500" />
+                      <span className="font-semibold">{r.step_count}</span> adım
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== YENİ İŞ EMRİ MODAL ===== */}
+        {showOrderModal && (
+          <Modal title="Yeni İş Emri" onClose={() => setShowOrderModal(false)}>
+            <div className="space-y-4">
+              <Field label="Ürün / Parça *">
+                <select value={orderForm.project_id} onChange={e => setOrderForm({ ...orderForm, project_id: e.target.value, route_id: '' })} className={inputCls}>
+                  <option value="">Seçin...</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.project_name}</option>)}
+                </select>
+              </Field>
+              <Field label="Rota *">
+                <select value={orderForm.route_id} onChange={e => setOrderForm({ ...orderForm, route_id: e.target.value })} className={inputCls}>
+                  <option value="">Seçin...</option>
+                  {routes.filter(r => !orderForm.project_id || r.project_id === orderForm.project_id).map(r => (
+                    <option key={r.id} value={r.id}>{r.route_name} ({r.step_count} adım)</option>
+                  ))}
+                </select>
+                {orderForm.project_id && routes.filter(r => r.project_id === orderForm.project_id).length === 0 && (
+                  <p className="text-xs text-orange-600 mt-1">Bu ürün için rota tanımlanmamış. Önce Rotalar sekmesinden rota oluştur.</p>
+                )}
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Planlanan Miktar *">
+                  <input type="number" value={orderForm.planned_quantity} onChange={e => setOrderForm({ ...orderForm, planned_quantity: e.target.value })} className={inputCls} placeholder="örn. 1000" />
+                </Field>
+                <Field label="Öncelik">
+                  <select value={orderForm.priority} onChange={e => setOrderForm({ ...orderForm, priority: e.target.value as Priority })} className={inputCls}>
+                    {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <Field label="Müşteri (opsiyonel)">
+                <select value={orderForm.customer_id} onChange={e => setOrderForm({ ...orderForm, customer_id: e.target.value })} className={inputCls}>
+                  <option value="">Seçin...</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.contact_name}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Planlanan Başlangıç">
+                  <input type="date" value={orderForm.planned_start_date} onChange={e => setOrderForm({ ...orderForm, planned_start_date: e.target.value })} className={inputCls} />
+                </Field>
+                <Field label="Planlanan Bitiş">
+                  <input type="date" value={orderForm.planned_end_date} onChange={e => setOrderForm({ ...orderForm, planned_end_date: e.target.value })} className={inputCls} />
+                </Field>
+              </div>
+              <Field label="Notlar">
+                <textarea value={orderForm.notes} onChange={e => setOrderForm({ ...orderForm, notes: e.target.value })} className={inputCls} rows={2} />
+              </Field>
+              <div className="flex gap-3 pt-3">
+                <button onClick={() => setShowOrderModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+                <button onClick={saveOrder} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Oluştur</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ===== ROTA MODAL ===== */}
+        {showRouteModal && (
+          <Modal title={editingRoute ? 'Rotayı Düzenle' : 'Yeni Rota'} onClose={() => setShowRouteModal(false)} large>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Ürün / Parça *">
+                  <select value={routeForm.project_id} onChange={e => setRouteForm({ ...routeForm, project_id: e.target.value })} className={inputCls}>
+                    <option value="">Seçin...</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.project_name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Rota Adı *">
+                  <input value={routeForm.route_name} onChange={e => setRouteForm({ ...routeForm, route_name: e.target.value })} className={inputCls} placeholder="örn. B6-154 Standart Akış" />
+                </Field>
+              </div>
+              <Field label="Açıklama">
+                <textarea value={routeForm.description} onChange={e => setRouteForm({ ...routeForm, description: e.target.value })} className={inputCls} rows={2} />
+              </Field>
+
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-gray-800">Adımlar ({routeForm.steps.length})</h4>
+                  <button onClick={addStepToRoute} className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    <Plus className="w-4 h-4" /> Adım Ekle
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {routeForm.steps.map((step, idx) => {
+                    const info = getStepTypeInfo(step.step_type)
+                    const Icon = info.icon
+                    return (
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 flex items-start gap-2">
+                        <div className="flex flex-col gap-1 pt-1">
+                          <button onClick={() => moveStep(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-30">▲</button>
+                          <span className="text-xs text-gray-500 text-center">{idx + 1}</span>
+                          <button onClick={() => moveStep(idx, 1)} disabled={idx === routeForm.steps.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-30">▼</button>
+                        </div>
+                        <div className={`p-2 rounded ${info.color}`}><Icon className="w-4 h-4" /></div>
+                        <div className="flex-1 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={step.step_name} onChange={e => {
+                              const ns = [...routeForm.steps]; ns[idx].step_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                            }} placeholder="Adım adı" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                            <select value={step.step_type} onChange={e => {
+                              const ns = [...routeForm.steps]
+                              const t = e.target.value as StepType
+                              ns[idx].step_type = t
+                              ns[idx].is_qc_step = t.startsWith('qc_')
+                              setRouteForm({ ...routeForm, steps: ns })
+                            }} className="px-2 py-1 border border-gray-300 rounded text-sm">
+                              {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={step.station_name} onChange={e => {
+                              const ns = [...routeForm.steps]; ns[idx].station_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                            }} placeholder="İstasyon (örn. FR01)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                            <input type="number" value={step.expected_duration_minutes} onChange={e => {
+                              const ns = [...routeForm.steps]; ns[idx].expected_duration_minutes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                            }} placeholder="Süre (dk)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                          </div>
+                        </div>
+                        <button onClick={() => removeStepFromRoute(idx)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowRouteModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+                <button onClick={saveRoute} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editingRoute ? 'Güncelle' : 'Kaydet'}</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    </PermissionGuard>
+  )
+}
+
+// =====================================================
+// SUBCOMPONENTS
+// =====================================================
+const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function Modal({ title, children, onClose, large }: { title: string; children: React.ReactNode; onClose: () => void; large?: boolean }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className={`bg-white rounded-xl shadow-2xl p-6 w-full ${large ? 'max-w-4xl' : 'max-w-xl'} max-h-[92vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: any; color: string }) {
+  const colorMap: Record<string, string> = {
+    blue: 'border-blue-500 text-blue-600',
+    yellow: 'border-yellow-500 text-yellow-600',
+    green: 'border-green-500 text-green-600',
+    red: 'border-red-500 text-red-600',
+  }
+  return (
+    <div className={`bg-white rounded-xl shadow-md p-6 border-l-4 ${colorMap[color]}`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600 mb-1">{title}</p>
+          <p className="text-3xl font-bold text-gray-900">{value}</p>
+        </div>
+        <Icon className={`w-12 h-12 ${colorMap[color]}`} />
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// ORDER DETAIL (FLOW VIEW)
+// =====================================================
+function OrderDetail({
+  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep,
+}: {
+  order: FlowOrder; stepLogs: StepLog[]; employees: any[]; machines: any[];
+  activeStepLogId: string | null; setActiveStepLogId: (id: string | null) => void;
+  onBack: () => void; onStart: () => void;
+  onCompleteStep: (log: StepLog, payload: any) => void;
+}) {
+  const status = STATUS_MAP[order.status]
+  const isStarted = order.status === 'in_progress' || order.status === 'completed'
+  const activeStep = stepLogs.find(l => l.status === 'in_progress')
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
+        ← İş Emirleri Listesi
+      </button>
+
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h3 className="text-2xl font-bold text-gray-800">{order.order_number}</h3>
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${status.bg} ${status.text}`}>{status.label}</span>
+            </div>
+            <p className="text-gray-600">{order.project_name} • {order.route_name}</p>
+            {order.customer_name && <p className="text-sm text-gray-500">Müşteri: {order.customer_name}</p>}
+          </div>
+          {order.status === 'planned' && (
+            <button onClick={onStart} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-lg">
+              <Play className="w-5 h-5" /> Üretime Başla
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MiniStat label="Planlanan" value={order.planned_quantity} color="blue" />
+          <MiniStat label="Depo Girişi" value={order.warehouse_in_quantity || 0} color="amber" />
+          <MiniStat label="Toplam Hurda" value={order.total_scrap_quantity || 0} color="red" />
+          <MiniStat label="Kabul Edilen" value={order.final_accepted_quantity || 0} color="green" />
+        </div>
+      </div>
+
+      {/* Flow Steps */}
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <RefreshCw className="w-5 h-5 text-blue-500" /> Üretim Akışı
+        </h3>
+        {stepLogs.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">Adım bulunamadı.</p>
+        ) : (
+          <div className="space-y-2">
+            {stepLogs.map((log, idx) => {
+              const info = getStepTypeInfo(log.step_type)
+              const Icon = info.icon
+              const isCompleted = log.status === 'completed'
+              const isCurrent = log.status === 'in_progress'
+              const isPending = log.status === 'pending'
+              const isExpanded = activeStepLogId === log.id
+
+              return (
+                <div key={log.id}>
+                  <div
+                    className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
+                      isCompleted ? 'border-green-200 bg-green-50' :
+                      isCurrent ? 'border-blue-400 bg-blue-50 shadow-md' :
+                      'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                        isCompleted ? 'bg-green-500 text-white' :
+                        isCurrent ? 'bg-blue-500 text-white animate-pulse' :
+                        'bg-gray-300 text-gray-700'
+                      }`}>{log.step_order}</div>
+                    </div>
+                    <div className={`p-2 rounded ${info.color}`}><Icon className="w-5 h-5" /></div>
+                    <div className="flex-1">
+                      <div className="font-bold text-gray-800">
+                        {log.step_name}
+                        {log.station_name && <span className="ml-2 text-xs px-2 py-0.5 bg-white border border-gray-300 rounded">{log.station_name}</span>}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-0.5 flex items-center gap-3 flex-wrap">
+                        <span>Giriş: <b>{log.in_quantity}</b></span>
+                        {isCompleted && <>
+                          <span className="text-green-600">Kabul: <b>{log.accepted_quantity}</b></span>
+                          {log.scrap_quantity > 0 && <span className="text-red-600">Hurda: <b>{log.scrap_quantity}</b></span>}
+                          {log.rework_quantity > 0 && <span className="text-orange-600">Yeniden: <b>{log.rework_quantity}</b></span>}
+                          {log.operator_name && <span className="text-gray-500">• {log.operator_name}</span>}
+                        </>}
+                      </div>
+                    </div>
+                    {isCurrent && (
+                      <button
+                        onClick={() => setActiveStepLogId(isExpanded ? null : log.id)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm"
+                      >
+                        {isExpanded ? 'Kapat' : 'Tamamla →'}
+                      </button>
+                    )}
+                    {isCompleted && <CheckCircle2 className="w-6 h-6 text-green-500" />}
+                  </div>
+                  {isExpanded && isCurrent && (
+                    <StepCompleteForm
+                      log={log}
+                      employees={employees}
+                      machines={machines}
+                      onSubmit={(payload) => onCompleteStep(log, payload)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const colorMap: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-700',
+    green: 'bg-green-50 text-green-700',
+  }
+  return (
+    <div className={`rounded-lg p-3 text-center ${colorMap[color]}`}>
+      <p className="text-xs opacity-80">{label}</p>
+      <p className="text-2xl font-bold">{value}</p>
+    </div>
+  )
+}
+
+function StepCompleteForm({
+  log, employees, machines, onSubmit,
+}: {
+  log: StepLog; employees: any[]; machines: any[];
+  onSubmit: (payload: any) => void;
+}) {
+  const [accepted, setAccepted] = useState(log.in_quantity.toString())
+  const [scrap, setScrap] = useState('0')
+  const [rework, setRework] = useState('0')
+  const [operatorId, setOperatorId] = useState('')
+  const [machineId, setMachineId] = useState('')
+  const [qcResult, setQcResult] = useState<'pass' | 'fail' | 'partial' | ''>('')
+  const [scrapReason, setScrapReason] = useState('')
+  const [scrapDest, setScrapDest] = useState<'warehouse_reject' | 'non_compliant' | ''>('')
+  const [notes, setNotes] = useState('')
+
+  const remaining = log.in_quantity - parseFloat(accepted || '0') - parseFloat(scrap || '0') - parseFloat(rework || '0')
+
+  return (
+    <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mt-2 ml-12 space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Kabul Edilen (Sonraki adıma)</label>
+          <input type="number" value={accepted} onChange={e => setAccepted(e.target.value)} className="w-full px-3 py-2 border border-green-300 rounded bg-white" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Hurda</label>
+          <input type="number" value={scrap} onChange={e => setScrap(e.target.value)} className="w-full px-3 py-2 border border-red-300 rounded bg-white" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Yeniden İşlem</label>
+          <input type="number" value={rework} onChange={e => setRework(e.target.value)} className="w-full px-3 py-2 border border-orange-300 rounded bg-white" />
+        </div>
+      </div>
+      <div className={`text-xs font-semibold ${remaining === 0 ? 'text-green-600' : remaining < 0 ? 'text-red-600' : 'text-orange-600'}`}>
+        Giriş: {log.in_quantity} | Toplam dağıtılan: {(parseFloat(accepted || '0') + parseFloat(scrap || '0') + parseFloat(rework || '0')).toFixed(2)} | Kalan: {remaining.toFixed(2)}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Operatör</label>
+          <select value={operatorId} onChange={e => setOperatorId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm">
+            <option value="">Seçin...</option>
+            {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Makine</label>
+          <select value={machineId} onChange={e => setMachineId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm">
+            <option value="">Seçin...</option>
+            {machines.map(m => <option key={m.id} value={m.id}>{m.machine_code} - {m.machine_name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {log.step_type.startsWith('qc_') && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">QC Sonucu</label>
+            <select value={qcResult} onChange={e => setQcResult(e.target.value as any)} className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm">
+              <option value="">Seçin...</option>
+              <option value="pass">Onay (Tümü Kabul)</option>
+              <option value="partial">Kısmi (Bir Kısmı Ret)</option>
+              <option value="fail">Ret (Tümü Reddedildi)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Hurda Lokasyonu</label>
+            <select value={scrapDest} onChange={e => setScrapDest(e.target.value as any)} className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm">
+              <option value="">—</option>
+              <option value="warehouse_reject">Depo Ret Alanı</option>
+              <option value="non_compliant">Uygun Olmayan Ürün</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {parseFloat(scrap || '0') > 0 && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Hurda Nedeni</label>
+          <input value={scrapReason} onChange={e => setScrapReason(e.target.value)} placeholder="Örn: Boyut hatası, çatlak, vb." className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm" />
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 mb-1">Notlar</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm" />
+      </div>
+
+      <button
+        onClick={() => onSubmit({
+          accepted_quantity: parseFloat(accepted || '0'),
+          scrap_quantity: parseFloat(scrap || '0'),
+          rework_quantity: parseFloat(rework || '0'),
+          operator_id: operatorId || undefined,
+          machine_id: machineId || undefined,
+          qc_result: qcResult || undefined,
+          scrap_reason: scrapReason || undefined,
+          scrap_destination: scrapDest || undefined,
+          notes: notes || undefined,
+        })}
+        className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold flex items-center justify-center gap-2"
+      >
+        <CheckCircle2 className="w-5 h-5" /> Adımı Tamamla ve Sonrakine Geç
+      </button>
+    </div>
+  )
+}

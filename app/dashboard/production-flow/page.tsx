@@ -13,7 +13,7 @@ import {
 // =====================================================
 // TYPES
 // =====================================================
-type StepType = 'warehouse_in' | 'qc_incoming' | 'operation' | 'qc_intermediate' | 'qc_final' | 'packaging' | 'shipping'
+type StepType = 'warehouse_in' | 'qc_incoming' | 'operation' | 'qc_intermediate' | 'qc_final' | 'packaging' | 'shipping' | 'note'
 type OrderStatus = 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled'
 type StepStatus = 'pending' | 'in_progress' | 'completed' | 'on_hold'
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
@@ -133,6 +133,7 @@ const STEP_TYPES: { value: StepType; label: string; icon: any; color: string }[]
   { value: 'qc_final', label: 'Son Kontrol', icon: ShieldCheck, color: 'bg-red-100 text-red-700' },
   { value: 'packaging', label: 'Paketleme', icon: Package, color: 'bg-purple-100 text-purple-700' },
   { value: 'shipping', label: 'Sevkiyat', icon: Truck, color: 'bg-green-100 text-green-700' },
+  { value: 'note', label: 'Not', icon: Edit3, color: 'bg-yellow-100 text-yellow-800' },
 ]
 
 const STATUS_MAP: Record<OrderStatus, { label: string; bg: string; text: string }> = {
@@ -563,7 +564,8 @@ export default function ProductionFlowPage() {
         step_type: rs.step_type,
         station_name: rs.station_name,
         notes: rs.notes || null,
-        status: 'pending',
+        // Note tipi adımlar otomatik tamamlanmış — sadece bilgilendirme amaçlı, akışı bloklamaz
+        status: rs.step_type === 'note' ? 'completed' : 'pending',
         created_by: user?.id,
       }))
       if (logsPayload.length > 0) {
@@ -589,14 +591,15 @@ export default function ProductionFlowPage() {
   const startOrder = async (order: FlowOrder) => {
     if (!confirm(`"${order.order_number}" iş emrini başlatmak istiyor musun?\n\n${order.planned_quantity} adet ilk adımdan başlayacak.`)) return
     try {
-      const firstLog = orderStepLogs[0]
+      // İlk operasyonel adım (note tipi atla)
+      const firstLog = orderStepLogs.find(l => l.step_type !== 'note')
       if (!firstLog) return alert('Adım bulunamadı!')
 
       await supabase.from('production_flow_orders').update({
         status: 'in_progress',
         actual_start_date: new Date().toISOString(),
         warehouse_in_quantity: order.planned_quantity,
-        current_step_order: 1,
+        current_step_order: firstLog.step_order,
       }).eq('id', order.id)
 
       await supabase.from('production_flow_step_logs').update({
@@ -607,7 +610,7 @@ export default function ProductionFlowPage() {
 
       await loadOrders(companyId!)
       await loadStepLogs(order.id)
-      setSelectedOrder({ ...order, status: 'in_progress' as OrderStatus, warehouse_in_quantity: order.planned_quantity, current_step_order: 1 })
+      setSelectedOrder({ ...order, status: 'in_progress' as OrderStatus, warehouse_in_quantity: order.planned_quantity, current_step_order: firstLog.step_order })
     } catch (err: any) {
       alert('Hata: ' + err.message)
     }
@@ -645,8 +648,10 @@ export default function ProductionFlowPage() {
         updated_at: new Date().toISOString(),
       }).eq('id', log.id)
 
-      // Move to next step
-      const nextLog = orderStepLogs.find(l => l.step_order === log.step_order + 1)
+      // Move to next operational step (skip note-type steps)
+      const nextLog = orderStepLogs
+        .filter(l => l.step_order > log.step_order && l.step_type !== 'note')
+        .sort((a, b) => a.step_order - b.step_order)[0]
       if (nextLog) {
         await supabase.from('production_flow_step_logs').update({
           in_quantity: payload.accepted_quantity,
@@ -910,7 +915,7 @@ export default function ProductionFlowPage() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Parça Bilgileri */}
+                {/* Parça Bilgileri (IEM No kaldırıldı, Dosya No oto-üretilir) */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">📋 Parça Bilgileri</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -919,9 +924,6 @@ export default function ProductionFlowPage() {
                     </Field>
                     <Field label="Parça Adı *">
                       <input type="text" value={orderForm.parca_adi} onChange={e => setOrderForm({ ...orderForm, parca_adi: e.target.value })} className={inputCls} />
-                    </Field>
-                    <Field label="IEM No">
-                      <input type="text" value={orderForm.iem_no} onChange={e => setOrderForm({ ...orderForm, iem_no: e.target.value })} className={inputCls} />
                     </Field>
                     <Field label="Revizyon No">
                       <input type="text" value={orderForm.revizyon_no} onChange={e => setOrderForm({ ...orderForm, revizyon_no: e.target.value })} className={inputCls} />
@@ -935,8 +937,8 @@ export default function ProductionFlowPage() {
                     <Field label="Delta FAI">
                       <input type="text" value={orderForm.delta_fai} onChange={e => setOrderForm({ ...orderForm, delta_fai: e.target.value })} className={inputCls} />
                     </Field>
-                    <Field label="Dosya No">
-                      <input type="text" value={orderForm.dosya_no} onChange={e => setOrderForm({ ...orderForm, dosya_no: e.target.value })} className={inputCls} />
+                    <Field label="Dosya No (otomatik)">
+                      <input type="text" value={orderForm.dosya_no} onChange={e => setOrderForm({ ...orderForm, dosya_no: e.target.value })} className={`${inputCls} bg-gray-50`} />
                     </Field>
                   </div>
                 </div>
@@ -1014,20 +1016,6 @@ export default function ProductionFlowPage() {
                   </div>
                 </div>
 
-                {/* Doğrulama */}
-                <div>
-                  <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">✅ Doğrulama</h4>
-                  <div className="grid grid-cols-2 gap-3 items-end">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={orderForm.dogrulama} onChange={e => setOrderForm({ ...orderForm, dogrulama: e.target.checked })} className="w-5 h-5 text-green-600 rounded" />
-                      <span className="text-sm font-medium text-gray-700">Doğrulandı</span>
-                    </label>
-                    <Field label="Doğrulayan">
-                      <input type="text" value={orderForm.dogrulayan} onChange={e => setOrderForm({ ...orderForm, dogrulayan: e.target.value })} placeholder="İsim" className={inputCls} />
-                    </Field>
-                  </div>
-                </div>
-
                 {/* Notlar */}
                 <Field label="Notlar">
                   <textarea value={orderForm.notes} onChange={e => setOrderForm({ ...orderForm, notes: e.target.value })} rows={2} placeholder="Ek notlar..." className={inputCls} />
@@ -1085,7 +1073,7 @@ export default function ProductionFlowPage() {
                   <h4 className="text-base font-bold text-blue-900 mb-3 flex items-center gap-2">
                     <RefreshCw className="w-5 h-5" /> Üretim Akışı Bilgileri
                   </h4>
-                  <p className="text-xs text-blue-700 mb-4">Bu iş emri hangi rotayı izleyecek, nasıl planlanacak ve hangi ekipman kullanılacak?</p>
+                  <p className="text-xs text-blue-700 mb-4">Bu iş emri hangi rotayı izleyecek ve nasıl planlanacak?</p>
                   <div className="space-y-3">
                     <Field label="Rota / İş Akışı *">
                       <select value={orderForm.route_id} onChange={e => setOrderForm({ ...orderForm, route_id: e.target.value })} className={inputCls}>
@@ -1098,15 +1086,7 @@ export default function ProductionFlowPage() {
                         <p className="text-xs text-orange-700 mt-1">⚠ Bu ürün için rota tanımlanmamış. Önce Rotalar sekmesinden oluştur.</p>
                       )}
                     </Field>
-                    <Field label="Ekipman">
-                      <input type="text" value={orderForm.ekipman} onChange={e => setOrderForm({ ...orderForm, ekipman: e.target.value })} placeholder="Örn: CNC-01, Test Fikstürü #4" className={inputCls} />
-                    </Field>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <Field label="Öncelik">
-                        <select value={orderForm.priority} onChange={e => setOrderForm({ ...orderForm, priority: e.target.value as Priority })} className={inputCls}>
-                          {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                        </select>
-                      </Field>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Field label="Planlanan Başlangıç">
                         <input type="date" value={orderForm.planned_start_date} onChange={e => setOrderForm({ ...orderForm, planned_start_date: e.target.value })} className={inputCls} />
                       </Field>
@@ -1149,16 +1129,25 @@ export default function ProductionFlowPage() {
               <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-bold text-gray-800">Adımlar ({routeForm.steps.length})</h4>
-                  <button onClick={addStepToRoute} className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    <Plus className="w-4 h-4" /> Adım Ekle
-                  </button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setRouteForm({ ...routeForm, steps: [...routeForm.steps, { step_name: 'NOT', step_type: 'note', station_name: '', is_qc_step: false, expected_duration_minutes: '', notes: '' }] })}
+                      className="text-sm text-yellow-700 hover:text-yellow-800 flex items-center gap-1">
+                      <Edit3 className="w-4 h-4" /> Not Ekle
+                    </button>
+                    <button onClick={addStepToRoute} className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                      <Plus className="w-4 h-4" /> Adım Ekle
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {routeForm.steps.map((step, idx) => {
                     const info = getStepTypeInfo(step.step_type)
                     const Icon = info.icon
+                    const isNote = step.step_type === 'note'
                     return (
-                      <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 flex items-start gap-2">
+                      <div key={idx} className={`p-3 rounded-lg border flex items-start gap-2 ${
+                        isNote ? 'bg-yellow-50 border-yellow-300 border-dashed' : 'bg-white border-gray-200'
+                      }`}>
                         <div className="flex flex-col gap-1 pt-1">
                           <button onClick={() => moveStep(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-30">▲</button>
                           <span className="text-xs text-gray-500 text-center">{idx + 1}</span>
@@ -1166,32 +1155,56 @@ export default function ProductionFlowPage() {
                         </div>
                         <div className={`p-2 rounded ${info.color}`}><Icon className="w-4 h-4" /></div>
                         <div className="flex-1 space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <input value={step.step_name} onChange={e => {
-                              const ns = [...routeForm.steps]; ns[idx].step_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
-                            }} placeholder="Adım adı" className="px-2 py-1 border border-gray-300 rounded text-sm" />
-                            <select value={step.step_type} onChange={e => {
-                              const ns = [...routeForm.steps]
-                              const t = e.target.value as StepType
-                              ns[idx].step_type = t
-                              ns[idx].is_qc_step = t.startsWith('qc_')
-                              setRouteForm({ ...routeForm, steps: ns })
-                            }} className="px-2 py-1 border border-gray-300 rounded text-sm">
-                              {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input value={step.station_name} onChange={e => {
-                              const ns = [...routeForm.steps]; ns[idx].station_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
-                            }} placeholder="İstasyon (örn. FR01)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
-                            <input type="number" value={step.expected_duration_minutes} onChange={e => {
-                              const ns = [...routeForm.steps]; ns[idx].expected_duration_minutes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
-                            }} placeholder="Süre (dk)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
-                          </div>
-                          <textarea value={step.notes} onChange={e => {
-                            const ns = [...routeForm.steps]; ns[idx].notes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
-                          }} placeholder="Adım notu (talimat, dikkat edilecek noktalar, vb.)" rows={2}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-yellow-50/50" />
+                          {isNote ? (
+                            // Sadece not metni
+                            <div>
+                              <div className="text-xs font-semibold text-yellow-800 mb-1 flex items-center gap-2">
+                                📝 Adımlar Arası Not
+                                <select value={step.step_type} onChange={e => {
+                                  const ns = [...routeForm.steps]
+                                  const t = e.target.value as StepType
+                                  ns[idx].step_type = t
+                                  ns[idx].is_qc_step = t.startsWith('qc_')
+                                  setRouteForm({ ...routeForm, steps: ns })
+                                }} className="ml-auto px-2 py-0.5 border border-gray-300 rounded text-xs bg-white">
+                                  {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                </select>
+                              </div>
+                              <textarea value={step.notes} onChange={e => {
+                                const ns = [...routeForm.steps]; ns[idx].notes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                              }} placeholder="Notu buraya yaz... (örn. Bu adımdan sonra parça soğutulmalı, fikstür değiştirilmeli vb.)" rows={2}
+                                className="w-full px-2 py-1 border border-yellow-300 rounded text-sm bg-white" />
+                            </div>
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input value={step.step_name} onChange={e => {
+                                  const ns = [...routeForm.steps]; ns[idx].step_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                                }} placeholder="Adım adı" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                                <select value={step.step_type} onChange={e => {
+                                  const ns = [...routeForm.steps]
+                                  const t = e.target.value as StepType
+                                  ns[idx].step_type = t
+                                  ns[idx].is_qc_step = t.startsWith('qc_')
+                                  setRouteForm({ ...routeForm, steps: ns })
+                                }} className="px-2 py-1 border border-gray-300 rounded text-sm">
+                                  {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                </select>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input value={step.station_name} onChange={e => {
+                                  const ns = [...routeForm.steps]; ns[idx].station_name = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                                }} placeholder="İstasyon (örn. FR01)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                                <input type="number" value={step.expected_duration_minutes} onChange={e => {
+                                  const ns = [...routeForm.steps]; ns[idx].expected_duration_minutes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                                }} placeholder="Süre (dk)" className="px-2 py-1 border border-gray-300 rounded text-sm" />
+                              </div>
+                              <textarea value={step.notes} onChange={e => {
+                                const ns = [...routeForm.steps]; ns[idx].notes = e.target.value; setRouteForm({ ...routeForm, steps: ns })
+                              }} placeholder="Adım notu (talimat, dikkat edilecek noktalar, vb.)" rows={2}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-yellow-50/50" />
+                            </>
+                          )}
                         </div>
                         <button onClick={() => removeStepFromRoute(idx)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -1286,9 +1299,9 @@ function OrderDetail({
     const sectionsHtml = [
       { title: 'Parça Bilgileri', items: [
         ['Parça No', val(order.parca_no)], ['Parça Adı', val(order.parca_adi)],
-        ['IEM No', val(order.iem_no)], ['Revizyon No', val(order.revizyon_no)],
-        ['FAI', val(order.fai)], ['Seri', val(order.seri)],
-        ['Delta FAI', val(order.delta_fai)], ['Dosya No', val(order.dosya_no)],
+        ['Revizyon No', val(order.revizyon_no)], ['FAI', val(order.fai)],
+        ['Seri', val(order.seri)], ['Delta FAI', val(order.delta_fai)],
+        ['Dosya No', val(order.dosya_no)],
       ]},
       { title: 'Proje & Müşteri', items: [
         ['Proje / Ürün', val(order.project_name)], ['Müşteri', val(order.customer_name)],
@@ -1303,10 +1316,7 @@ function OrderDetail({
         ['Bitiş Tarihi', fmtDate(order.bitis_tarihi)],
         ['Teslim Tarihi', fmtDate(order.teslim_tarihi)],
       ]},
-      { title: 'Doğrulama', items: [
-        ['Durum', order.dogrulama ? 'Doğrulandı ✓' : 'Bekliyor'],
-        ['Doğrulayan', val(order.dogrulayan)],
-      ]},
+      // Doğrulama bölümü çıktıdan kaldırıldı
     ].map(sec => `
       <div class="section">
         <h3>${sec.title}</h3>
@@ -1318,9 +1328,14 @@ function OrderDetail({
       </div>
     `).join('')
 
-    // Geçerli Doküman Listesi
+    // Geçerli Doküman Listesi — her zaman görünür, en az 6 satır
     const validDocs = order.valid_documents || []
-    const validDocsHtml = validDocs.length > 0 ? `
+    const MIN_DOC_ROWS = 6
+    const docRows = [
+      ...validDocs.map(d => ({ name: esc(d.name) || '', doc_no: esc(d.doc_no) || '', revision: esc(d.revision) || '', date: d.date ? fmtDate(d.date) : '' })),
+      ...Array.from({ length: Math.max(0, MIN_DOC_ROWS - validDocs.length) }, () => ({ name: '', doc_no: '', revision: '', date: '' })),
+    ]
+    const validDocsHtml = `
       <div class="section">
         <h3>📑 Geçerli Doküman Listesi</h3>
         <table class="docs">
@@ -1333,28 +1348,26 @@ function OrderDetail({
             </tr>
           </thead>
           <tbody>
-            ${validDocs.map(d => `
+            ${docRows.map(d => `
               <tr>
-                <td>${esc(d.name) || '-'}</td>
-                <td>${esc(d.doc_no) || '-'}</td>
-                <td>${esc(d.revision) || '-'}</td>
-                <td>${d.date ? fmtDate(d.date) : '-'}</td>
+                <td>${d.name || '&nbsp;'}</td>
+                <td>${d.doc_no || '&nbsp;'}</td>
+                <td>${d.revision || '&nbsp;'}</td>
+                <td>${d.date || '&nbsp;'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
-    ` : ''
+    `
 
-    // Akış (Ekipman & Rota & Öncelik)
+    // Akış (sadece Rota + Plan Tarihleri — ekipman ve öncelik çıkarıldı)
     const akisHtml = `
       <div class="section">
         <h3>🔄 Üretim Akışı Bilgileri</h3>
         <table class="kv">
           <tbody>
             <tr><td class="k">Rota</td><td class="v">${esc(val(order.route_name))}</td></tr>
-            <tr><td class="k">Ekipman</td><td class="v">${esc(val(order.ekipman))}</td></tr>
-            <tr><td class="k">Öncelik</td><td class="v">${PRIORITY_MAP[order.priority]?.label || '-'}</td></tr>
             <tr><td class="k">Plan Başlangıç</td><td class="v">${fmtDate(order.planned_start_date)}</td></tr>
             <tr><td class="k">Plan Bitiş</td><td class="v">${fmtDate(order.planned_end_date)}</td></tr>
           </tbody>
@@ -1366,6 +1379,21 @@ function OrderDetail({
       const info = STEP_TYPES.find(t => t.value === log.step_type) || STEP_TYPES[2]
       const isCompleted = log.status === 'completed'
       const stepNote = (log as any).notes
+      const isNote = log.step_type === 'note'
+
+      // Note tipi adım: tam genişlikte sarı banner satır (operasyonel sütunlar yok)
+      if (isNote) {
+        return `
+          <tr class="note-row">
+            <td class="ord">📝</td>
+            <td colspan="8" class="note-content">
+              <span class="note-label">ADIMLAR ARASI NOT:</span>
+              ${esc(stepNote || log.step_name)}
+            </td>
+          </tr>
+        `
+      }
+
       return `
         <tr>
           <td class="ord">${log.step_order}</td>
@@ -1383,7 +1411,7 @@ function OrderDetail({
           <td class="op">${esc(log.machine_name || '')}</td>
           <td class="kase">
             <div class="kase-box">
-              <div class="kase-label">Kaşe / İmza</div>
+              <div class="kase-label">Doğrulama</div>
             </div>
           </td>
         </tr>
@@ -1402,7 +1430,9 @@ function OrderDetail({
         .header .meta { font-size: 10px; color: #555; text-align: right; line-height: 1.5; }
         .order-num { font-size: 14px; font-weight: 700; color: #1e40af; }
         .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #dbeafe; color: #1e40af; margin-left: 6px; }
-        .doc-no { font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px; margin-left: 6px; }
+        .doc-meta { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .doc-no { font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px; }
+        .dosya-no { font-size: 11px; font-weight: 700; color: #1e40af; background: #dbeafe; padding: 2px 8px; border-radius: 4px; }
         .section { margin-bottom: 12px; page-break-inside: avoid; }
         .section h3 { font-size: 11px; color: #1e40af; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
         table.kv { width: 100%; border-collapse: collapse; }
@@ -1428,6 +1458,9 @@ function OrderDetail({
         table.flow .kase { width: 130px; padding: 4px; }
         .kase-box { height: 60px; border: 1.5px dashed #94a3b8; border-radius: 4px; position: relative; background: #fafbfc; }
         .kase-box .kase-label { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); font-size: 7.5px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; }
+        table.flow .note-row td { background: #fef9c3 !important; border-color: #fbbf24; }
+        table.flow .note-content { font-size: 10px; color: #713f12; padding: 6px 8px; }
+        table.flow .note-label { font-weight: 700; color: #854d0e; margin-right: 6px; letter-spacing: 0.5px; }
         .footer { margin-top: 18px; font-size: 9px; color: #666; display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding-top: 6px; }
         .notes-block { background: #fef9c3; border: 1px solid #fde047; border-radius: 4px; padding: 6px 8px; margin-top: 10px; font-size: 10px; }
         .notes-block .lbl { font-weight: 700; color: #854d0e; font-size: 9px; }
@@ -1439,13 +1472,11 @@ function OrderDetail({
           <div class="order-num">
             ${order.order_number}
             <span class="status-pill">${status.label}</span>
-            <span class="doc-no">Doküman No: DF03</span>
           </div>
-        </div>
-        <div class="meta">
-          <div><b>Çıktı Tarihi:</b> ${today}</div>
-          <div><b>Rota:</b> ${esc(order.route_name || '-')}</div>
-          <div><b>Öncelik:</b> ${PRIORITY_MAP[order.priority]?.label || '-'}</div>
+          <div class="doc-meta">
+            <span class="doc-no">Doküman No: DF03</span>
+            ${order.dosya_no ? `<span class="dosya-no">Dosya No: ${esc(order.dosya_no)}</span>` : ''}
+          </div>
         </div>
       </div>
 
@@ -1469,7 +1500,7 @@ function OrderDetail({
             <th>Yeniden</th>
             <th>Operatör</th>
             <th>Makine</th>
-            <th>Kaşe / İmza</th>
+            <th>Doğrulama</th>
           </tr>
         </thead>
         <tbody>${stepsHtml}</tbody>
@@ -1527,11 +1558,10 @@ function OrderDetail({
       <div className="bg-white rounded-xl shadow-md p-6 space-y-5">
         <h3 className="text-lg font-bold text-gray-800 mb-2">İş Emri Detayları</h3>
 
-        {/* Parça Bilgileri */}
+        {/* Parça Bilgileri (IEM No kaldırıldı) */}
         <DetailSection title="📋 Parça Bilgileri" items={[
           ['Parça No', order.parca_no],
           ['Parça Adı', order.parca_adi],
-          ['IEM No', order.iem_no],
           ['Revizyon No', order.revizyon_no],
           ['FAI', order.fai],
           ['Seri', order.seri],
@@ -1568,12 +1598,6 @@ function OrderDetail({
           ['Bitiş Tarihi', order.bitis_tarihi ? new Date(order.bitis_tarihi).toLocaleDateString('tr-TR') : null],
         ]} />
 
-        {/* Doğrulama */}
-        <DetailSection title="✅ Doğrulama" items={[
-          ['Durum', order.dogrulama ? 'Doğrulandı ✓' : 'Bekliyor'],
-          ['Doğrulayan', order.dogrulayan],
-        ]} />
-
         {order.notes && (
           <div className="bg-yellow-50 rounded-lg p-3">
             <p className="text-xs text-gray-500 mb-0.5">Notlar</p>
@@ -1608,15 +1632,13 @@ function OrderDetail({
           </div>
         )}
 
-        {/* Akış Bilgileri */}
+        {/* Akış Bilgileri (ekipman + öncelik kaldırıldı) */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
           <h4 className="text-sm font-bold text-blue-900 mb-3 flex items-center gap-2 border-b border-blue-200 pb-1">
             <RefreshCw className="w-4 h-4" /> Üretim Akışı
           </h4>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <DetailCell label="Rota" value={order.route_name} />
-            <DetailCell label="Ekipman" value={order.ekipman} />
-            <DetailCell label="Öncelik" value={PRIORITY_MAP[order.priority]?.label} />
             <DetailCell label="Plan Başlangıç" value={order.planned_start_date ? new Date(order.planned_start_date).toLocaleDateString('tr-TR') : null} />
             <DetailCell label="Plan Bitiş" value={order.planned_end_date ? new Date(order.planned_end_date).toLocaleDateString('tr-TR') : null} />
           </div>
@@ -1639,6 +1661,19 @@ function OrderDetail({
               const isCurrent = log.status === 'in_progress'
               const isPending = log.status === 'pending'
               const isExpanded = activeStepLogId === log.id
+              const isNote = log.step_type === 'note'
+
+              if (isNote) {
+                return (
+                  <div key={log.id} className="bg-yellow-50 border-2 border-yellow-300 border-dashed rounded-lg p-3 flex items-start gap-3">
+                    <Edit3 className="w-5 h-5 text-yellow-700 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-yellow-800 uppercase tracking-wide mb-1">📝 Adım Notu</div>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap">{(log as any).notes || log.step_name}</div>
+                    </div>
+                  </div>
+                )
+              }
 
               return (
                 <div key={log.id}>
@@ -1678,7 +1713,7 @@ function OrderDetail({
                       )}
                     </div>
 
-                    {/* Kaşe / İmza Alanı */}
+                    {/* Doğrulama Alanı */}
                     <div className="hidden md:flex flex-col items-center justify-center min-w-[120px] h-[70px] border-2 border-dashed border-gray-400 rounded-md bg-white px-2 relative">
                       {isCompleted && log.operator_name ? (
                         <div className="text-[10px] text-gray-700 text-center leading-tight">
@@ -1686,9 +1721,9 @@ function OrderDetail({
                           {log.completed_at && <div className="text-gray-500 mt-0.5">{new Date(log.completed_at).toLocaleDateString('tr-TR')}</div>}
                         </div>
                       ) : (
-                        <Stamp className="w-5 h-5 text-gray-300" />
+                        <CheckCircle2 className="w-5 h-5 text-gray-300" />
                       )}
-                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-1.5 text-[8px] text-gray-400 uppercase tracking-wider">Kaşe / İmza</span>
+                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-1.5 text-[8px] text-gray-400 uppercase tracking-wider">Doğrulama</span>
                     </div>
 
                     {isCurrent && (

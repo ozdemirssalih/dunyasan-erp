@@ -588,6 +588,23 @@ export default function ProductionFlowPage() {
     await loadStepLogs(order.id)
   }
 
+  const deleteOrder = async (order: FlowOrder) => {
+    if (!confirm(`"${order.order_number}" iş emrini silmek istediğine emin misin?\n\nTüm adım kayıtları da silinecek. Bu işlem geri alınamaz.`)) return
+    try {
+      // step logs CASCADE ile DB tarafında silinir (FK ON DELETE CASCADE)
+      const { error } = await supabase.from('production_flow_orders').delete().eq('id', order.id)
+      if (error) throw error
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(null)
+        setActiveStepLogId(null)
+      }
+      await loadOrders(companyId!)
+      alert('✅ İş emri silindi.')
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
+  }
+
   const startOrder = async (order: FlowOrder) => {
     if (!confirm(`"${order.order_number}" iş emrini başlatmak istiyor musun?\n\n${order.planned_quantity} adet ilk adımdan başlayacak.`)) return
     try {
@@ -817,7 +834,7 @@ export default function ProductionFlowPage() {
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Hurda</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Durum</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Öncelik</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Detay</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -838,8 +855,15 @@ export default function ProductionFlowPage() {
                         <td className="px-4 py-3 text-center">
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${pr.bg} ${pr.text}`}>{pr.label}</span>
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <Eye className="w-4 h-4 text-blue-600 inline" />
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openOrderDetail(o)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600" title="Detay">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => deleteOrder(o)} className="p-1.5 rounded hover:bg-red-50 text-red-600" title="Sil">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -863,6 +887,7 @@ export default function ProductionFlowPage() {
             onBack={() => { setSelectedOrder(null); setActiveStepLogId(null) }}
             onStart={() => startOrder(selectedOrder)}
             onCompleteStep={completeStep}
+            onDelete={() => deleteOrder(selectedOrder)}
           />
         )}
 
@@ -1280,12 +1305,13 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: s
 // ORDER DETAIL (FLOW VIEW)
 // =====================================================
 function OrderDetail({
-  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep,
+  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep, onDelete,
 }: {
   order: FlowOrder; stepLogs: StepLog[]; employees: any[]; machines: any[];
   activeStepLogId: string | null; setActiveStepLogId: (id: string | null) => void;
   onBack: () => void; onStart: () => void;
   onCompleteStep: (log: StepLog, payload: any) => void;
+  onDelete: () => void;
 }) {
   const status = STATUS_MAP[order.status]
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
@@ -1538,9 +1564,14 @@ function OrderDetail({
         <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
           ← İş Emirleri Listesi
         </button>
-        <button onClick={() => setShowPrintDialog(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 shadow">
-          <Printer className="w-4 h-4" /> PDF Yazdır
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowPrintDialog(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 shadow">
+            <Printer className="w-4 h-4" /> PDF Yazdır
+          </button>
+          <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow">
+            <Trash2 className="w-4 h-4" /> Sil
+          </button>
+        </div>
       </div>
 
       {/* PDF Tarih Sorgu Modal */}

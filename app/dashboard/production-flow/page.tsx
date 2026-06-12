@@ -1291,7 +1291,16 @@ function OrderDetail({
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
   const activeStep = stepLogs.find(l => l.status === 'in_progress')
 
-  const handlePrint = () => {
+  // PDF tarih sorgu modal'ı
+  const [showPrintDialog, setShowPrintDialog] = useState(false)
+  const [printBaslama, setPrintBaslama] = useState(order.baslama_tarihi || order.planned_start_date || '')
+  const [printBitis, setPrintBitis] = useState(order.bitis_tarihi || order.planned_end_date || '')
+  const [printTeslim, setPrintTeslim] = useState(order.teslim_tarihi || '')
+
+  const handlePrint = (override?: { baslama: string; bitis: string; teslim: string }) => {
+    const useBaslama = override?.baslama ?? printBaslama
+    const useBitis = override?.bitis ?? printBitis
+    const useTeslim = override?.teslim ?? printTeslim
     const printWin = window.open('', '_blank', 'width=1100,height=800')
     if (!printWin) return
     const today = new Date().toLocaleDateString('tr-TR')
@@ -1315,9 +1324,9 @@ function OrderDetail({
       ]},
       // Operasyon & Üretim bölümü çıktıdan kaldırıldı
       { title: 'Tarihler', items: [
-        ['Başlama Tarihi', fmtDate(order.baslama_tarihi)],
-        ['Bitiş Tarihi', fmtDate(order.bitis_tarihi)],
-        ['Teslim Tarihi', fmtDate(order.teslim_tarihi)],
+        ['Başlama Tarihi', fmtDate(useBaslama)],
+        ['Bitiş Tarihi', fmtDate(useBitis)],
+        ['Teslim Tarihi', fmtDate(useTeslim)],
       ]},
       // Doğrulama bölümü çıktıdan kaldırıldı
     ].map(sec => `
@@ -1527,10 +1536,52 @@ function OrderDetail({
         <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
           ← İş Emirleri Listesi
         </button>
-        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 shadow">
+        <button onClick={() => setShowPrintDialog(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 shadow">
           <Printer className="w-4 h-4" /> PDF Yazdır
         </button>
       </div>
+
+      {/* PDF Tarih Sorgu Modal */}
+      {showPrintDialog && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowPrintDialog(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Yazdırılacak Tarihler</h3>
+                <p className="text-xs text-gray-500 mt-0.5">İş emri bu tarih(ler) için yazdırılacak</p>
+              </div>
+              <button onClick={() => setShowPrintDialog(false)}><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Başlama Tarihi</label>
+                <input type="date" value={printBaslama} onChange={e => setPrintBaslama(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Bitiş Tarihi</label>
+                <input type="date" value={printBitis} onChange={e => setPrintBitis(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Teslim Tarihi</label>
+                <input type="date" value={printTeslim} onChange={e => setPrintTeslim(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="text-[11px] text-gray-500 bg-gray-50 rounded p-2">
+                💡 Bu tarihler PDF çıktısında "Tarihler" bölümünde görünecek. Boş bırakırsan ilgili satır "-" olarak çıkar. Mevcut iş emri tarihleri değişmez.
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowPrintDialog(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold">İptal</button>
+              <button onClick={() => { setShowPrintDialog(false); handlePrint({ baslama: printBaslama, bitis: printBitis, teslim: printTeslim }) }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2">
+                <Printer className="w-4 h-4" /> Yazdır
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white rounded-xl shadow-md p-6">

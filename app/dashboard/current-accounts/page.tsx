@@ -37,7 +37,7 @@ export default function CurrentAccountsPage() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [editingContact, setEditingContact] = useState<any>(null)
   const [newForm, setNewForm] = useState({
-    contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '',
+    contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '', sector: '',
     bank_name: '', iban: '', bank_account_no: '', bank_branch: ''
   })
 
@@ -214,6 +214,7 @@ export default function CurrentAccountsPage() {
       email: contact.email || '',
       address: contact.address || '',
       tax_number: contact.tax_number || '',
+      tax_office: contact.tax_office || '',
       sector: contact.sector || '',
       bank_name: contact.bank_name || '',
       iban: contact.iban || '',
@@ -449,7 +450,7 @@ export default function CurrentAccountsPage() {
 
       {/* Yeni Cari Modal */}
       {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowNewModal(false); setEditingContact(null); setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' }) }}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowNewModal(false); setEditingContact(null); setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' }) }}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-800">{editingContact ? 'Cari Hesap Düzenle' : 'Yeni Cari Hesap'}</h3>
@@ -483,6 +484,12 @@ export default function CurrentAccountsPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Vergi No</label>
                       <input value={newForm.tax_number} onChange={e => setNewForm({...newForm, tax_number: e.target.value})} placeholder="VKN" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
+                      <input value={newForm.tax_office} onChange={e => setNewForm({...newForm, tax_office: e.target.value})} placeholder="Örn: Kadıköy" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Sektör / Kategori
@@ -533,6 +540,7 @@ export default function CurrentAccountsPage() {
                     contact_name: newForm.contact_name,
                     phone: newForm.phone || null, email: newForm.email || null,
                     address: newForm.address || null, tax_number: newForm.tax_number || null,
+                    tax_office: newForm.tax_office || null,
                     sector: newForm.sector || null,
                     bank_name: newForm.bank_name || null,
                     iban: newForm.iban || null,
@@ -550,7 +558,7 @@ export default function CurrentAccountsPage() {
                   }
                   setShowNewModal(false)
                   setEditingContact(null)
-                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' })
+                  setNewForm({ contact_name: '', phone: '', email: '', address: '', tax_number: '', tax_office: '', sector: '', bank_name: '', iban: '', bank_account_no: '', bank_branch: '' })
                   loadData()
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
@@ -629,10 +637,11 @@ export default function CurrentAccountsPage() {
             <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
               <div>
                 <h3 className="text-2xl font-bold text-gray-800">{selectedContact.contact_name}</h3>
-                <div className="flex gap-4 text-sm text-gray-500 mt-1">
+                <div className="flex gap-4 text-sm text-gray-500 mt-1 flex-wrap">
                   {selectedContact.phone && <span>{selectedContact.phone}</span>}
                   {selectedContact.email && <span>{selectedContact.email}</span>}
                   {selectedContact.tax_number && <span>VKN: {selectedContact.tax_number}</span>}
+                  {selectedContact.tax_office && <span>Vergi Dairesi: {selectedContact.tax_office}</span>}
                 </div>
               </div>
               <div className="text-right">

@@ -209,7 +209,8 @@ const generateDosyaNo = () => {
 export default function ProductionFlowPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'routes'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'prints' | 'routes'>('dashboard')
+  const [printLogs, setPrintLogs] = useState<any[]>([])
 
   const [routes, setRoutes] = useState<ProductRoute[]>([])
   const [orders, setOrders] = useState<FlowOrder[]>([])
@@ -272,7 +273,7 @@ export default function ProductionFlowPage() {
       const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
       if (!profile?.company_id) return
       setCompanyId(profile.company_id)
-      await Promise.all([loadRoutes(profile.company_id), loadOrders(profile.company_id), loadRefs(profile.company_id)])
+      await Promise.all([loadRoutes(profile.company_id), loadOrders(profile.company_id), loadRefs(profile.company_id), loadPrintLogs(profile.company_id)])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -340,6 +341,47 @@ export default function ProductionFlowPage() {
       project_name: o.project_id ? (projMap.get(o.project_id) as any)?.project_name : null,
       route_name: o.route_id ? (routeMap.get(o.route_id) as any)?.route_name : null,
     })))
+  }
+
+  const loadPrintLogs = async (cid: string) => {
+    const { data } = await supabase
+      .from('production_flow_print_logs')
+      .select('*')
+      .eq('company_id', cid)
+      .order('printed_at', { ascending: false })
+    setPrintLogs(data || [])
+  }
+
+  const logPrintEvent = async (order: FlowOrder, values: { iem_no: string; baslama: string; bitis: string; teslim: string }) => {
+    if (!companyId) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profile } = user ? await supabase.from('profiles').select('full_name').eq('id', user.id).single() : { data: null }
+      await supabase.from('production_flow_print_logs').insert({
+        company_id: companyId,
+        order_id: order.id,
+        order_number: order.order_number,
+        project_name: order.project_name || null,
+        parca_adi: order.parca_adi || null,
+        iem_no: values.iem_no || null,
+        baslama_tarihi: values.baslama || null,
+        bitis_tarihi: values.bitis || null,
+        teslim_tarihi: values.teslim || null,
+        printed_by: user?.id || null,
+        printed_by_name: (profile as any)?.full_name || null,
+      })
+      await loadPrintLogs(companyId)
+    } catch (err) {
+      console.error('Print log error:', err)
+    }
+  }
+
+  const deletePrintLog = async (logId: string) => {
+    if (!confirm('Bu yazdırma kaydını silmek istediğine emin misin?')) return
+    try {
+      await supabase.from('production_flow_print_logs').delete().eq('id', logId)
+      await loadPrintLogs(companyId!)
+    } catch (err: any) { alert('Hata: ' + err.message) }
   }
 
   const loadStepLogs = async (orderId: string) => {
@@ -746,10 +788,11 @@ export default function ProductionFlowPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex gap-1">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex gap-1 flex-wrap">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Activity },
             { id: 'orders', label: 'İş Emirleri', icon: ListChecks },
+            { id: 'prints', label: 'İş Emri Listesi (Yazdırılanlar)', icon: Printer },
             { id: 'routes', label: 'Rotalar', icon: Layers },
           ].map(tab => {
             const Icon = tab.icon
@@ -888,7 +931,80 @@ export default function ProductionFlowPage() {
             onStart={() => startOrder(selectedOrder)}
             onCompleteStep={completeStep}
             onDelete={() => deleteOrder(selectedOrder)}
+            onLogPrint={(vals) => logPrintEvent(selectedOrder, vals)}
           />
+        )}
+
+        {/* ===== İŞ EMRİ LİSTESİ (Yazdırılan PDF'ler) ===== */}
+        {activeTab === 'prints' && (
+          <div className="space-y-4">
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <Printer className="w-6 h-6 text-amber-600" />
+                <div>
+                  <h3 className="font-bold text-amber-900">Yazdırılan İş Emirleri</h3>
+                  <p className="text-xs text-amber-700">PDF olarak yazdırılan tüm iş emirlerinin kaydı — IEM No, tarihler ve yazdıran kişi ile</p>
+                </div>
+              </div>
+            </div>
+
+            {printLogs.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-md p-12 text-center">
+                <Printer className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 mb-2">Henüz yazdırılan iş emri yok</p>
+                <p className="text-sm text-gray-400">İş Emirleri'ne git ve "PDF Yazdır" butonunu kullan.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">İş Emri No</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Parça / Ürün</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">IEM No (Yazdırılan)</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Başlama</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Bitiş</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Teslim</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Yazdıran</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Yazdırma Tarihi</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {printLogs.map(log => {
+                      const order = orders.find(o => o.id === log.order_id)
+                      const fmtD = (d?: string) => d ? new Date(d).toLocaleDateString('tr-TR') : '-'
+                      return (
+                        <tr key={log.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-bold text-gray-800">{log.order_number}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{log.parca_adi || log.project_name || '-'}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-blue-700">{log.iem_no || '-'}</td>
+                          <td className="px-4 py-3 text-center text-sm">{fmtD(log.baslama_tarihi)}</td>
+                          <td className="px-4 py-3 text-center text-sm">{fmtD(log.bitis_tarihi)}</td>
+                          <td className="px-4 py-3 text-center text-sm">{fmtD(log.teslim_tarihi)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{log.printed_by_name || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{new Date(log.printed_at).toLocaleString('tr-TR')}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {order && (
+                                <button onClick={() => { setActiveTab('orders'); openOrderDetail(order) }}
+                                  className="p-1.5 rounded hover:bg-blue-50 text-blue-600" title="İş emrini aç">
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button onClick={() => deletePrintLog(log.id)} className="p-1.5 rounded hover:bg-red-50 text-red-600" title="Kayıt sil">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ===== ROTALAR ===== */}
@@ -1305,13 +1421,14 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: s
 // ORDER DETAIL (FLOW VIEW)
 // =====================================================
 function OrderDetail({
-  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep, onDelete,
+  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep, onDelete, onLogPrint,
 }: {
   order: FlowOrder; stepLogs: StepLog[]; employees: any[]; machines: any[];
   activeStepLogId: string | null; setActiveStepLogId: (id: string | null) => void;
   onBack: () => void; onStart: () => void;
   onCompleteStep: (log: StepLog, payload: any) => void;
   onDelete: () => void;
+  onLogPrint: (vals: { iem_no: string; baslama: string; bitis: string; teslim: string }) => void;
 }) {
   const status = STATUS_MAP[order.status]
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
@@ -1613,7 +1730,12 @@ function OrderDetail({
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowPrintDialog(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold">İptal</button>
-              <button onClick={() => { setShowPrintDialog(false); handlePrint({ baslama: printBaslama, bitis: printBitis, teslim: printTeslim, iem_no: printIemNo }) }}
+              <button onClick={() => {
+                setShowPrintDialog(false)
+                const vals = { baslama: printBaslama, bitis: printBitis, teslim: printTeslim, iem_no: printIemNo }
+                handlePrint(vals)
+                onLogPrint(vals)
+              }}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2">
                 <Printer className="w-4 h-4" /> Yazdır
               </button>

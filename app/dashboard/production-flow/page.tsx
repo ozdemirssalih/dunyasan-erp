@@ -1291,16 +1291,18 @@ function OrderDetail({
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
   const activeStep = stepLogs.find(l => l.status === 'in_progress')
 
-  // PDF tarih sorgu modal'ı
+  // PDF tarih + IEM sorgu modal'ı
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [printBaslama, setPrintBaslama] = useState(order.baslama_tarihi || order.planned_start_date || '')
   const [printBitis, setPrintBitis] = useState(order.bitis_tarihi || order.planned_end_date || '')
   const [printTeslim, setPrintTeslim] = useState(order.teslim_tarihi || '')
+  const [printIemNo, setPrintIemNo] = useState(order.iem_no || '')
 
-  const handlePrint = (override?: { baslama: string; bitis: string; teslim: string }) => {
+  const handlePrint = (override?: { baslama: string; bitis: string; teslim: string; iem_no: string }) => {
     const useBaslama = override?.baslama ?? printBaslama
     const useBitis = override?.bitis ?? printBitis
     const useTeslim = override?.teslim ?? printTeslim
+    const useIemNo = override?.iem_no ?? printIemNo
     const printWin = window.open('', '_blank', 'width=1100,height=800')
     if (!printWin) return
     const today = new Date().toLocaleDateString('tr-TR')
@@ -1311,7 +1313,7 @@ function OrderDetail({
     const sectionsHtml = [
       { title: 'Parça Bilgileri', items: [
         ['Parça No', val(order.parca_no)], ['Parça Adı', val(order.parca_adi)],
-        ['IEM No', val(order.iem_no)], ['Revizyon No', val(order.revizyon_no)],
+        ['IEM No', val(useIemNo)], ['Revizyon No', val(order.revizyon_no)],
         ['FAI', val(order.fai)], ['Seri', val(order.seri)],
         ['Delta FAI', val(order.delta_fai)], ['Dosya No', val(order.dosya_no)],
       ]},
@@ -1547,12 +1549,18 @@ function OrderDetail({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-gray-800">Yazdırılacak Tarihler</h3>
-                <p className="text-xs text-gray-500 mt-0.5">İş emri bu tarih(ler) için yazdırılacak</p>
+                <h3 className="text-lg font-bold text-gray-800">Yazdırma Bilgileri</h3>
+                <p className="text-xs text-gray-500 mt-0.5">İş emri bu IEM No ve tarihler için yazdırılacak</p>
               </div>
               <button onClick={() => setShowPrintDialog(false)}><X className="w-5 h-5 text-gray-500" /></button>
             </div>
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">IEM No</label>
+                <input type="text" value={printIemNo} onChange={e => setPrintIemNo(e.target.value)}
+                  placeholder="örn. IEM-2026-001"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Başlama Tarihi</label>
                 <input type="date" value={printBaslama} onChange={e => setPrintBaslama(e.target.value)}
@@ -1569,12 +1577,12 @@ function OrderDetail({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="text-[11px] text-gray-500 bg-gray-50 rounded p-2">
-                💡 Bu tarihler PDF çıktısında "Tarihler" bölümünde görünecek. Boş bırakırsan ilgili satır "-" olarak çıkar. Mevcut iş emri tarihleri değişmez.
+                💡 Bu değerler PDF çıktısında görünecek. Boş bırakırsan ilgili satır "-" olarak çıkar. Mevcut iş emri kaydı değişmez.
               </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowPrintDialog(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold">İptal</button>
-              <button onClick={() => { setShowPrintDialog(false); handlePrint({ baslama: printBaslama, bitis: printBitis, teslim: printTeslim }) }}
+              <button onClick={() => { setShowPrintDialog(false); handlePrint({ baslama: printBaslama, bitis: printBitis, teslim: printTeslim, iem_no: printIemNo }) }}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2">
                 <Printer className="w-4 h-4" /> Yazdır
               </button>

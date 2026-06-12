@@ -966,7 +966,6 @@ export default function ProductionFlowPage() {
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Bitiş</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Teslim</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Yazdıran</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Yazdırma Tarihi</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
                     </tr>
                   </thead>
@@ -983,7 +982,6 @@ export default function ProductionFlowPage() {
                           <td className="px-4 py-3 text-center text-sm">{fmtD(log.bitis_tarihi)}</td>
                           <td className="px-4 py-3 text-center text-sm">{fmtD(log.teslim_tarihi)}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{log.printed_by_name || '-'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500">{new Date(log.printed_at).toLocaleString('tr-TR')}</td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {order && (

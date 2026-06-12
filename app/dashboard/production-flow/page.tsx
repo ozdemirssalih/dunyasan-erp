@@ -1437,7 +1437,15 @@ function OrderDetail({
   const [printBaslama, setPrintBaslama] = useState(order.baslama_tarihi || order.planned_start_date || '')
   const [printBitis, setPrintBitis] = useState(order.bitis_tarihi || order.planned_end_date || '')
   const [printTeslim, setPrintTeslim] = useState(order.teslim_tarihi || '')
-  const [printIemNo, setPrintIemNo] = useState(order.iem_no || '')
+  // IEM No her yazdırmada otomatik üretilir
+  const [printIemNo, setPrintIemNo] = useState(() => generateIemNo())
+
+  // Dialog her açıldığında IEM No yeniden üretilir
+  useEffect(() => {
+    if (showPrintDialog) {
+      setPrintIemNo(generateIemNo())
+    }
+  }, [showPrintDialog])
 
   const handlePrint = (override?: { baslama: string; bitis: string; teslim: string; iem_no: string }) => {
     const useBaslama = override?.baslama ?? printBaslama
@@ -1702,10 +1710,15 @@ function OrderDetail({
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">IEM No</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-700">IEM No (otomatik)</label>
+                  <button type="button" onClick={() => setPrintIemNo(generateIemNo())}
+                    className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" /> Yenile
+                  </button>
+                </div>
                 <input type="text" value={printIemNo} onChange={e => setPrintIemNo(e.target.value)}
-                  placeholder="örn. IEM-2026-001"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50 font-mono" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Başlama Tarihi</label>

@@ -474,7 +474,7 @@ export default function ProductionFlowPage() {
   const openNewOrder = () => {
     setOrderForm({
       ...emptyOrderForm,
-      iem_no: generateIemNo(),
+      // IEM No artık manuel — kullanıcı yazacak
       dosya_no: generateDosyaNo(),
     })
     setShowOrderModal(true)
@@ -915,7 +915,7 @@ export default function ProductionFlowPage() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Parça Bilgileri (IEM No kaldırıldı, Dosya No oto-üretilir) */}
+                {/* Parça Bilgileri (IEM No manuel, Dosya No oto-üretilir) */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">📋 Parça Bilgileri</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -924,6 +924,9 @@ export default function ProductionFlowPage() {
                     </Field>
                     <Field label="Parça Adı *">
                       <input type="text" value={orderForm.parca_adi} onChange={e => setOrderForm({ ...orderForm, parca_adi: e.target.value })} className={inputCls} />
+                    </Field>
+                    <Field label="IEM No">
+                      <input type="text" value={orderForm.iem_no} onChange={e => setOrderForm({ ...orderForm, iem_no: e.target.value })} placeholder="örn. IEM-2026-001" className={inputCls} />
                     </Field>
                     <Field label="Revizyon No">
                       <input type="text" value={orderForm.revizyon_no} onChange={e => setOrderForm({ ...orderForm, revizyon_no: e.target.value })} className={inputCls} />
@@ -1299,9 +1302,9 @@ function OrderDetail({
     const sectionsHtml = [
       { title: 'Parça Bilgileri', items: [
         ['Parça No', val(order.parca_no)], ['Parça Adı', val(order.parca_adi)],
-        ['Revizyon No', val(order.revizyon_no)], ['FAI', val(order.fai)],
-        ['Seri', val(order.seri)], ['Delta FAI', val(order.delta_fai)],
-        ['Dosya No', val(order.dosya_no)],
+        ['IEM No', val(order.iem_no)], ['Revizyon No', val(order.revizyon_no)],
+        ['FAI', val(order.fai)], ['Seri', val(order.seri)],
+        ['Delta FAI', val(order.delta_fai)], ['Dosya No', val(order.dosya_no)],
       ]},
       { title: 'Proje & Müşteri', items: [
         ['Proje / Ürün', val(order.project_name)], ['Müşteri', val(order.customer_name)],
@@ -1558,10 +1561,11 @@ function OrderDetail({
       <div className="bg-white rounded-xl shadow-md p-6 space-y-5">
         <h3 className="text-lg font-bold text-gray-800 mb-2">İş Emri Detayları</h3>
 
-        {/* Parça Bilgileri (IEM No kaldırıldı) */}
+        {/* Parça Bilgileri */}
         <DetailSection title="📋 Parça Bilgileri" items={[
           ['Parça No', order.parca_no],
           ['Parça Adı', order.parca_adi],
+          ['IEM No', order.iem_no],
           ['Revizyon No', order.revizyon_no],
           ['FAI', order.fai],
           ['Seri', order.seri],

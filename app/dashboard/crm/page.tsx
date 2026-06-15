@@ -419,7 +419,6 @@ export default function CRMPage() {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-xs text-gray-600 font-semibold">📅 {fmtDate(next.due_date)}</div>
-                        {c.estimated_value > 0 && <div className="text-[10px] text-green-600">{fmtMoney(c.estimated_value)}</div>}
                       </div>
                     </button>
                   )
@@ -481,7 +480,6 @@ export default function CRMPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Müşteri</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">İletişim</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Durum</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Değer</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Sıradaki Görev</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
                     </tr>
@@ -504,9 +502,6 @@ export default function CRMPage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className={`px-2 py-1 rounded-full text-xs font-semibold ${status.bg} ${status.text}`}>{status.label}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm font-semibold text-green-700">
-                            {c.estimated_value > 0 ? fmtMoney(c.estimated_value) : <span className="text-gray-300">-</span>}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             {next ? (
@@ -632,9 +627,6 @@ export default function CRMPage() {
                     <option value="">Seçin...</option>
                     {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                   </select>
-                </Field>
-                <Field label="Tahmini Değer (₺)">
-                  <input type="number" value={customerForm.estimated_value} onChange={e => setCustomerForm({ ...customerForm, estimated_value: e.target.value })} placeholder="0" className={inputCls} />
                 </Field>
               </div>
               <Field label="Adres">
@@ -845,18 +837,6 @@ function CustomerDetail({ customer, tasks, employees, onBack, onEdit, onDelete, 
             </div>
             {customer.contact_person && <p className="text-gray-700 mb-1">👤 {customer.contact_person}</p>}
             {customer.sector && <p className="text-sm text-gray-500">{customer.sector}</p>}
-            {nextTask && (
-              <div className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 bg-blue-50 border border-blue-200 rounded">
-                <Calendar className="w-3 h-3 text-blue-600" />
-                <span className="text-blue-700"><b>Sıradaki:</b> {nextTask.title} — {fmtDate(nextTask.due_date)}</span>
-              </div>
-            )}
-            {customer.estimated_value > 0 && (
-              <div className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 bg-green-50 border border-green-200 rounded ml-2">
-                <DollarSign className="w-3 h-3 text-green-600" />
-                <span className="text-green-700"><b>Tahmini:</b> {fmtMoney(customer.estimated_value)}</span>
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onAddTask} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold flex items-center gap-2">

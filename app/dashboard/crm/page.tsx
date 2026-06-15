@@ -169,7 +169,7 @@ export default function CRMPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [activities, setActivities] = useState<ActivityItem[]>([])
-  const [contacts, setContacts] = useState<any[]>([])
+  const [crmCustomers, setCrmCustomers] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
 
   // Modals
@@ -221,8 +221,9 @@ export default function CRMPage() {
   const [stageForm, setStageForm] = useState(emptyStage)
 
   const emptyCustomer = {
-    contact_name: '', phone: '', email: '', address: '',
-    tax_number: '', tax_office: '', sector: '',
+    customer_name: '', contact_person: '', phone: '', email: '', website: '',
+    address: '', tax_number: '', tax_office: '', sector: '',
+    customer_type: 'prospect', source: '', assigned_to: '', notes: '',
   }
   const [customerForm, setCustomerForm] = useState(emptyCustomer)
 
@@ -244,12 +245,12 @@ export default function CRMPage() {
   }
 
   const loadAll = async (cid: string) => {
-    const [stagesRes, leadsRes, dealsRes, actsRes, contactsRes, empRes] = await Promise.all([
+    const [stagesRes, leadsRes, dealsRes, actsRes, custRes, empRes] = await Promise.all([
       supabase.from('crm_pipeline_stages').select('*').eq('company_id', cid).order('display_order'),
       supabase.from('crm_leads').select('*').eq('company_id', cid).order('created_at', { ascending: false }),
       supabase.from('crm_deals').select('*').eq('company_id', cid).order('created_at', { ascending: false }),
       supabase.from('crm_activities').select('*').eq('company_id', cid).order('due_date', { ascending: true }),
-      supabase.from('contacts').select('*').eq('company_id', cid).eq('is_active', true).order('contact_name'),
+      supabase.from('crm_customers').select('*').eq('company_id', cid).eq('is_active', true).order('customer_name'),
       supabase.from('employees').select('id, full_name').eq('company_id', cid).eq('status', 'active').order('full_name'),
     ])
 
@@ -262,7 +263,7 @@ export default function CRMPage() {
     }
     setStages(stageList)
     setLeads(leadsRes.data || [])
-    setContacts(contactsRes.data || [])
+    setCrmCustomers(custRes.data || [])
     setEmployees(empRes.data || [])
     setActivities(actsRes.data || [])
 
@@ -360,7 +361,7 @@ export default function CRMPage() {
     const stage = stages.find(s => s.id === dealForm.stage_id)
     const status: DealStatus = stage?.is_won ? 'won' : stage?.is_lost ? 'lost' : 'open'
     try {
-      const contactName = dealForm.contact_id ? contacts.find(c => c.id === dealForm.contact_id)?.contact_name : null
+      const contactName = dealForm.contact_id ? crmCustomers.find(c => c.id === dealForm.contact_id)?.customer_name : null
       const payload = {
         company_id: companyId,
         deal_name: dealForm.deal_name,
@@ -468,41 +469,50 @@ export default function CRMPage() {
     await loadAll(companyId)
   }
 
-  // ============= CUSTOMER CRUD =============
+  // ============= CRM CUSTOMER CRUD =============
   const openNewCustomer = () => { setEditingCustomer(null); setCustomerForm(emptyCustomer); setShowCustomerModal(true) }
   const openEditCustomer = (c: any) => {
     setEditingCustomer(c)
     setCustomerForm({
-      contact_name: c.contact_name || '', phone: c.phone || '', email: c.email || '',
+      customer_name: c.customer_name || '', contact_person: c.contact_person || '',
+      phone: c.phone || '', email: c.email || '', website: c.website || '',
       address: c.address || '', tax_number: c.tax_number || '', tax_office: c.tax_office || '',
-      sector: c.sector || '',
+      sector: c.sector || '', customer_type: c.customer_type || 'prospect',
+      source: c.source || '', assigned_to: c.assigned_to || '', notes: c.notes || '',
     })
     setShowCustomerModal(true)
   }
   const saveCustomer = async () => {
-    if (!customerForm.contact_name || !companyId) return alert('Firma/kişi adı zorunlu!')
+    if (!customerForm.customer_name || !companyId) return alert('Müşteri adı zorunlu!')
     try {
       const payload: any = {
-        contact_name: customerForm.contact_name,
+        customer_name: customerForm.customer_name,
+        contact_person: customerForm.contact_person || null,
         phone: customerForm.phone || null,
         email: customerForm.email || null,
+        website: customerForm.website || null,
         address: customerForm.address || null,
         tax_number: customerForm.tax_number || null,
         tax_office: customerForm.tax_office || null,
         sector: customerForm.sector || null,
+        customer_type: customerForm.customer_type || 'prospect',
+        source: customerForm.source || null,
+        assigned_to: customerForm.assigned_to || null,
+        notes: customerForm.notes || null,
+        updated_at: new Date().toISOString(),
       }
       if (editingCustomer) {
-        await supabase.from('contacts').update(payload).eq('id', editingCustomer.id)
+        await supabase.from('crm_customers').update(payload).eq('id', editingCustomer.id)
       } else {
-        await supabase.from('contacts').insert({ ...payload, company_id: companyId, is_active: true })
+        await supabase.from('crm_customers').insert({ ...payload, company_id: companyId, is_active: true, created_by: userId })
       }
       setShowCustomerModal(false)
       await loadAll(companyId)
     } catch (err: any) { alert('Hata: ' + err.message) }
   }
   const deleteCustomer = async (c: any) => {
-    if (!confirm(`"${c.contact_name}" müşterisini silmek istediğine emin misin?\n\n(Geçmiş kayıtlar etkilenmeyecek, sadece pasife alınacak.)`)) return
-    await supabase.from('contacts').update({ is_active: false }).eq('id', c.id)
+    if (!confirm(`"${c.customer_name}" müşterisini silmek istediğine emin misin?\n\n(Soft-delete: kayıt pasife alınacak.)`)) return
+    await supabase.from('crm_customers').update({ is_active: false }).eq('id', c.id)
     await loadAll(companyId!)
   }
 
@@ -516,10 +526,10 @@ export default function CRMPage() {
     return true
   })
 
-  const filteredCustomers = contacts.filter(c => {
+  const filteredCustomers = crmCustomers.filter(c => {
     if (!customerSearch) return true
     const t = customerSearch.toLowerCase()
-    return [c.contact_name, c.phone, c.email, c.tax_number, c.sector].some(v => v?.toLowerCase().includes(t))
+    return [c.customer_name, c.contact_person, c.phone, c.email, c.tax_number, c.sector].some(v => v?.toLowerCase().includes(t))
   })
 
   const filteredDeals = deals.filter(d => {
@@ -817,7 +827,7 @@ export default function CRMPage() {
                 <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="Müşteri, telefon, VKN, sektör ara..."
                   className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg" />
               </div>
-              <div className="text-sm text-gray-500">{filteredCustomers.length} / {contacts.length} müşteri</div>
+              <div className="text-sm text-gray-500">{filteredCustomers.length} / {crmCustomers.length} müşteri</div>
             </div>
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -839,7 +849,8 @@ export default function CRMPage() {
                     return (
                       <tr key={c.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-800">{c.contact_name}</div>
+                          <div className="font-semibold text-gray-800">{c.customer_name}</div>
+                          {c.contact_person && <div className="text-xs text-gray-600">👤 {c.contact_person}</div>}
                           {c.address && <div className="text-xs text-gray-500 truncate max-w-[200px]">{c.address}</div>}
                         </td>
                         <td className="px-4 py-3 text-sm">
@@ -863,7 +874,7 @@ export default function CRMPage() {
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => {
                               setEditingDeal(null)
-                              setDealForm({ ...emptyDeal, contact_id: c.id, deal_name: `${c.contact_name} — Fırsat`, stage_id: stages[0]?.id || '' })
+                              setDealForm({ ...emptyDeal, contact_id: c.id, deal_name: `${c.customer_name} — Fırsat`, stage_id: stages[0]?.id || '' })
                               setShowDealModal(true)
                             }} className="p-1.5 rounded hover:bg-blue-50 text-blue-600" title="Yeni Fırsat">
                               <Plus className="w-4 h-4" />
@@ -1113,10 +1124,10 @@ export default function CRMPage() {
             <div className="space-y-4">
               <Field label="Fırsat Adı *"><input value={dealForm.deal_name} onChange={e => setDealForm({ ...dealForm, deal_name: e.target.value })} className={inputCls} placeholder="Örn: ABC Şirketi - Yıllık Bakım Kontratı" /></Field>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field label="Müşteri (Cari)">
+                <Field label="Müşteri">
                   <select value={dealForm.contact_id} onChange={e => setDealForm({ ...dealForm, contact_id: e.target.value })} className={inputCls}>
                     <option value="">Seçin...</option>
-                    {contacts.map(c => <option key={c.id} value={c.id}>{c.contact_name}</option>)}
+                    {crmCustomers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
                   </select>
                 </Field>
                 <Field label="Pipeline Aşaması *">
@@ -1205,19 +1216,34 @@ export default function CRMPage() {
           </Modal>
         )}
 
-        {/* ===== CUSTOMER MODAL ===== */}
+        {/* ===== CUSTOMER MODAL (CRM müşterisi - cari'den ayrı) ===== */}
         {showCustomerModal && (
           <Modal title={editingCustomer ? 'Müşteriyi Düzenle' : 'Yeni Müşteri'} onClose={() => setShowCustomerModal(false)} large>
             <div className="space-y-4">
-              <Field label="Firma / Kişi Adı *">
-                <input value={customerForm.contact_name} onChange={e => setCustomerForm({ ...customerForm, contact_name: e.target.value })} placeholder="Örn: ABC Mühendislik Ltd. Şti." className={inputCls} />
-              </Field>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Müşteri Adı / Firma *">
+                  <input value={customerForm.customer_name} onChange={e => setCustomerForm({ ...customerForm, customer_name: e.target.value })} placeholder="Örn: ABC Mühendislik Ltd. Şti." className={inputCls} />
+                </Field>
+                <Field label="Yetkili Kişi">
+                  <input value={customerForm.contact_person} onChange={e => setCustomerForm({ ...customerForm, contact_person: e.target.value })} placeholder="Ahmet Yılmaz - Satınalma" className={inputCls} />
+                </Field>
                 <Field label="Telefon">
                   <input value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} placeholder="0532..." className={inputCls} />
                 </Field>
                 <Field label="E-posta">
                   <input type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} placeholder="info@..." className={inputCls} />
+                </Field>
+                <Field label="Web Sitesi">
+                  <input value={customerForm.website} onChange={e => setCustomerForm({ ...customerForm, website: e.target.value })} placeholder="https://..." className={inputCls} />
+                </Field>
+                <Field label="Müşteri Tipi">
+                  <select value={customerForm.customer_type} onChange={e => setCustomerForm({ ...customerForm, customer_type: e.target.value })} className={inputCls}>
+                    <option value="prospect">Potansiyel</option>
+                    <option value="active">Aktif Müşteri</option>
+                    <option value="vip">VIP Müşteri</option>
+                    <option value="partner">İş Ortağı</option>
+                    <option value="inactive">Pasif</option>
+                  </select>
                 </Field>
               </div>
               <Field label="Adres">
@@ -1230,12 +1256,27 @@ export default function CRMPage() {
                 <Field label="Vergi Dairesi">
                   <input value={customerForm.tax_office} onChange={e => setCustomerForm({ ...customerForm, tax_office: e.target.value })} placeholder="Örn: Kadıköy" className={inputCls} />
                 </Field>
+                <Field label="Sektör / Kategori">
+                  <input value={customerForm.sector} onChange={e => setCustomerForm({ ...customerForm, sector: e.target.value })} placeholder="Örn: Otomotiv, Savunma Sanayi" className={inputCls} />
+                </Field>
+                <Field label="Kaynak">
+                  <select value={customerForm.source} onChange={e => setCustomerForm({ ...customerForm, source: e.target.value })} className={inputCls}>
+                    <option value="">Seçin...</option>
+                    {LEAD_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Atanan Satış Temsilcisi">
+                  <select value={customerForm.assigned_to} onChange={e => setCustomerForm({ ...customerForm, assigned_to: e.target.value })} className={inputCls}>
+                    <option value="">Seçin...</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                  </select>
+                </Field>
               </div>
-              <Field label="Sektör / Kategori">
-                <input value={customerForm.sector} onChange={e => setCustomerForm({ ...customerForm, sector: e.target.value })} placeholder="Örn: Otomotiv, Savunma Sanayi" className={inputCls} />
+              <Field label="Notlar">
+                <textarea value={customerForm.notes} onChange={e => setCustomerForm({ ...customerForm, notes: e.target.value })} rows={3} className={inputCls} />
               </Field>
-              <div className="text-[11px] text-gray-500 bg-gray-50 rounded p-2">
-                💡 Bu müşteri "Cari Hesaplar" modülüyle ortak — orada da görünür, banka bilgileri sonra eklenebilir.
+              <div className="text-[11px] text-gray-500 bg-blue-50 border border-blue-200 rounded p-2">
+                ℹ️ Bu CRM'in kendi müşteri kaydı — Cari Hesaplar modülünden tamamen ayrı tutuluyor.
               </div>
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setShowCustomerModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>

@@ -7,6 +7,7 @@ import {
   Users, Phone, Mail, Globe, Calendar, MapPin, Plus, X, Edit3,
   Trash2, CheckCircle2, Clock, AlertCircle, Search, Filter,
   Briefcase, ChevronLeft, MessageSquare, ArrowRight, ListChecks,
+  Sun, PhoneCall, Video, Send, RefreshCw, DollarSign,
 } from 'lucide-react'
 
 // ===========================================
@@ -31,6 +32,7 @@ interface Customer {
   notes: string | null
   source: string | null
   assigned_to: string | null
+  estimated_value: number
   is_active: boolean
   created_at: string
 }
@@ -71,6 +73,7 @@ const PRIORITY_MAP: Record<Priority, { label: string; bg: string; text: string }
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 
 const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('tr-TR') : '-'
+const fmtMoney = (n: number) => `₺${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(n)}`
 
 // ===========================================
 // PAGE
@@ -81,7 +84,7 @@ export default function CRMPage() {
   const [userName, setUserName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [activeTab, setActiveTab] = useState<'customers' | 'tasks'>('customers')
+  const [activeTab, setActiveTab] = useState<'today' | 'customers' | 'tasks'>('today')
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -106,6 +109,7 @@ export default function CRMPage() {
     customer_name: '', contact_person: '', phone: '', email: '', website: '',
     address: '', tax_number: '', tax_office: '', sector: '',
     customer_type: 'prospect' as CustomerStatus, notes: '', assigned_to: '',
+    estimated_value: '',
   }
   const [customerForm, setCustomerForm] = useState(emptyCustomer)
 
@@ -152,6 +156,7 @@ export default function CRMPage() {
       address: c.address || '', tax_number: c.tax_number || '', tax_office: c.tax_office || '',
       sector: c.sector || '', customer_type: c.customer_type, notes: c.notes || '',
       assigned_to: c.assigned_to || '',
+      estimated_value: c.estimated_value?.toString() || '',
     })
     setShowCustomerModal(true)
   }
@@ -171,6 +176,7 @@ export default function CRMPage() {
         customer_type: customerForm.customer_type,
         notes: customerForm.notes || null,
         assigned_to: customerForm.assigned_to || null,
+        estimated_value: customerForm.estimated_value ? parseFloat(customerForm.estimated_value) : 0,
         updated_at: new Date().toISOString(),
       }
       if (editingCustomer) {
@@ -255,6 +261,14 @@ export default function CRMPage() {
 
   const customerTasks = (custId: string) => tasks.filter(t => t.customer_id === custId)
 
+  // Bir müşteriye ait sıradaki (en yakın) açık görev
+  const nextTaskFor = (custId: string): Task | null => {
+    const list = tasks
+      .filter(t => t.customer_id === custId && !t.completed && t.due_date)
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+    return list[0] || null
+  }
+
   const filteredTasks = useMemo(() => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -321,12 +335,100 @@ export default function CRMPage() {
         {/* Tabs */}
         {!selectedCustomer && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex gap-1">
+            <TabBtn active={activeTab === 'today'} onClick={() => setActiveTab('today')} icon={Sun}>
+              Bugün
+            </TabBtn>
             <TabBtn active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={Users}>
               Müşteriler ({customers.length})
             </TabBtn>
             <TabBtn active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={ListChecks}>
               Görevler ({tasks.filter(t => !t.completed).length})
             </TabBtn>
+          </div>
+        )}
+
+        {/* ============== BUGÜN DASHBOARD ============== */}
+        {!selectedCustomer && activeTab === 'today' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Bugünün görevleri */}
+            <div className="bg-white rounded-xl shadow-md p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-orange-500" /> Bugünün Görevleri ({todayTasksCount})
+                </h4>
+                <button onClick={() => openNewTask()} className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> Yeni
+                </button>
+              </div>
+              <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                {tasks.filter(t => {
+                  if (t.completed || !t.due_date) return false
+                  const d = new Date(t.due_date)
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
+                  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+                  return d >= today && d < tomorrow
+                }).map(t => (
+                  <TaskRow key={t.id} task={t} customer={customers.find(c => c.id === t.customer_id)}
+                    onToggle={() => toggleTaskComplete(t)} onEdit={() => openEditTask(t)} onDelete={() => deleteTask(t)}
+                    onCustomerClick={(c: Customer) => setSelectedCustomer(c)} />
+                ))}
+                {todayTasksCount === 0 && <p className="text-sm text-gray-400 text-center py-6">Bugün için görev yok 🎉</p>}
+              </div>
+            </div>
+
+            {/* Gecikmiş */}
+            <div className="bg-white rounded-xl shadow-md p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500" /> Gecikmiş ({overdueCount})
+                </h4>
+              </div>
+              <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                {tasks.filter(t => {
+                  if (t.completed || !t.due_date) return false
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
+                  return new Date(t.due_date) < today
+                }).map(t => (
+                  <TaskRow key={t.id} task={t} customer={customers.find(c => c.id === t.customer_id)}
+                    onToggle={() => toggleTaskComplete(t)} onEdit={() => openEditTask(t)} onDelete={() => deleteTask(t)}
+                    onCustomerClick={(c: Customer) => setSelectedCustomer(c)} />
+                ))}
+                {overdueCount === 0 && <p className="text-sm text-gray-400 text-center py-6">Gecikmiş görev yok 🎉</p>}
+              </div>
+            </div>
+
+            {/* Yakın takip — müşteri bazlı sonraki görevler */}
+            <div className="bg-white rounded-xl shadow-md p-5 lg:col-span-2">
+              <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-500" /> Müşteri Takip — Sıradaki Görevler
+              </h4>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {customers.map(c => {
+                  const next = nextTaskFor(c.id)
+                  if (!next) return null
+                  const status = STATUS_MAP[c.customer_type]
+                  return (
+                    <button key={c.id} onClick={() => setSelectedCustomer(c)}
+                      className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${status.bg} ${status.text}`}>{status.label}</div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-800 truncate">{c.customer_name}</div>
+                          <div className="text-xs text-gray-500 truncate">→ {next.title}</div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-xs text-gray-600 font-semibold">📅 {fmtDate(next.due_date)}</div>
+                        {c.estimated_value > 0 && <div className="text-[10px] text-green-600">{fmtMoney(c.estimated_value)}</div>}
+                      </div>
+                    </button>
+                  )
+                }).filter(Boolean)}
+                {customers.every(c => !nextTaskFor(c.id)) && (
+                  <p className="text-sm text-gray-400 text-center py-6">Hiçbir müşteri için açık görev yok</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -379,7 +481,8 @@ export default function CRMPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Müşteri</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">İletişim</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Durum</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Açık Görev</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Değer</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Sıradaki Görev</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
                     </tr>
                   </thead>
@@ -387,6 +490,7 @@ export default function CRMPage() {
                     {filteredCustomers.map(c => {
                       const status = STATUS_MAP[c.customer_type]
                       const openTasks = customerTasks(c.id).filter(t => !t.completed).length
+                      const next = nextTaskFor(c.id)
                       return (
                         <tr key={c.id} onClick={() => setSelectedCustomer(c)} className="hover:bg-gray-50 cursor-pointer">
                           <td className="px-4 py-3">
@@ -401,10 +505,20 @@ export default function CRMPage() {
                           <td className="px-4 py-3 text-center">
                             <span className={`px-2 py-1 rounded-full text-xs font-semibold ${status.bg} ${status.text}`}>{status.label}</span>
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            {openTasks > 0 ? (
-                              <span className="px-2 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">{openTasks}</span>
-                            ) : <span className="text-gray-300">-</span>}
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-green-700">
+                            {c.estimated_value > 0 ? fmtMoney(c.estimated_value) : <span className="text-gray-300">-</span>}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {next ? (
+                              <div>
+                                <div className="text-gray-800 truncate max-w-[220px]">{next.title}</div>
+                                <div className="text-[11px] text-gray-500">📅 {fmtDate(next.due_date)}</div>
+                              </div>
+                            ) : openTasks > 0 ? (
+                              <span className="text-xs text-orange-600">{openTasks} açık</span>
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1">
@@ -519,6 +633,9 @@ export default function CRMPage() {
                     {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                   </select>
                 </Field>
+                <Field label="Tahmini Değer (₺)">
+                  <input type="number" value={customerForm.estimated_value} onChange={e => setCustomerForm({ ...customerForm, estimated_value: e.target.value })} placeholder="0" className={inputCls} />
+                </Field>
               </div>
               <Field label="Adres">
                 <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} className={inputCls} />
@@ -538,6 +655,30 @@ export default function CRMPage() {
         {showTaskModal && (
           <Modal title={editingTask ? 'Görevi Düzenle' : 'Yeni Görev'} onClose={() => setShowTaskModal(false)}>
             <div className="space-y-4">
+              {/* Hızlı şablonlar */}
+              {!editingTask && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1.5">Hızlı şablon:</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { icon: PhoneCall, label: 'Ara', title: 'Müşteriyi ara' },
+                      { icon: Video, label: 'Toplantı', title: 'Toplantı yap' },
+                      { icon: Send, label: 'Teklif', title: 'Teklif gönder' },
+                      { icon: RefreshCw, label: 'Takip', title: 'Takip et' },
+                    ].map(t => {
+                      const Icon = t.icon
+                      return (
+                        <button key={t.label} type="button" onClick={() => setTaskForm({ ...taskForm, title: t.title })}
+                          className="flex flex-col items-center gap-1 p-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700">
+                          <Icon className="w-4 h-4" />
+                          <span className="text-[11px] font-semibold">{t.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               <Field label="Konu *">
                 <input value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="Örn: ABC'yi ara - teklif takibi" className={inputCls} />
               </Field>
@@ -684,6 +825,9 @@ function CustomerDetail({ customer, tasks, employees, onBack, onEdit, onDelete, 
   const openTasks = tasks.filter((t: Task) => !t.completed)
   const completedTasks = tasks.filter((t: Task) => t.completed)
   const assignedEmp = customer.assigned_to ? employees.find((e: any) => e.id === customer.assigned_to) : null
+  const nextTask = openTasks
+    .filter((t: Task) => t.due_date)
+    .sort((a: Task, b: Task) => (a.due_date || '').localeCompare(b.due_date || ''))[0] as Task | undefined
 
   return (
     <div className="space-y-4">
@@ -701,6 +845,18 @@ function CustomerDetail({ customer, tasks, employees, onBack, onEdit, onDelete, 
             </div>
             {customer.contact_person && <p className="text-gray-700 mb-1">👤 {customer.contact_person}</p>}
             {customer.sector && <p className="text-sm text-gray-500">{customer.sector}</p>}
+            {nextTask && (
+              <div className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 bg-blue-50 border border-blue-200 rounded">
+                <Calendar className="w-3 h-3 text-blue-600" />
+                <span className="text-blue-700"><b>Sıradaki:</b> {nextTask.title} — {fmtDate(nextTask.due_date)}</span>
+              </div>
+            )}
+            {customer.estimated_value > 0 && (
+              <div className="mt-2 inline-flex items-center gap-2 text-xs px-2 py-1 bg-green-50 border border-green-200 rounded ml-2">
+                <DollarSign className="w-3 h-3 text-green-600" />
+                <span className="text-green-700"><b>Tahmini:</b> {fmtMoney(customer.estimated_value)}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onAddTask} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold flex items-center gap-2">

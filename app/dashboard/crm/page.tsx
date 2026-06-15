@@ -470,7 +470,7 @@ export default function CRMPage() {
                       onToggle={() => toggleTaskComplete(t)}
                       onEdit={() => openEditTask(t)}
                       onDelete={() => deleteTask(t)}
-                      onCustomerClick={(c) => setSelectedCustomer(c)}
+                      onCustomerClick={(c: Customer) => setSelectedCustomer(c)}
                     />
                   ))}
                 </div>

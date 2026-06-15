@@ -163,7 +163,7 @@ export default function CRMPage() {
   const [userName, setUserName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pipeline' | 'leads' | 'deals' | 'activities' | 'reports'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pipeline' | 'leads' | 'customers' | 'deals' | 'activities' | 'reports'>('dashboard')
 
   const [stages, setStages] = useState<Stage[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -180,6 +180,11 @@ export default function CRMPage() {
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<ActivityItem | null>(null)
   const [showStageModal, setShowStageModal] = useState(false)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<any>(null)
+
+  // Customer search
+  const [customerSearch, setCustomerSearch] = useState('')
 
   // Selected for detail panel
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
@@ -215,6 +220,12 @@ export default function CRMPage() {
   const emptyStage = { name: '', color: 'blue', win_probability: 0, is_won: false, is_lost: false }
   const [stageForm, setStageForm] = useState(emptyStage)
 
+  const emptyCustomer = {
+    contact_name: '', phone: '', email: '', address: '',
+    tax_number: '', tax_office: '', sector: '',
+  }
+  const [customerForm, setCustomerForm] = useState(emptyCustomer)
+
   useEffect(() => { init() }, [])
 
   const init = async () => {
@@ -238,7 +249,7 @@ export default function CRMPage() {
       supabase.from('crm_leads').select('*').eq('company_id', cid).order('created_at', { ascending: false }),
       supabase.from('crm_deals').select('*').eq('company_id', cid).order('created_at', { ascending: false }),
       supabase.from('crm_activities').select('*').eq('company_id', cid).order('due_date', { ascending: true }),
-      supabase.from('contacts').select('id, contact_name').eq('company_id', cid).eq('is_active', true).order('contact_name'),
+      supabase.from('contacts').select('*').eq('company_id', cid).eq('is_active', true).order('contact_name'),
       supabase.from('employees').select('id, full_name').eq('company_id', cid).eq('status', 'active').order('full_name'),
     ])
 
@@ -457,6 +468,44 @@ export default function CRMPage() {
     await loadAll(companyId)
   }
 
+  // ============= CUSTOMER CRUD =============
+  const openNewCustomer = () => { setEditingCustomer(null); setCustomerForm(emptyCustomer); setShowCustomerModal(true) }
+  const openEditCustomer = (c: any) => {
+    setEditingCustomer(c)
+    setCustomerForm({
+      contact_name: c.contact_name || '', phone: c.phone || '', email: c.email || '',
+      address: c.address || '', tax_number: c.tax_number || '', tax_office: c.tax_office || '',
+      sector: c.sector || '',
+    })
+    setShowCustomerModal(true)
+  }
+  const saveCustomer = async () => {
+    if (!customerForm.contact_name || !companyId) return alert('Firma/kişi adı zorunlu!')
+    try {
+      const payload: any = {
+        contact_name: customerForm.contact_name,
+        phone: customerForm.phone || null,
+        email: customerForm.email || null,
+        address: customerForm.address || null,
+        tax_number: customerForm.tax_number || null,
+        tax_office: customerForm.tax_office || null,
+        sector: customerForm.sector || null,
+      }
+      if (editingCustomer) {
+        await supabase.from('contacts').update(payload).eq('id', editingCustomer.id)
+      } else {
+        await supabase.from('contacts').insert({ ...payload, company_id: companyId, is_active: true })
+      }
+      setShowCustomerModal(false)
+      await loadAll(companyId)
+    } catch (err: any) { alert('Hata: ' + err.message) }
+  }
+  const deleteCustomer = async (c: any) => {
+    if (!confirm(`"${c.contact_name}" müşterisini silmek istediğine emin misin?\n\n(Geçmiş kayıtlar etkilenmeyecek, sadece pasife alınacak.)`)) return
+    await supabase.from('contacts').update({ is_active: false }).eq('id', c.id)
+    await loadAll(companyId!)
+  }
+
   // ============= FILTERS =============
   const filteredLeads = leads.filter(l => {
     if (leadStatusFilter !== 'all' && l.status !== leadStatusFilter) return false
@@ -465,6 +514,12 @@ export default function CRMPage() {
       return [l.full_name, l.company_name, l.email, l.phone].some(v => v?.toLowerCase().includes(t))
     }
     return true
+  })
+
+  const filteredCustomers = contacts.filter(c => {
+    if (!customerSearch) return true
+    const t = customerSearch.toLowerCase()
+    return [c.contact_name, c.phone, c.email, c.tax_number, c.sector].some(v => v?.toLowerCase().includes(t))
   })
 
   const filteredDeals = deals.filter(d => {
@@ -536,6 +591,7 @@ export default function CRMPage() {
     { id: 'dashboard', label: 'Dashboard', icon: Activity },
     { id: 'pipeline', label: 'Pipeline', icon: Layers },
     { id: 'leads', label: "Lead'ler", icon: UserPlus },
+    { id: 'customers', label: 'Müşteriler', icon: Users },
     { id: 'deals', label: 'Fırsatlar', icon: Handshake },
     { id: 'activities', label: 'Aktiviteler', icon: Calendar },
     { id: 'reports', label: 'Raporlar', icon: BarChart3 },
@@ -553,6 +609,9 @@ export default function CRMPage() {
             <p className="text-gray-600">Müşteri ilişkileri, satış pipeline ve aktivite takibi</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <button onClick={openNewCustomer} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow">
+              <Users className="w-4 h-4" /> Yeni Müşteri
+            </button>
             <button onClick={openNewLead} className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow">
               <UserPlus className="w-4 h-4" /> Yeni Lead
             </button>
@@ -745,6 +804,97 @@ export default function CRMPage() {
                 </tbody>
               </table>
               {filteredLeads.length === 0 && <p className="text-center text-gray-400 py-12">Lead bulunamadı</p>}
+            </div>
+          </div>
+        )}
+
+        {/* ===== MÜŞTERİLER ===== */}
+        {activeTab === 'customers' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="Müşteri, telefon, VKN, sektör ara..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg" />
+              </div>
+              <div className="text-sm text-gray-500">{filteredCustomers.length} / {contacts.length} müşteri</div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Müşteri</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">İletişim</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Vergi Bilgileri</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Sektör</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Açık Fırsat</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {filteredCustomers.map(c => {
+                    const openDealsForCustomer = deals.filter(d => d.contact_id === c.id && d.status === 'open')
+                    const openValue = openDealsForCustomer.reduce((s, d) => s + d.value, 0)
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-gray-800">{c.contact_name}</div>
+                          {c.address && <div className="text-xs text-gray-500 truncate max-w-[200px]">{c.address}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {c.phone && <div className="flex items-center gap-1 text-gray-700"><Phone className="w-3 h-3" /> {c.phone}</div>}
+                          {c.email && <div className="flex items-center gap-1 text-gray-700"><Mail className="w-3 h-3" /> {c.email}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {c.tax_number && <div>VKN: {c.tax_number}</div>}
+                          {c.tax_office && <div className="text-xs text-gray-500">{c.tax_office}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{c.sector ? <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{c.sector}</span> : '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {openDealsForCustomer.length > 0 ? (
+                            <div>
+                              <div className="font-bold text-blue-700">{openDealsForCustomer.length}</div>
+                              <div className="text-[10px] text-gray-500">{fmtMoney(openValue)}</div>
+                            </div>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => {
+                              setEditingDeal(null)
+                              setDealForm({ ...emptyDeal, contact_id: c.id, deal_name: `${c.contact_name} — Fırsat`, stage_id: stages[0]?.id || '' })
+                              setShowDealModal(true)
+                            }} className="p-1.5 rounded hover:bg-blue-50 text-blue-600" title="Yeni Fırsat">
+                              <Plus className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => {
+                              setActivityForm({ ...emptyActivity, contact_id: c.id, due_date: new Date().toISOString().slice(0, 16) })
+                              setEditingActivity(null)
+                              setShowActivityModal(true)
+                            }} className="p-1.5 rounded hover:bg-orange-50 text-orange-600" title="Aktivite Ekle">
+                              <Calendar className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => openEditCustomer(c)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600"><Edit3 className="w-4 h-4" /></button>
+                            <button onClick={() => deleteCustomer(c)} className="p-1.5 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {filteredCustomers.length === 0 && (
+                <div className="text-center py-12">
+                  <Users className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-3">{customerSearch ? 'Müşteri bulunamadı' : 'Henüz müşteri eklenmedi'}</p>
+                  {!customerSearch && (
+                    <button onClick={openNewCustomer} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                      <Plus className="w-4 h-4" /> İlk Müşterini Ekle
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1050,6 +1200,46 @@ export default function CRMPage() {
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setShowActivityModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
                 <button onClick={saveActivity} className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold">{editingActivity ? 'Güncelle' : 'Oluştur'}</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ===== CUSTOMER MODAL ===== */}
+        {showCustomerModal && (
+          <Modal title={editingCustomer ? 'Müşteriyi Düzenle' : 'Yeni Müşteri'} onClose={() => setShowCustomerModal(false)} large>
+            <div className="space-y-4">
+              <Field label="Firma / Kişi Adı *">
+                <input value={customerForm.contact_name} onChange={e => setCustomerForm({ ...customerForm, contact_name: e.target.value })} placeholder="Örn: ABC Mühendislik Ltd. Şti." className={inputCls} />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Telefon">
+                  <input value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} placeholder="0532..." className={inputCls} />
+                </Field>
+                <Field label="E-posta">
+                  <input type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} placeholder="info@..." className={inputCls} />
+                </Field>
+              </div>
+              <Field label="Adres">
+                <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} className={inputCls} />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Vergi No (VKN)">
+                  <input value={customerForm.tax_number} onChange={e => setCustomerForm({ ...customerForm, tax_number: e.target.value })} placeholder="VKN" className={inputCls} />
+                </Field>
+                <Field label="Vergi Dairesi">
+                  <input value={customerForm.tax_office} onChange={e => setCustomerForm({ ...customerForm, tax_office: e.target.value })} placeholder="Örn: Kadıköy" className={inputCls} />
+                </Field>
+              </div>
+              <Field label="Sektör / Kategori">
+                <input value={customerForm.sector} onChange={e => setCustomerForm({ ...customerForm, sector: e.target.value })} placeholder="Örn: Otomotiv, Savunma Sanayi" className={inputCls} />
+              </Field>
+              <div className="text-[11px] text-gray-500 bg-gray-50 rounded p-2">
+                💡 Bu müşteri "Cari Hesaplar" modülüyle ortak — orada da görünür, banka bilgileri sonra eklenebilir.
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowCustomerModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+                <button onClick={saveCustomer} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">{editingCustomer ? 'Güncelle' : 'Oluştur'}</button>
               </div>
             </div>
           </Modal>

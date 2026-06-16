@@ -1470,6 +1470,12 @@ export default function AccountingPageV2() {
   const pastIncomingChecks = getPastChecks('incoming')
   const pastOutgoingChecks = getPastChecks('outgoing')
 
+  // Ödenmemiş (bekleyen) tüm giden çekler
+  const unpaidOutgoingChecks = checks
+    .filter(c => c.check_type === 'outgoing' && c.status === 'pending')
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+  const unpaidOutgoingTotal = unpaidOutgoingChecks.reduce((s, c) => s + parseFloat(c.amount || 0), 0)
+
   // 12 aylık ödenmesi gereken (bekleyen giden) çek tutarları
   const monthlyOutgoingByMonth = (() => {
     const totals: Record<number, number> = {}
@@ -2656,50 +2662,71 @@ export default function AccountingPageV2() {
                 </div>
               </div>
 
-              {/* Ödenmiş Çekler - Ayrı Alan */}
-              <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
+              {/* Ödenmemiş Giden Çekler - Ayrı Alan */}
+              <div className="mb-6 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                   <div>
-                    <h4 className="text-lg font-bold text-gray-900 mb-1">💳 Ödenmiş Giden Çekler</h4>
-                    <p className="text-sm text-gray-600">Tedarikçilere ödenmiş olan çekler (geçmiş kayıt)</p>
+                    <h4 className="text-lg font-bold text-gray-900 mb-1">💳 Ödenmemiş Giden Çekler</h4>
+                    <p className="text-sm text-gray-600">Henüz ödenmemiş (bekleyen) tüm giden çekler</p>
                   </div>
-                  <span className="px-3 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full">
-                    {pastOutgoingChecks.length} adet · {pastOutgoingChecks.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-                  </span>
+                  <div className="text-right">
+                    <div className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg">
+                      {unpaidOutgoingChecks.length} adet
+                    </div>
+                    <div className="mt-1 text-2xl font-bold text-red-700">
+                      {unpaidOutgoingTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
+                <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
                   <div className="max-h-96 overflow-y-auto">
-                    {pastOutgoingChecks.length > 0 ? (
+                    {unpaidOutgoingChecks.length > 0 ? (
                       <table className="w-full">
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Çek No</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Banka</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tedarikçi</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tutar</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Tutar</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Vade</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {pastOutgoingChecks.map((check) => (
-                            <tr key={check.id} className="hover:bg-gray-50">
-                              <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
-                              <td className="px-3 py-2 text-sm text-gray-700">{check.bank_name || '-'}</td>
-                              <td className="px-3 py-2 text-sm text-gray-700">{check.supplier_name || '-'}</td>
-                              <td className="px-3 py-2 text-sm font-semibold text-blue-600">
-                                {formatCurrency(check.amount, check.currency)}
-                              </td>
-                              <td className="px-3 py-2 text-sm text-gray-600">
-                                {new Date(check.due_date).toLocaleDateString('tr-TR')}
-                              </td>
-                            </tr>
-                          ))}
+                          {unpaidOutgoingChecks.map((check) => {
+                            const due = new Date(check.due_date)
+                            const today = new Date()
+                            today.setHours(0, 0, 0, 0)
+                            const isOverdue = due < today
+                            return (
+                              <tr key={check.id} className={`hover:bg-gray-50 ${isOverdue ? 'bg-red-50' : ''}`}>
+                                <td className="px-3 py-2 text-sm font-medium text-gray-900">{check.check_number}</td>
+                                <td className="px-3 py-2 text-sm text-gray-700">{check.bank_name || '-'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-700">{check.supplier_name || '-'}</td>
+                                <td className="px-3 py-2 text-sm font-semibold text-red-600 text-right">
+                                  {formatCurrency(check.amount, check.currency)}
+                                </td>
+                                <td className={`px-3 py-2 text-sm ${isOverdue ? 'text-red-700 font-semibold' : 'text-gray-600'}`}>
+                                  {due.toLocaleDateString('tr-TR')}
+                                  {isOverdue && <span className="ml-1 text-[10px] text-red-700">(gecikmiş)</span>}
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
+                        <tfoot className="bg-red-50 border-t-2 border-red-300 sticky bottom-0">
+                          <tr>
+                            <td colSpan={3} className="px-3 py-2 text-sm font-bold text-gray-800 text-right">TOPLAM</td>
+                            <td className="px-3 py-2 text-base font-bold text-red-700 text-right">
+                              {unpaidOutgoingTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
                       </table>
                     ) : (
                       <div className="p-8 text-center text-gray-500">
                         <FileCheck className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                        <p className="text-sm">Ödenmiş çek bulunmuyor</p>
+                        <p className="text-sm">Ödenmemiş giden çek bulunmuyor 🎉</p>
                       </div>
                     )}
                   </div>

@@ -28,6 +28,9 @@ interface Customer {
   contact_person: string | null
   phone: string | null
   email: string | null
+  website: string | null
+  country: string | null
+  source_event: string | null
   address: string | null
   tax_number: string | null
   tax_office: string | null
@@ -87,10 +90,13 @@ export default function CRMPage() {
   // Filters
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | CurrentStatus>('all')
+  const [countryFilter, setCountryFilter] = useState<string>('all')
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
 
   // Form
   const emptyCustomer = {
-    customer_name: '', contact_person: '', phone: '', email: '',
+    customer_name: '', contact_person: '', phone: '', email: '', website: '',
+    country: '', source_event: '',
     address: '', tax_number: '', tax_office: '', sector: '',
     notes: '', assigned_to: '', current_status: 'new' as CurrentStatus,
   }
@@ -127,7 +133,8 @@ export default function CRMPage() {
     setEditingCustomer(c)
     setCustomerForm({
       customer_name: c.customer_name, contact_person: c.contact_person || '',
-      phone: c.phone || '', email: c.email || '',
+      phone: c.phone || '', email: c.email || '', website: c.website || '',
+      country: c.country || '', source_event: c.source_event || '',
       address: c.address || '', tax_number: c.tax_number || '', tax_office: c.tax_office || '',
       sector: c.sector || '', notes: c.notes || '',
       assigned_to: c.assigned_to || '', current_status: c.current_status || 'new',
@@ -143,6 +150,9 @@ export default function CRMPage() {
         contact_person: customerForm.contact_person || null,
         phone: customerForm.phone || null,
         email: customerForm.email || null,
+        website: customerForm.website || null,
+        country: customerForm.country || null,
+        source_event: customerForm.source_event || null,
         address: customerForm.address || null,
         tax_number: customerForm.tax_number || null,
         tax_office: customerForm.tax_office || null,
@@ -198,12 +208,24 @@ export default function CRMPage() {
   // ============= FILTER =============
   const filtered = customers.filter(c => {
     if (statusFilter !== 'all' && c.current_status !== statusFilter) return false
+    if (countryFilter !== 'all') {
+      if (countryFilter === '__none__') { if (c.country) return false }
+      else if (c.country !== countryFilter) return false
+    }
+    if (sourceFilter !== 'all') {
+      if (sourceFilter === '__none__') { if (c.source_event) return false }
+      else if (c.source_event !== sourceFilter) return false
+    }
     if (search) {
       const t = search.toLowerCase()
-      return [c.customer_name, c.contact_person, c.phone, c.email, c.sector].some(v => v?.toLowerCase().includes(t))
+      return [c.customer_name, c.contact_person, c.phone, c.email, c.sector, c.country, c.website].some(v => v?.toLowerCase().includes(t))
     }
     return true
   })
+
+  // Unique countries and sources for filter dropdowns
+  const allCountries = Array.from(new Set(customers.map(c => c.country).filter(Boolean) as string[])).sort()
+  const allSources = Array.from(new Set(customers.map(c => c.source_event).filter(Boolean) as string[])).sort()
 
   // Stats per status
   const statusCounts = useMemo(() => {
@@ -247,12 +269,41 @@ export default function CRMPage() {
           })}
         </div>
 
-        {/* Search */}
-        <div className="bg-white rounded-xl shadow-sm border p-3">
+        {/* Search + Filters */}
+        <div className="bg-white rounded-xl shadow-sm border p-3 space-y-3">
+          {/* Büyük arama kutusu */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Müşteri, yetkili, telefon, email ara..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Müşteri adı, yetkili, telefon, e-posta, ülke, web sitesi, sektör ara..."
+              className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none" />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {/* Ülke + kaynak filtreleri */}
+          <div className="flex gap-2 flex-wrap items-center text-sm">
+            <span className="text-xs text-gray-500 font-semibold">Ülke:</span>
+            <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+              <option value="all">Tümü</option>
+              <option value="__none__">— Belirtilmemiş —</option>
+              {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {allSources.length > 0 && (
+              <>
+                <span className="text-xs text-gray-500 font-semibold ml-3">Kaynak:</span>
+                <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                  <option value="all">Tümü</option>
+                  <option value="__none__">— Belirtilmemiş —</option>
+                  {allSources.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </>
+            )}
+
+            <span className="ml-auto text-xs text-gray-500">{filtered.length} / {customers.length} müşteri</span>
           </div>
         </div>
 
@@ -273,6 +324,7 @@ export default function CRMPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Müşteri</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Ülke</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Yetkili</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Telefon</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">E-posta</th>
@@ -290,6 +342,16 @@ export default function CRMPage() {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-gray-800 text-sm">{c.customer_name}</div>
                         {c.sector && <div className="text-[11px] text-gray-500">{c.sector}</div>}
+                        {c.website && (
+                          <a href={c.website.startsWith('http') ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-[10px] text-blue-600 hover:underline">🔗 {c.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {c.country ? (
+                          <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">{c.country}</span>
+                        ) : <span className="text-gray-300">-</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">{c.contact_person || '-'}</td>
                       <td className="px-4 py-3 text-sm">
@@ -377,6 +439,15 @@ export default function CRMPage() {
                   </Field>
                   <Field label="Sektör">
                     <input value={customerForm.sector} onChange={e => setCustomerForm({ ...customerForm, sector: e.target.value })} placeholder="Örn: Otomotiv" className={inputCls} />
+                  </Field>
+                  <Field label="Ülke">
+                    <input value={customerForm.country} onChange={e => setCustomerForm({ ...customerForm, country: e.target.value })} placeholder="Örn: Türkiye, Slovakya" className={inputCls} />
+                  </Field>
+                  <Field label="Web Sitesi">
+                    <input value={customerForm.website} onChange={e => setCustomerForm({ ...customerForm, website: e.target.value })} placeholder="https://..." className={inputCls} />
+                  </Field>
+                  <Field label="Kaynak">
+                    <input value={customerForm.source_event} onChange={e => setCustomerForm({ ...customerForm, source_event: e.target.value })} placeholder="Örn: SAHA Expo 2026" className={inputCls} />
                   </Field>
                   <Field label="Güncel Durum">
                     <select value={customerForm.current_status} onChange={e => setCustomerForm({ ...customerForm, current_status: e.target.value as CurrentStatus })} className={inputCls}>

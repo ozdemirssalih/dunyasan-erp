@@ -176,6 +176,81 @@ export default function PurchaseApprovalsPage() {
     return { count: filtered.length, totalTRY: total, fx }
   }, [filtered])
 
+  // ============= DF67 SINGLE REQUEST FORM PRINT =============
+  const printRequestForm = (a: Approval) => {
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) return
+    const today = new Date().toLocaleDateString('tr-TR')
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Satın Alma İstek Formu - ${a.approval_no}</title>
+    <style>
+      @page { size: A4; margin: 1.5cm; }
+      *{box-sizing:border-box}
+      body{font-family:'Helvetica',Arial,sans-serif;color:#111;margin:0;padding:0;font-size:11px}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #b45309;padding-bottom:10px;margin-bottom:18px}
+      .header h1{margin:0 0 4px 0;font-size:22px;color:#b45309}
+      .header .subtitle{font-size:12px;color:#555}
+      .doc-no{display:inline-block;padding:3px 10px;background:#fef3c7;color:#b45309;font-weight:700;border-radius:4px;font-size:11px}
+      .request-no{display:inline-block;padding:3px 10px;background:#fed7aa;color:#7c2d12;font-weight:700;border-radius:4px;font-size:11px;font-family:monospace;margin-left:6px}
+      h3{color:#b45309;border-bottom:1px solid #fcd34d;padding-bottom:4px;font-size:12px;margin:18px 0 8px 0;text-transform:uppercase;letter-spacing:0.5px}
+      table.kv{width:100%;border-collapse:collapse;margin-bottom:10px}
+      table.kv td{padding:5px 8px;border-bottom:1px dotted #e5e7eb;font-size:11px}
+      table.kv td.k{font-weight:600;color:#555;width:30%;background:#f9fafb}
+      .totals{background:#fef3c7;padding:10px;border-radius:6px;margin-top:10px;display:flex;justify-content:space-between;align-items:center}
+      .totals .lbl{font-weight:700;color:#b45309;font-size:13px}
+      .totals .val{font-size:18px;font-weight:700;color:#b45309}
+      .notes-block{background:#fef9c3;border-left:4px solid #fbbf24;padding:8px 10px;margin-top:12px;font-size:11px}
+      .sign-block{display:flex;gap:30px;margin-top:50px;justify-content:space-around}
+      .sign-col{text-align:center;flex:1;max-width:200px}
+      .sign-line{border-top:1px solid #333;margin-top:60px;padding-top:6px;font-size:10px;font-weight:600}
+      .footer{margin-top:30px;font-size:9px;color:#555;text-align:right;border-top:1px solid #ddd;padding-top:6px}
+    </style></head><body>
+    <div class="header"><div>
+      <h1>SATIN ALMA İSTEK FORMU</h1>
+      <div class="subtitle">DÜNYASAN Savunma Sistemleri</div>
+      <div style="margin-top:6px"><span class="doc-no">Doküman No: DF67</span><span class="request-no">${a.approval_no}</span></div>
+    </div><div style="text-align:right;font-size:10px;color:#555">
+      <div><b>Talep Tarihi:</b> ${fmtDate(a.request_date)}</div>
+      <div><b>Çıktı Tarihi:</b> ${today}</div>
+    </div></div>
+
+    <h3>Talep Bilgileri</h3>
+    <table class="kv"><tbody>
+      <tr><td class="k">Talep Eden</td><td><b>${a.requested_by || '-'}</b></td></tr>
+      <tr><td class="k">Departman</td><td>${a.department || '-'}</td></tr>
+      ${a.project_name ? `<tr><td class="k">Proje</td><td>${a.project_name}</td></tr>` : ''}
+    </tbody></table>
+
+    <h3>Tedarikçi & Malzeme</h3>
+    <table class="kv"><tbody>
+      <tr><td class="k">Tedarikçi</td><td><b>${a.supplier_name || '-'}</b></td></tr>
+      <tr><td class="k">Malzeme / Hizmet</td><td>${a.item_description || '-'}</td></tr>
+      <tr><td class="k">Miktar</td><td><b>${a.quantity} ${a.unit}</b></td></tr>
+      <tr><td class="k">Birim Fiyat</td><td>${fmtMoney(a.unit_price, a.currency)}</td></tr>
+    </tbody></table>
+
+    <div class="totals"><div class="lbl">TOPLAM TUTAR:</div><div class="val">${fmtMoney(a.total_amount, a.currency)}</div></div>
+
+    ${a.notes ? `<div class="notes-block"><b>Notlar:</b><br>${a.notes}</div>` : ''}
+
+    <h3>Onay</h3>
+    <table class="kv"><tbody>
+      <tr><td class="k">Onaylayan</td><td><b>${a.approved_by || '-'}</b></td></tr>
+      <tr><td class="k">Onay Tarihi</td><td>${fmtDate(a.approval_date)}</td></tr>
+      <tr><td class="k">Durum</td><td>${(STATUS_MAP[a.status] || STATUS_MAP.pending).label}</td></tr>
+    </tbody></table>
+
+    <div class="sign-block">
+      <div class="sign-col"><div class="sign-line">Talep Eden</div></div>
+      <div class="sign-col"><div class="sign-line">Departman Yöneticisi</div></div>
+      <div class="sign-col"><div class="sign-line">Genel Müdür Onayı</div></div>
+    </div>
+
+    <div class="footer">DF67 Satın Alma İstek Formu · ${today}</div>
+    <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+    </body></html>`)
+    win.document.close()
+  }
+
   // ============= PRINT =============
   const handlePrint = () => {
     const win = window.open('', '_blank', 'width=1200,height=800')
@@ -404,6 +479,9 @@ export default function PurchaseApprovalsPage() {
                     </td>
                     <td className="px-3 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => printRequestForm(a)} className="p-1.5 rounded hover:bg-amber-50 text-amber-600" title="DF67 İstek Formu Yazdır">
+                          <Printer className="w-4 h-4" />
+                        </button>
                         <button onClick={() => openEdit(a)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600"><Edit3 className="w-4 h-4" /></button>
                         <button onClick={() => remove(a)} className="p-1.5 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </div>

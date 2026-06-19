@@ -335,6 +335,77 @@ export default function CurrentAccountsPage() {
 
   const fmt = (n: number) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' TL'
 
+  // DF66 — Müşteri Listesi Yazdır
+  const printCustomerList = () => {
+    const win = window.open('', '_blank', 'width=1200,height=800')
+    if (!win) return
+    const today = new Date().toLocaleDateString('tr-TR')
+    const rows = filtered.map((c, i) => `
+      <tr>
+        <td class="ord">${i + 1}</td>
+        <td>${c.contact_name || '-'}</td>
+        <td>${c.sector || '-'}</td>
+        <td>${c.phone || '-'}</td>
+        <td>${c.email || '-'}</td>
+        <td>${c.tax_number || '-'}<div class="meta">${c.tax_office || ''}</div></td>
+        <td>${c.address || '-'}</td>
+        <td class="num">${c.balance >= 0 ? '+' : ''}${(c.balance || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('')
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Müşteri Listesi - DF66</title>
+    <style>
+      @page { size: A4 landscape; margin: 1cm; }
+      *{box-sizing:border-box}
+      body{font-family:'Helvetica',Arial,sans-serif;color:#111;margin:0;padding:0;font-size:10px}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e40af;padding-bottom:10px;margin-bottom:14px}
+      .header h1{margin:0 0 4px 0;font-size:22px;color:#1e40af}
+      .header .subtitle{font-size:12px;color:#555}
+      .header .meta{text-align:right;font-size:10px;color:#555;line-height:1.5}
+      .doc-no{display:inline-block;padding:3px 10px;background:#fef3c7;color:#b45309;font-weight:700;border-radius:4px;font-size:11px}
+      .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+      .summary-box{border:1px solid #cbd5e1;border-radius:6px;padding:8px 10px;background:#f9fafb}
+      .summary-box .label{font-size:9px;color:#555;text-transform:uppercase}
+      .summary-box .value{font-size:14px;font-weight:700;color:#111;margin-top:2px}
+      table{width:100%;border-collapse:collapse;font-size:9.5px}
+      thead{background:#1e40af;color:white}
+      th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:left;vertical-align:top}
+      .ord{text-align:center;width:28px;font-weight:700;background:#f1f5f9}
+      .num{text-align:right;font-weight:700}
+      .meta{font-size:8.5px;color:#777;margin-top:1px}
+      tbody tr:nth-child(even){background:#f8fafc}
+      .sign-block{display:flex;gap:30px;margin-top:30px;justify-content:space-around}
+      .sign-col{text-align:center;flex:1;max-width:200px}
+      .sign-line{border-top:1px solid #333;margin-top:50px;padding-top:4px;font-size:9px}
+      .footer{margin-top:24px;font-size:9px;color:#555;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:6px}
+    </style></head><body>
+    <div class="header"><div>
+      <h1>DÜNYASAN — MÜŞTERİ LİSTESİ</h1>
+      <div class="subtitle">Cari Hesaplar — Müşteri ve Tedarikçi Kayıtları</div>
+      <div style="margin-top:6px"><span class="doc-no">Doküman No: DF66</span></div>
+    </div><div class="meta">
+      <div><b>Çıktı Tarihi:</b> ${today}</div>
+      <div><b>Toplam Kayıt:</b> ${filtered.length}</div>
+    </div></div>
+    <div class="summary">
+      <div class="summary-box"><div class="label">Toplam Cari</div><div class="value">${filtered.length}</div></div>
+      <div class="summary-box"><div class="label">Alacaklı (Bakiye +)</div><div class="value">${filtered.filter(c => c.balance > 0).length}</div></div>
+      <div class="summary-box"><div class="label">Borçlu (Bakiye -)</div><div class="value">${filtered.filter(c => c.balance < 0).length}</div></div>
+    </div>
+    <table><thead><tr>
+      <th>#</th><th>Müşteri / Firma</th><th>Sektör</th><th>Telefon</th><th>E-posta</th>
+      <th>VKN / Vergi Dairesi</th><th>Adres</th><th>Bakiye (₺)</th>
+    </tr></thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:20px;color:#999">Kayıt yok</td></tr>'}</tbody></table>
+    <div class="sign-block">
+      <div class="sign-col"><div class="sign-line">Hazırlayan</div></div>
+      <div class="sign-col"><div class="sign-line">Mali İşler</div></div>
+      <div class="sign-col"><div class="sign-line">Onaylayan</div></div>
+    </div>
+    <div class="footer"><div>Bu liste ${today} tarihinde sistemden otomatik oluşturulmuştur.</div><div>DF66 · v1.0</div></div>
+    <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+    </body></html>`)
+    win.document.close()
+  }
+
   if (loading) return <div className="flex items-center justify-center h-screen"><div className="text-gray-600">Yükleniyor...</div></div>
 
   return (
@@ -345,7 +416,10 @@ export default function CurrentAccountsPage() {
           <h2 className="text-3xl font-bold text-gray-800">Cari Hesaplar</h2>
           <p className="text-gray-600">{contacts.length} cari hesap</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={printCustomerList} className="flex items-center gap-2 bg-gray-700 hover:bg-gray-800 text-white px-4 py-2.5 rounded-lg font-semibold">
+            <Search className="w-4 h-4" /> Müşteri Listesi (DF66)
+          </button>
           <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg font-semibold">
             <Tag className="w-4 h-4" /> Kategoriler
           </button>

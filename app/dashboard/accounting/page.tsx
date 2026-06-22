@@ -3771,6 +3771,31 @@ export default function AccountingPageV2() {
                         <p className="text-[10px] text-gray-400 mt-1">Limit: {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.credit_limit)} {acc.currency}</p>
                       </div>
                     )}
+                    {acc.account_type === 'bank' && acc.credit_limit && acc.credit_limit > 0 && (() => {
+                      const bal = acc.current_balance || 0
+                      const used = bal < 0 ? Math.abs(bal) : 0
+                      const available = bal + acc.credit_limit
+                      const usedPct = Math.min((used / acc.credit_limit) * 100, 100)
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-500">Kredi Limiti</span>
+                            <span className="font-semibold text-blue-600">{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(acc.credit_limit)} {acc.currency}</span>
+                          </div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-500">Kullanılan</span>
+                            <span className={`font-semibold ${used > 0 ? 'text-red-600' : 'text-gray-500'}`}>{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(used)} {acc.currency}</span>
+                          </div>
+                          <div className="flex justify-between text-sm mb-1 pt-1 border-t border-gray-100">
+                            <span className="text-gray-700 font-semibold">Kullanılabilir</span>
+                            <span className="font-bold text-green-600">{new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(available)} {acc.currency}</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2 mt-2">
+                            <div className="bg-red-500 h-2 rounded-full" style={{ width: `${usedPct}%` }}></div>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 ))}
                 {cashAccounts.length === 0 && (

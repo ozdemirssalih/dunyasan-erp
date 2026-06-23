@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DÜNYASAN - Vardiya Sistemi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { size: A4 landscape; margin: 10mm; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+    }
+
+    .page {
+      background: #fff;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 30px 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      border-radius: 4px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #003366;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo { width: 180px; }
+
+    .company-info {
+      font-size: 10px;
+      color: #444;
+      line-height: 1.5;
+    }
+
+    .company-info .name {
+      font-size: 14px;
+      font-weight: 800;
+      color: #003366;
+    }
+
+    .header-right { text-align: right; }
+
+    .doc-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: #003366;
+      letter-spacing: 2px;
+    }
+
+    .doc-date {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    /* Top header row */
+    .header-row th {
+      background: #003366;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 14px 10px;
+      text-align: center;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 2px solid #003366;
+    }
+
+    .header-row th.gunduz { background: #d97706; border-color: #d97706; }
+    .header-row th.tezgah { background: #003366; }
+    .header-row th.gece { background: #1e3a5f; border-color: #1e3a5f; }
+
+    /* Data rows */
+    tbody td {
+      border: 1.5px solid #c0c8d4;
+      padding: 12px 16px;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    tbody tr:nth-child(even) { background: #f7f9fc; }
+    tbody tr:hover { background: #eef3ff; }
+
+    /* Gündüz column */
+    td.gunduz {
+      text-align: center;
+      font-weight: 700;
+      color: #92400e;
+      background: #fffbeb;
+      font-size: 13px;
+    }
+
+    /* Tezgah column */
+    td.tezgah {
+      text-align: center;
+      font-weight: 800;
+      color: #003366;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+
+    td.tezgah .badge {
+      display: inline-block;
+      background: #003366;
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin: 2px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    td.tezgah .badge-torna {
+      background: #7c3aed;
+    }
+
+    /* Gece column */
+    td.gece {
+      text-align: center;
+      font-weight: 700;
+      color: #1e3a5f;
+      background: #eff6ff;
+      font-size: 13px;
+    }
+
+    /* Row number */
+    td.sira {
+      text-align: center;
+      font-weight: 800;
+      color: #999;
+      width: 40px;
+      font-size: 12px;
+    }
+
+    /* Footer */
+    .footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 30px;
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 2px solid #003366;
+    }
+
+    .signature {
+      text-align: center;
+    }
+
+    .signature .title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #003366;
+      text-transform: uppercase;
+      margin-bottom: 35px;
+    }
+
+    .signature .line {
+      border-top: 1px solid #999;
+      width: 160px;
+      margin: 0 auto 4px;
+    }
+
+    .signature .sub {
+      font-size: 9px;
+      color: #888;
+    }
+
+    .note {
+      text-align: center;
+      font-size: 9px;
+      color: #aaa;
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    /* Print */
+    .print-bar {
+      max-width: 1100px;
+      margin: 0 auto 15px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-print { background: #003366; color: #fff; }
+    .btn-print:hover { background: #004488; }
+
+    @media print {
+      body { background: none; padding: 0; }
+      .page { box-shadow: none; padding: 20px; }
+      .print-bar { display: none !important; }
+      tbody tr:hover { background: inherit; }
+
+      .header-row th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .header-row th.gunduz { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .header-row th.gece { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      td.gunduz { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      td.gece { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      td.tezgah .badge, td.tezgah .badge-torna { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="print-bar">
+    <button class="btn btn-print" onclick="window.print()">Yazdır / PDF İndir</button>
+  </div>
+
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <img src="dunyalogopng.png" alt="Dünyasan Logo" class="logo">
+        <div class="company-info">
+          <div class="name">DÜNYASAN SAVUNMA ANONİM ŞİRKETİ</div>
+          Fabrikalar Mh. Kırıkkale Silah İhtisas OSB 2. Sk. No: 18/1 KIRIKKALE
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="doc-title">VARDİYA SİSTEMİ</div>
+        <div class="doc-date" id="doc-date"></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <table>
+      <thead>
+        <tr class="header-row">
+          <th style="width:40px">#</th>
+          <th class="gunduz" style="width:30%">GÜNDÜZ</th>
+          <th class="tezgah" style="width:30%">TEZGAH</th>
+          <th class="gece" style="width:30%">GECE</th>
+        </tr>
+      </thead>
+      <tbody id="shift-body">
+      </tbody>
+    </table>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="signature">
+        <div class="title">Hazırlayan</div>
+        <div class="line"></div>
+        <div class="sub">Üretim Sorumlusu</div>
+      </div>
+      <div class="signature">
+        <div class="title">Onaylayan</div>
+        <div class="line"></div>
+        <div class="sub">Üretim Müdürü</div>
+      </div>
+      <div class="signature">
+        <div class="title">Genel Müdür</div>
+        <div class="line"></div>
+        <div class="sub">Onay</div>
+      </div>
+    </div>
+
+    <div class="note">
+      Bu belge DÜNYASAN SAVUNMA ANONİM ŞİRKETİ tarafından hazırlanmıştır.
+    </div>
+
+  </div>
+
+  <script>
+    document.getElementById('doc-date').textContent = new Date().toLocaleDateString('tr-TR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    const shifts = [
+      { day: 'SEFA GÜNİ', machines: ['F19','F20','F21','F22','F23'], night: 'RECEP OKAL' },
+      { day: 'AYDIN EFE ARLIER', machines: ['F5','F6','F7'], night: 'AHMET CAN CEYLAN' },
+      { day: 'MEVLÜT TEKELİ', machines: ['F12','F15','F13','F14'], night: 'SAMET GÜVENÇ' },
+      { day: 'BAHADIR YÜCEL', machines: ['F2','F3','F4'], night: 'EKREM TAŞÇI' },
+      { day: 'DİLARA KAYHAN', machines: ['F9','F18','F17'], night: 'ARDA KILIÇ' },
+
+      { day: 'ORHAN ÖZTÜRK', machines: ['TORNA'], night: '' },
+    ];
+
+    const tbody = document.getElementById('shift-body');
+    shifts.forEach((s, i) => {
+      const tr = document.createElement('tr');
+
+      const machinesHtml = s.machines.map(m => {
+        const cls = m === 'TORNA' ? 'badge badge-torna' : 'badge';
+        return `<span class="${cls}">${m}</span>`;
+      }).join(' ');
+
+      tr.innerHTML = `
+        <td class="sira">${i + 1}</td>
+        <td class="gunduz">${s.day}</td>
+        <td class="tezgah">${machinesHtml}</td>
+        <td class="gece">${s.night || '<span style="color:#ccc">—</span>'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  </script>
+
+</body>
+</html>

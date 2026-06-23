@@ -20,7 +20,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentTime, setCurrentTime] = useState('')
   const [currentDate, setCurrentDate] = useState('')
   const [authLoading, setAuthLoading] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const hasCheckedAuth = useRef(false)
+
+  // Route değişince mobil menüyü kapat
+  useEffect(() => { setSidebarOpen(false) }, [pathname])
 
   useEffect(() => {
     // Check authentication - only once ever using ref
@@ -146,8 +150,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex flex-col">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar — mobile: slide-in overlay, desktop: static */}
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-40
+        w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex flex-col
+        transform transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         {/* Logo Section */}
         <div className="p-6 border-b border-blue-700">
           <Image
@@ -215,20 +233,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <header className="bg-white shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">DÜNYASAN ERP</h1>
-              <p className="text-sm text-gray-600">Üretim Yönetim Sistemi</p>
+          <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Hamburger (mobile only) */}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors flex-shrink-0"
+                aria-label="Menüyü Aç/Kapat"
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {sidebarOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-lg md:text-2xl font-bold text-gray-800 truncate">DÜNYASAN ERP</h1>
+                <p className="text-xs md:text-sm text-gray-600 hidden sm:block">Üretim Yönetim Sistemi</p>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">{currentTime}</div>
-              <div className="text-sm text-gray-600">{currentDate}</div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-base md:text-2xl font-bold text-blue-600">{currentTime}</div>
+              <div className="text-[10px] md:text-sm text-gray-600">{currentDate}</div>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6">
           {children}
         </div>
       </main>

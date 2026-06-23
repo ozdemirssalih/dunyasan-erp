@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import {
   Users, Phone, Mail, Plus, X, Edit3, Trash2, Search,
-  Briefcase, PhoneCall, Send, Check, AlertCircle, MailPlus, Settings, Loader2,
+  Briefcase, PhoneCall, Send, Check, AlertCircle,
 } from 'lucide-react'
 
 // ===========================================
@@ -87,21 +87,6 @@ export default function CRMPage() {
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
-  // Mail otomasyonu
-  const [emailConfig, setEmailConfig] = useState<{connected: boolean; email?: string; senderName?: string; replyTo?: string} | null>(null)
-  const [showMailModal, setShowMailModal] = useState(false)
-  const [mailSending, setMailSending] = useState(false)
-  const [mailResult, setMailResult] = useState<{sent: number; failed: number} | null>(null)
-  const [mailForm, setMailForm] = useState({
-    campaignName: '',
-    subject: '',
-    body: '',
-    senderName: '',
-    replyTo: '',
-    targetMode: 'filtered' as 'filtered' | 'selected',
-  })
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
   // Filters
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | CurrentStatus>('all')
@@ -118,49 +103,6 @@ export default function CRMPage() {
   const [customerForm, setCustomerForm] = useState(emptyCustomer)
 
   useEffect(() => { init() }, [])
-
-  // URL'de email_connected=1 varsa toast göster + reload config
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('email_connected') === '1') {
-      alert('✅ Gmail başarıyla bağlandı! Artık toplu mail gönderebilirsin.')
-      window.history.replaceState({}, '', window.location.pathname)
-      checkEmailConfig()
-    }
-    if (params.get('email_error')) {
-      alert('Gmail bağlantı hatası: ' + params.get('email_error'))
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-  }, [])
-
-  const checkEmailConfig = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-      const res = await fetch(`/api/email/oauth/status?token=${encodeURIComponent(session.access_token)}`)
-      const data = await res.json()
-      setEmailConfig(data)
-      if (data.senderName) setMailForm(f => ({ ...f, senderName: data.senderName }))
-      if (data.replyTo) setMailForm(f => ({ ...f, replyTo: data.replyTo }))
-    } catch (e) { console.error(e) }
-  }
-
-  const connectGmail = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return alert('Önce sisteme giriş yapmalısın')
-    window.location.href = `/api/email/oauth?token=${encodeURIComponent(session.access_token)}`
-  }
-
-  const disconnectGmail = async () => {
-    if (!confirm('Gmail bağlantısını kaldırmak istediğine emin misin?')) return
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    await fetch(`/api/email/oauth/status?token=${encodeURIComponent(session.access_token)}`, { method: 'POST' })
-    setEmailConfig({ connected: false })
-  }
-
-  // CRM açıldığında config'i de yükle
-  useEffect(() => { if (companyId) checkEmailConfig() }, [companyId])
 
   const init = async () => {
     try {
@@ -305,36 +247,10 @@ export default function CRMPage() {
             </h2>
             <p className="text-gray-600">Müşteri takip — tek satır, hızlı işlem</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={openNew} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow font-semibold">
-              <Plus className="w-4 h-4" /> Yeni Müşteri
-            </button>
-            {emailConfig?.connected ? (
-              <button
-                onClick={() => { setMailForm(f => ({ ...f, targetMode: 'filtered' })); setSelectedIds(new Set()); setMailResult(null); setShowMailModal(true) }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow font-semibold"
-                title={`Bağlı: ${emailConfig.email}`}>
-                <MailPlus className="w-4 h-4" /> Toplu Mail
-              </button>
-            ) : (
-              <button onClick={connectGmail}
-                className="flex items-center gap-2 px-5 py-2.5 border-2 border-blue-400 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold">
-                <Mail className="w-4 h-4" /> Gmail Bağla
-              </button>
-            )}
-          </div>
+          <button onClick={openNew} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow font-semibold">
+            <Plus className="w-4 h-4" /> Yeni Müşteri
+          </button>
         </div>
-
-        {/* Gmail durum bandı */}
-        {emailConfig?.connected && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-green-600" />
-              <span className="text-blue-900">Mail gönderici hesap: <b>{emailConfig.email}</b></span>
-            </div>
-            <button onClick={disconnectGmail} className="text-blue-600 hover:underline">Bağlantıyı Kaldır</button>
-          </div>
-        )}
 
         {/* Status filter chips */}
         <div className="bg-white rounded-xl shadow-sm border p-3 flex gap-2 flex-wrap items-center">
@@ -496,136 +412,6 @@ export default function CRMPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* ===== TOPLU MAIL MODAL ===== */}
-        {showMailModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !mailSending && setShowMailModal(false)}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <MailPlus className="w-5 h-5 text-blue-600" /> Toplu Mail Gönder
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Gönderici: <b>{emailConfig?.email}</b>
-                  </p>
-                </div>
-                {!mailSending && <button onClick={() => setShowMailModal(false)}><X className="w-5 h-5 text-gray-500" /></button>}
-              </div>
-
-              {!mailResult ? (
-                <div className="p-6 space-y-4">
-                  {/* Hedef seçimi */}
-                  <Field label="Kime gönderilsin?">
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => setMailForm({ ...mailForm, targetMode: 'filtered' })}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold border-2 ${mailForm.targetMode === 'filtered' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
-                        Şu anki filtreye uyanlar ({filtered.filter(c => c.email).length} alıcı)
-                      </button>
-                      <button onClick={() => setMailForm({ ...mailForm, targetMode: 'selected' })}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold border-2 ${mailForm.targetMode === 'selected' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600'}`}>
-                        Manuel seçilenler ({selectedIds.size} alıcı)
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-gray-500 mt-2">
-                      💡 İpucu: Üstteki ülke/durum filtrelerini kullanarak hedef grubu daralt (örn. "Türkiye + Yeni" durumundakiler).
-                    </p>
-                  </Field>
-
-                  <Field label="Kampanya Adı (sadece sen göreceksin)">
-                    <input value={mailForm.campaignName} onChange={e => setMailForm({ ...mailForm, campaignName: e.target.value })}
-                      placeholder="Örn: SAHA Expo Tanıtım — Haziran 2026" className={inputCls} />
-                  </Field>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Field label="Gönderici Adı">
-                      <input value={mailForm.senderName} onChange={e => setMailForm({ ...mailForm, senderName: e.target.value })}
-                        placeholder="DÜNYASAN Satış" className={inputCls} />
-                    </Field>
-                    <Field label="Yanıtla → (Reply-To)">
-                      <input type="email" value={mailForm.replyTo} onChange={e => setMailForm({ ...mailForm, replyTo: e.target.value })}
-                        placeholder="satis@dunyasan.com.tr" className={inputCls} />
-                    </Field>
-                  </div>
-
-                  <Field label="Konu *">
-                    <input value={mailForm.subject} onChange={e => setMailForm({ ...mailForm, subject: e.target.value })}
-                      placeholder="DÜNYASAN — Tanışma & İşbirliği Önerisi" className={inputCls} />
-                  </Field>
-
-                  <Field label="Mesaj (HTML destekli) *">
-                    <textarea value={mailForm.body} onChange={e => setMailForm({ ...mailForm, body: e.target.value })}
-                      rows={10} className={inputCls + ' font-mono text-xs'}
-                      placeholder={`Sayın {yetkili},\n\n{firma} olarak savunma sanayinde...\n\nSaygılarımla,\nDÜNYASAN`} />
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      🏷 Şablon değişkenleri: <code>{'{firma}'}</code> <code>{'{yetkili}'}</code> <code>{'{ulke}'}</code> <code>{'{telefon}'}</code> <code>{'{email}'}</code>
-                    </p>
-                  </Field>
-
-                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800">
-                    ⚠️ Gmail günlük gönderim limiti: <b>~500 mail/gün</b> (ücretsiz hesap) veya <b>2.000/gün</b> (Workspace). Toplu gönderim ~1 saniye/mail hızında yapılır — 100 mail ≈ 1-2 dakika sürer.
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button onClick={() => setShowMailModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
-                    <button
-                      onClick={async () => {
-                        if (!mailForm.subject || !mailForm.body) return alert('Konu ve mesaj zorunlu')
-                        const targets = mailForm.targetMode === 'filtered'
-                          ? filtered.filter(c => c.email).map(c => c.id)
-                          : Array.from(selectedIds)
-                        if (targets.length === 0) return alert('Hedef alıcı yok')
-                        if (!confirm(`${targets.length} müşteriye mail göndermek üzeresin. Devam edilsin mi?`)) return
-
-                        setMailSending(true)
-                        try {
-                          const { data: { session } } = await supabase.auth.getSession()
-                          if (!session) throw new Error('Oturum bulunamadı')
-                          const res = await fetch(`/api/email/send-bulk?token=${encodeURIComponent(session.access_token)}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              customerIds: targets,
-                              subject: mailForm.subject,
-                              htmlBody: mailForm.body.replace(/\n/g, '<br>'),
-                              campaignName: mailForm.campaignName,
-                              senderName: mailForm.senderName,
-                              replyTo: mailForm.replyTo,
-                            }),
-                          })
-                          const data = await res.json()
-                          if (!res.ok) throw new Error(data.error || 'Gönderim hatası')
-                          setMailResult({ sent: data.sent, failed: data.failed })
-                          await loadAll(companyId!)  // refresh statuses
-                        } catch (e: any) {
-                          alert('Hata: ' + e.message)
-                        } finally {
-                          setMailSending(false)
-                        }
-                      }}
-                      disabled={mailSending}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-                      {mailSending ? <><Loader2 className="w-4 h-4 animate-spin" /> Gönderiliyor...</> : <><Send className="w-4 h-4" /> Gönder</>}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center">
-                    <Check className="w-10 h-10 text-green-600" />
-                  </div>
-                  <h4 className="text-2xl font-bold text-gray-800">Gönderim Tamamlandı</h4>
-                  <div className="flex justify-center gap-6">
-                    <div><div className="text-3xl font-bold text-green-600">{mailResult.sent}</div><div className="text-xs text-gray-500">Başarılı</div></div>
-                    {mailResult.failed > 0 && <div><div className="text-3xl font-bold text-red-600">{mailResult.failed}</div><div className="text-xs text-gray-500">Başarısız</div></div>}
-                  </div>
-                  <button onClick={() => { setMailResult(null); setShowMailModal(false) }}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold">Kapat</button>
-                </div>
-              )}
-            </div>
           </div>
         )}
 

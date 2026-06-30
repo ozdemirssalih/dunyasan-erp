@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search, Plus, X, Edit2, Trash2, Tag, Check } from 'lucide-react'
+import { Building2, TrendingUp, TrendingDown, DollarSign, Eye, ArrowLeft, Search, Plus, X, Edit2, Trash2, Tag, Check, Printer } from 'lucide-react'
 
 // Türkiye'deki yaygın bankalar
 const BANKS = [
@@ -23,6 +23,218 @@ const SECTORS = [
   'Finans / Bankacılık', 'Telekom', 'Medya / Reklam', 'Perakende',
   'Toptan Ticaret', 'Hizmet', 'Personel', 'Diğer'
 ]
+
+// Cari hesap özet/geçmiş yazdırma — yeni pencerede print-friendly HTML
+function printContactSummary(contact: any, transactions: any[]) {
+  const fmtMoney = (v: number, cur: string = 'TRY') => {
+    const sign = v < 0 ? '-' : ''
+    const abs = Math.abs(v).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (cur === 'TRY') return `${sign}₺${abs}`
+    if (cur === 'USD') return `${sign}$${abs}`
+    if (cur === 'EUR') return `${sign}€${abs}`
+    return `${sign}${abs} ${cur}`
+  }
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('tr-TR')
+  const today = new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+
+  const invoiceLabels: Record<string, string> = {
+    sales: 'Satış Faturası', purchase: 'Alış Faturası', incoming_return: 'Gelen İade',
+    outgoing_return: 'Giden İade', withholding: 'Tevkifatlı', exempt: 'İstisna',
+    purchase_fx: 'Alış Kur Farkı', sales_fx: 'Satış Kur Farkı',
+  }
+
+  const sorted = [...transactions].sort((a, b) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime())
+
+  const rows = sorted.map((t: any, i: number) => {
+    const isCash = t.source === 'cash'
+    const isIncome = isCash && t.transaction_type === 'income'
+    const isReceivable = !isCash && t.transaction_type === 'receivable'
+    const amount = parseFloat(t.amount) || 0
+    const cur = t.currency || 'TRY'
+    // Borç/Alacak sütun değerleri
+    let alacak = '', borc = ''
+    if (isCash) {
+      if (isIncome) borc = fmtMoney(amount, cur)
+      else alacak = fmtMoney(amount, cur)
+    } else {
+      if (isReceivable) alacak = fmtMoney(amount, cur)
+      else borc = fmtMoney(amount, cur)
+    }
+    const tip = isCash
+      ? (isIncome ? 'Gelen Ödeme' : 'Giden Ödeme')
+      : (isReceivable ? 'Alacak' : 'Borç')
+    const aciklama = [
+      t.description || t.reference_number || '-',
+      t.invoice_type ? `<span class="tag">${invoiceLabels[t.invoice_type] || t.invoice_type}</span>` : '',
+      t.invoice_category ? `<span class="tag tag-purple">${t.invoice_category}</span>` : '',
+      isCash && t.payment_method ? `<span class="tag">${t.payment_method === 'cash' ? 'Nakit' : t.payment_method === 'transfer' ? 'Havale' : t.payment_method === 'check' ? 'Çek' : t.payment_method}</span>` : '',
+      isCash && t.cash_account_name ? `<span class="tag tag-indigo">${t.cash_account_name}</span>` : '',
+    ].filter(Boolean).join(' ')
+    return `
+      <tr>
+        <td class="num">${i + 1}</td>
+        <td>${fmtDate(t.transaction_date)}</td>
+        <td>${aciklama}</td>
+        <td><span class="tip ${isReceivable || (isCash && !isIncome) ? 'tip-green' : 'tip-red'}">${tip}</span></td>
+        <td class="num green">${alacak}</td>
+        <td class="num red">${borc}</td>
+      </tr>
+    `
+  }).join('')
+
+  const balanceRows = Object.entries(contact.balanceByCurrency || {}).map(([cur, val]: any) => {
+    const v = parseFloat(val)
+    if (Math.abs(v) < 0.005) return ''
+    return `<div class="bal ${v >= 0 ? 'pos' : 'neg'}">${fmtMoney(v, cur)}</div>`
+  }).join('') || `<div class="bal">${fmtMoney(0, 'TRY')}</div>`
+
+  const receivableRows = Object.entries(contact.totalReceivableByCurrency || {}).map(([cur, val]: any) =>
+    `<div>${fmtMoney(parseFloat(val), cur)}</div>`
+  ).join('') || `<div>${fmtMoney(0, 'TRY')}</div>`
+
+  const payableRows = Object.entries(contact.totalPayableByCurrency || {}).map(([cur, val]: any) =>
+    `<div>${fmtMoney(parseFloat(val), cur)}</div>`
+  ).join('') || `<div>${fmtMoney(0, 'TRY')}</div>`
+
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Cari Hesap Özeti — ${contact.contact_name}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #1f2937; padding: 20mm; font-size: 11pt; }
+  .head { display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #1f2937; padding-bottom: 12px; margin-bottom: 18px; }
+  .head h1 { font-size: 22pt; font-weight: 800; }
+  .head .meta { text-align: right; font-size: 9pt; color: #6b7280; }
+  .info { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; }
+  .card .label { font-size: 8pt; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 700; }
+  .card .value { font-size: 11pt; color: #1f2937; font-weight: 600; line-height: 1.5; }
+  .card .small { font-size: 9pt; color: #4b5563; }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+  .sum-box { padding: 12px; border-radius: 6px; text-align: center; }
+  .sum-box .lbl { font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px; }
+  .sum-box .val { font-size: 14pt; font-weight: 800; }
+  .sum-box.balance { background: #f3f4f6; }
+  .sum-box.receivable { background: #ecfdf5; color: #065f46; }
+  .sum-box.payable { background: #fef2f2; color: #991b1b; }
+  .sum-box.count { background: #eef2ff; color: #3730a3; }
+  .bal.pos { color: #15803d; }
+  .bal.neg { color: #b91c1c; }
+  .sum-box .bal { font-size: 13pt; font-weight: 800; line-height: 1.4; }
+  h2 { font-size: 13pt; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  thead th { background: #1f2937; color: #fff; text-align: left; padding: 6px 8px; font-size: 8.5pt; font-weight: 700; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody tr:nth-child(even) td { background: #f9fafb; }
+  tbody td.green { color: #15803d; font-weight: 600; }
+  tbody td.red { color: #b91c1c; font-weight: 600; }
+  .tag { display: inline-block; background: #f3f4f6; color: #4b5563; padding: 1px 6px; border-radius: 3px; font-size: 7.5pt; margin-right: 3px; }
+  .tag-purple { background: #f3e8ff; color: #6b21a8; }
+  .tag-indigo { background: #e0e7ff; color: #3730a3; }
+  .tip { padding: 1px 8px; border-radius: 3px; font-size: 7.5pt; font-weight: 700; }
+  .tip-green { background: #dcfce7; color: #166534; }
+  .tip-red { background: #fee2e2; color: #991b1b; }
+  .footer { margin-top: 22px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 8pt; color: #6b7280; display: flex; justify-content: space-between; }
+  @page { size: A4 portrait; margin: 12mm; }
+  @media print {
+    body { padding: 0; }
+    .actions { display: none !important; }
+  }
+  .actions { position: fixed; top: 12px; right: 12px; }
+  .actions button { background: #1f2937; color: #fff; border: 0; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 11pt; }
+</style>
+</head>
+<body>
+<div class="actions"><button onclick="window.print()">🖨 Yazdır</button></div>
+
+<div class="head">
+  <div>
+    <h1>${contact.contact_name}</h1>
+    <div class="meta" style="text-align: left; margin-top: 4px;">Cari Hesap Geçmişi / Özet</div>
+  </div>
+  <div class="meta">
+    <div><b>Yazdırma:</b> ${today}</div>
+    <div><b>İşlem Sayısı:</b> ${contact.transactionCount || transactions.length}</div>
+  </div>
+</div>
+
+<div class="info">
+  <div class="card">
+    <div class="label">İletişim</div>
+    <div class="value">${contact.contact_name}</div>
+    <div class="small">${contact.phone || ''}${contact.phone && contact.email ? ' · ' : ''}${contact.email || ''}</div>
+    ${contact.address ? `<div class="small">${contact.address}</div>` : ''}
+  </div>
+  <div class="card">
+    <div class="label">VKN</div>
+    <div class="value">${contact.tax_number || '—'}</div>
+    <div class="small">${contact.tax_office || ''}</div>
+  </div>
+  <div class="card">
+    <div class="label">Sektör</div>
+    <div class="value">${contact.sector || '—'}</div>
+  </div>
+  <div class="card">
+    <div class="label">Banka / IBAN</div>
+    <div class="value" style="font-size: 9pt;">${contact.bank_name || '—'}</div>
+    <div class="small" style="font-family: monospace;">${contact.iban || ''}</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="sum-box balance">
+    <div class="lbl">Bakiye</div>
+    ${balanceRows}
+  </div>
+  <div class="sum-box receivable">
+    <div class="lbl">Toplam Alacak</div>
+    ${receivableRows}
+  </div>
+  <div class="sum-box payable">
+    <div class="lbl">Toplam Borç</div>
+    ${payableRows}
+  </div>
+  <div class="sum-box count">
+    <div class="lbl">İşlem Sayısı</div>
+    <div class="val">${contact.transactionCount || transactions.length}</div>
+  </div>
+</div>
+
+<h2>İşlem Geçmişi (${transactions.length} kayıt)</h2>
+${transactions.length === 0 ? '<p style="text-align:center; color:#9ca3af; padding: 20px;">Henüz işlem yok</p>' : `
+<table>
+  <thead>
+    <tr>
+      <th class="num" style="width: 28px;">#</th>
+      <th style="width: 78px;">Tarih</th>
+      <th>Açıklama</th>
+      <th style="width: 90px;">Tip</th>
+      <th class="num" style="width: 110px;">Alacak</th>
+      <th class="num" style="width: 110px;">Borç</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>`}
+
+<div class="footer">
+  <div>DÜNYASAN ERP — Cari Hesap Geçmişi</div>
+  <div>${today}</div>
+</div>
+</body>
+</html>`
+
+  const w = window.open('', '_blank', 'width=1100,height=800')
+  if (!w) { alert('Pop-up engellendi. Lütfen bu site için pop-up\'a izin verin.'); return }
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  // Render bitince otomatik print dialogunu aç
+  w.onload = () => { setTimeout(() => w.print(), 250) }
+}
 
 export default function CurrentAccountsPage() {
   const [contacts, setContacts] = useState<any[]>([])
@@ -703,9 +915,17 @@ export default function CurrentAccountsPage() {
       {/* Seçili Cari Detay */}
       {selectedContact ? (
         <div className="space-y-4">
-          <button onClick={() => setSelectedContact(null)} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
-            <ArrowLeft className="w-4 h-4" /> Listeye Dön
-          </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <button onClick={() => setSelectedContact(null)} className="flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-800">
+              <ArrowLeft className="w-4 h-4" /> Listeye Dön
+            </button>
+            <button
+              onClick={() => printContactSummary(selectedContact, contactTransactions)}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm"
+            >
+              <Printer className="w-4 h-4" /> Geçmişi Yazdır
+            </button>
+          </div>
 
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">

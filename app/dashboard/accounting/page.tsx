@@ -59,7 +59,7 @@ export default function AccountingPageV2() {
   const [accountTransactions, setAccountTransactions] = useState<any[]>([])
   const [accountBalanceInput, setAccountBalanceInput] = useState('')
   const [showTransferModal, setShowTransferModal] = useState(false)
-  const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '', description: '' })
+  const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '', description: '', exchange_rate: '' })
 
   // Gider kategorileri
   const [expenseCategories, setExpenseCategories] = useState<string[]>([
@@ -762,41 +762,58 @@ export default function AccountingPageV2() {
     const amount = parseFloat(transferForm.amount)
     if (amount <= 0) return alert('Tutar 0\'dan büyük olmalı!')
 
+    const fromAcc = cashAccounts.find(a => a.id === transferForm.from_account_id)
+    const toAcc = cashAccounts.find(a => a.id === transferForm.to_account_id)
+    const fromCurrency = fromAcc?.currency || 'TRY'
+    const toCurrency = toAcc?.currency || 'TRY'
+    const isCrossCurrency = fromCurrency !== toCurrency
+
+    let rate = 1
+    if (isCrossCurrency) {
+      rate = parseFloat(transferForm.exchange_rate)
+      if (!rate || rate <= 0) return alert(`Kur zorunlu: 1 ${fromCurrency} = ? ${toCurrency}`)
+    }
+    const receivedAmount = Math.round(amount * rate * 100) / 100
+
     setIsSubmitting(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const fromAcc = cashAccounts.find(a => a.id === transferForm.from_account_id)
-      const toAcc = cashAccounts.find(a => a.id === transferForm.to_account_id)
-      const desc = transferForm.description || `Transfer: ${fromAcc?.account_name} → ${toAcc?.account_name}`
+      const baseDesc = transferForm.description || `Transfer: ${fromAcc?.account_name} → ${toAcc?.account_name}`
+      const desc = isCrossCurrency
+        ? `${baseDesc} | Kur: 1 ${fromCurrency} = ${rate} ${toCurrency}`
+        : baseDesc
       const now = new Date().toISOString()
+      const ref = `TRF-${Date.now()}`
 
-      // Gönderen kasadan çıkış
+      // Gönderen kasadan çıkış (kendi para biriminde)
       await supabase.from('cash_transactions').insert({
         company_id: companyId, transaction_type: 'expense', amount,
-        currency: fromAcc?.currency || 'TRY', payment_method: 'transfer',
+        currency: fromCurrency, payment_method: 'transfer',
         transaction_date: now, description: desc,
-        reference_number: `TRF-${Date.now()}`,
+        reference_number: ref,
         cash_account_id: transferForm.from_account_id,
         created_by: user?.id
       })
 
-      // Alan kasaya giriş
+      // Alan kasaya giriş (kendi para biriminde, kurdan dönüştürülmüş)
       await supabase.from('cash_transactions').insert({
-        company_id: companyId, transaction_type: 'income', amount,
-        currency: toAcc?.currency || 'TRY', payment_method: 'transfer',
+        company_id: companyId, transaction_type: 'income', amount: receivedAmount,
+        currency: toCurrency, payment_method: 'transfer',
         transaction_date: now, description: desc,
-        reference_number: `TRF-${Date.now()}`,
+        reference_number: ref,
         cash_account_id: transferForm.to_account_id,
         created_by: user?.id
       })
 
       // Kasa bakiyelerini güncelle
       await supabase.from('cash_accounts').update({ current_balance: (fromAcc?.current_balance || 0) - amount }).eq('id', transferForm.from_account_id)
-      await supabase.from('cash_accounts').update({ current_balance: (toAcc?.current_balance || 0) + amount }).eq('id', transferForm.to_account_id)
+      await supabase.from('cash_accounts').update({ current_balance: (toAcc?.current_balance || 0) + receivedAmount }).eq('id', transferForm.to_account_id)
 
-      alert('Transfer başarılı!')
+      alert(isCrossCurrency
+        ? `Transfer başarılı!\n${amount} ${fromCurrency} → ${receivedAmount} ${toCurrency} (kur: ${rate})`
+        : 'Transfer başarılı!')
       setShowTransferModal(false)
-      setTransferForm({ from_account_id: '', to_account_id: '', amount: '', description: '' })
+      setTransferForm({ from_account_id: '', to_account_id: '', amount: '', description: '', exchange_rate: '' })
       loadData()
     } catch (error: any) {
       alert('Hata: ' + error.message)
@@ -3930,14 +3947,48 @@ export default function AccountingPageV2() {
                     {cashAccounts.filter(a => a.id !== transferForm.from_account_id).map(a => <option key={a.id} value={a.id}>{a.account_name} ({new Intl.NumberFormat('tr-TR', {minimumFractionDigits: 2}).format(a.current_balance)} {a.currency})</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tutar *</label>
-                  <input type="number" step="0.01" value={transferForm.amount} onChange={e => setTransferForm({...transferForm, amount: e.target.value})} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
-                  <input value={transferForm.description} onChange={e => setTransferForm({...transferForm, description: e.target.value})} placeholder="Transfer açıklaması" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
-                </div>
+                {(() => {
+                  const fromAcc = cashAccounts.find(a => a.id === transferForm.from_account_id)
+                  const toAcc = cashAccounts.find(a => a.id === transferForm.to_account_id)
+                  const fromCur = fromAcc?.currency
+                  const toCur = toAcc?.currency
+                  const crossCurrency = fromCur && toCur && fromCur !== toCur
+                  const amt = parseFloat(transferForm.amount)
+                  const rate = parseFloat(transferForm.exchange_rate)
+                  const converted = crossCurrency && amt > 0 && rate > 0 ? Math.round(amt * rate * 100) / 100 : null
+                  return (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tutar {fromCur ? `(${fromCur})` : ''} *</label>
+                        <input type="number" step="0.01" value={transferForm.amount} onChange={e => setTransferForm({...transferForm, amount: e.target.value})} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                      </div>
+                      {crossCurrency && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                          <label className="block text-sm font-semibold text-amber-900">
+                            Kur * (1 {fromCur} = ? {toCur})
+                          </label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={transferForm.exchange_rate}
+                            onChange={e => setTransferForm({...transferForm, exchange_rate: e.target.value})}
+                            placeholder={`Örn: ${fromCur === 'USD' && toCur === 'TRY' ? '42.50' : '0.00'}`}
+                            className="w-full px-4 py-2 border border-amber-300 rounded-lg text-gray-900 bg-white"
+                          />
+                          {converted !== null && (
+                            <div className="text-sm text-amber-900">
+                              Alan kasaya girecek: <strong>{new Intl.NumberFormat('tr-TR', {minimumFractionDigits: 2}).format(converted)} {toCur}</strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
+                        <input value={transferForm.description} onChange={e => setTransferForm({...transferForm, description: e.target.value})} placeholder="Transfer açıklaması" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                      </div>
+                    </>
+                  )
+                })()}
                 <div className="flex gap-3">
                   <button onClick={() => setShowTransferModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg font-semibold">İptal</button>
                   <button onClick={handleTransfer} disabled={isSubmitting} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50">

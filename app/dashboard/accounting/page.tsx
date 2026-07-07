@@ -768,19 +768,31 @@ export default function AccountingPageV2() {
     const toCurrency = toAcc?.currency || 'TRY'
     const isCrossCurrency = fromCurrency !== toCurrency
 
+    // Kur "1 <base> = ? <quote>" formatinda sorulur; base her zaman piyasada quote edilen taraf
+    // Oncelik: GBP > EUR > USD > TRY
+    const CUR_RANK: Record<string, number> = { GBP: 4, EUR: 3, USD: 2, TRY: 1 }
+    const baseCurrency = (CUR_RANK[fromCurrency] ?? 0) >= (CUR_RANK[toCurrency] ?? 0) ? fromCurrency : toCurrency
+    const quoteCurrency = baseCurrency === fromCurrency ? toCurrency : fromCurrency
+
     let rate = 1
     if (isCrossCurrency) {
       rate = parseFloat(transferForm.exchange_rate)
-      if (!rate || rate <= 0) return alert(`Kur zorunlu: 1 ${fromCurrency} = ? ${toCurrency}`)
+      if (!rate || rate <= 0) return alert(`Kur zorunlu: 1 ${baseCurrency} = ? ${quoteCurrency}`)
     }
-    const receivedAmount = Math.round(amount * rate * 100) / 100
+    // baseCurrency === fromCurrency ise: 1 from = rate to → carpimla
+    // baseCurrency === toCurrency ise:   1 to = rate from → bolmeyle
+    const receivedAmount = isCrossCurrency
+      ? (baseCurrency === fromCurrency
+          ? Math.round(amount * rate * 100) / 100
+          : Math.round((amount / rate) * 100) / 100)
+      : amount
 
     setIsSubmitting(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       const baseDesc = transferForm.description || `Transfer: ${fromAcc?.account_name} → ${toAcc?.account_name}`
       const desc = isCrossCurrency
-        ? `${baseDesc} | Kur: 1 ${fromCurrency} = ${rate} ${toCurrency}`
+        ? `${baseDesc} | Kur: 1 ${baseCurrency} = ${rate} ${quoteCurrency}`
         : baseDesc
       const now = new Date().toISOString()
       const ref = `TRF-${Date.now()}`
@@ -3952,10 +3964,24 @@ export default function AccountingPageV2() {
                   const toAcc = cashAccounts.find(a => a.id === transferForm.to_account_id)
                   const fromCur = fromAcc?.currency
                   const toCur = toAcc?.currency
-                  const crossCurrency = fromCur && toCur && fromCur !== toCur
+                  const crossCurrency = !!(fromCur && toCur && fromCur !== toCur)
+                  const CUR_RANK: Record<string, number> = { GBP: 4, EUR: 3, USD: 2, TRY: 1 }
+                  const baseCur = crossCurrency
+                    ? ((CUR_RANK[fromCur!] ?? 0) >= (CUR_RANK[toCur!] ?? 0) ? fromCur! : toCur!)
+                    : null
+                  const quoteCur = crossCurrency ? (baseCur === fromCur ? toCur! : fromCur!) : null
                   const amt = parseFloat(transferForm.amount)
                   const rate = parseFloat(transferForm.exchange_rate)
-                  const converted = crossCurrency && amt > 0 && rate > 0 ? Math.round(amt * rate * 100) / 100 : null
+                  const converted = crossCurrency && amt > 0 && rate > 0
+                    ? (baseCur === fromCur
+                        ? Math.round(amt * rate * 100) / 100
+                        : Math.round((amt / rate) * 100) / 100)
+                    : null
+                  const rateExample = baseCur === 'EUR' && quoteCur === 'TRY' ? '46.50'
+                    : baseCur === 'USD' && quoteCur === 'TRY' ? '42.50'
+                    : baseCur === 'GBP' && quoteCur === 'TRY' ? '54.00'
+                    : baseCur === 'EUR' && quoteCur === 'USD' ? '1.09'
+                    : '0.00'
                   return (
                     <>
                       <div>
@@ -3965,14 +3991,14 @@ export default function AccountingPageV2() {
                       {crossCurrency && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
                           <label className="block text-sm font-semibold text-amber-900">
-                            Kur * (1 {fromCur} = ? {toCur})
+                            Kur * (1 {baseCur} = ? {quoteCur})
                           </label>
                           <input
                             type="number"
                             step="0.0001"
                             value={transferForm.exchange_rate}
                             onChange={e => setTransferForm({...transferForm, exchange_rate: e.target.value})}
-                            placeholder={`Örn: ${fromCur === 'USD' && toCur === 'TRY' ? '42.50' : '0.00'}`}
+                            placeholder={`Örn: ${rateExample}`}
                             className="w-full px-4 py-2 border border-amber-300 rounded-lg text-gray-900 bg-white"
                           />
                           {converted !== null && (

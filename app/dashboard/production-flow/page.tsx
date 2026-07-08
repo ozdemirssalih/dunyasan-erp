@@ -692,6 +692,22 @@ export default function ProductionFlowPage() {
     }
   }
 
+  const saveOrderValidDocuments = async (orderId: string, docs: ValidDocument[]) => {
+    try {
+      const { error } = await supabase.from('production_flow_orders')
+        .update({ valid_documents: docs })
+        .eq('id', orderId)
+      if (error) throw error
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, valid_documents: docs })
+      }
+      if (companyId) await loadOrders(companyId)
+    } catch (err: any) {
+      alert('Doküman listesi kaydedilemedi: ' + err.message)
+      throw err
+    }
+  }
+
   const completeStep = async (log: StepLog, payload: {
     accepted_quantity: number; scrap_quantity: number; rework_quantity: number;
     operator_id?: string; machine_id?: string; qc_result?: 'pass' | 'fail' | 'partial';
@@ -949,6 +965,7 @@ export default function ProductionFlowPage() {
             onCompleteStep={completeStep}
             onDelete={() => deleteOrder(selectedOrder)}
             onLogPrint={(vals) => logPrintEvent(selectedOrder, vals)}
+            onSaveDocs={(docs) => saveOrderValidDocuments(selectedOrder.id, docs)}
           />
         )}
 
@@ -1436,7 +1453,7 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: s
 // ORDER DETAIL (FLOW VIEW)
 // =====================================================
 function OrderDetail({
-  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep, onDelete, onLogPrint,
+  order, stepLogs, employees, machines, activeStepLogId, setActiveStepLogId, onBack, onStart, onCompleteStep, onDelete, onLogPrint, onSaveDocs,
 }: {
   order: FlowOrder; stepLogs: StepLog[]; employees: any[]; machines: any[];
   activeStepLogId: string | null; setActiveStepLogId: (id: string | null) => void;
@@ -1444,6 +1461,7 @@ function OrderDetail({
   onCompleteStep: (log: StepLog, payload: any) => void;
   onDelete: () => void;
   onLogPrint: (vals: { iem_no: string; baslama: string; bitis: string; teslim: string }) => void;
+  onSaveDocs: (docs: ValidDocument[]) => Promise<void>;
 }) {
   const status = STATUS_MAP[order.status]
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
@@ -1456,6 +1474,27 @@ function OrderDetail({
   const [printTeslim, setPrintTeslim] = useState(order.teslim_tarihi || '')
   // IEM No iş emrinin kaydındaki — her yazdırmada aynı, değiştirilemez
   const printIemNo = order.iem_no || ''
+
+  // Geçerli doküman listesi (detay sayfasında düzenlenebilir)
+  const [docsDraft, setDocsDraft] = useState<ValidDocument[]>(order.valid_documents || [])
+  const [docsDirty, setDocsDirty] = useState(false)
+  const [savingDocs, setSavingDocs] = useState(false)
+  useEffect(() => {
+    setDocsDraft(order.valid_documents || [])
+    setDocsDirty(false)
+  }, [order.id, order.valid_documents])
+  const updateDoc = (idx: number, patch: Partial<ValidDocument>) => {
+    const nd = [...docsDraft]
+    nd[idx] = { ...nd[idx], ...patch }
+    setDocsDraft(nd); setDocsDirty(true)
+  }
+  const addDoc = () => { setDocsDraft([...docsDraft, { name: '', doc_no: '', revision: '', date: '' }]); setDocsDirty(true) }
+  const removeDoc = (idx: number) => { setDocsDraft(docsDraft.filter((_, i) => i !== idx)); setDocsDirty(true) }
+  const saveDocs = async () => {
+    setSavingDocs(true)
+    try { await onSaveDocs(docsDraft); setDocsDirty(false) }
+    finally { setSavingDocs(false) }
+  }
 
   const handlePrint = (override?: { baslama: string; bitis: string; teslim: string; iem_no: string }) => {
     const useBaslama = override?.baslama ?? printBaslama
@@ -1501,8 +1540,8 @@ function OrderDetail({
       </div>
     `).join('')
 
-    // Geçerli Doküman Listesi — her zaman görünür, en az 6 satır
-    const validDocs = order.valid_documents || []
+    // Geçerli Doküman Listesi — her zaman görünür, en az 6 satır (ekrandaki taslaktan)
+    const validDocs = docsDraft
     const MIN_DOC_ROWS = 6
     const docRows = [
       ...validDocs.map(d => ({ name: esc(d.name) || '', doc_no: esc(d.doc_no) || '', revision: esc(d.revision) || '', date: d.date ? fmtDate(d.date) : '' })),
@@ -1745,7 +1784,8 @@ function OrderDetail({
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowPrintDialog(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold">İptal</button>
-              <button onClick={() => {
+              <button onClick={async () => {
+                if (docsDirty) { try { await saveDocs() } catch { return } }
                 setShowPrintDialog(false)
                 const vals = { baslama: printBaslama, bitis: printBitis, teslim: printTeslim, iem_no: printIemNo }
                 handlePrint(vals)
@@ -1836,32 +1876,51 @@ function OrderDetail({
           </div>
         )}
 
-        {/* Geçerli Doküman Listesi */}
-        {order.valid_documents && order.valid_documents.length > 0 && (
-          <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">📑 Geçerli Doküman Listesi</h4>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Doküman Adı</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Doküman No</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Revizyon</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Tarih</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {order.valid_documents.map((doc, i) => (
-                  <tr key={i}>
-                    <td className="px-3 py-2">{doc.name || '-'}</td>
-                    <td className="px-3 py-2">{doc.doc_no || '-'}</td>
-                    <td className="px-3 py-2">{doc.revision || '-'}</td>
-                    <td className="px-3 py-2">{doc.date ? new Date(doc.date).toLocaleDateString('tr-TR') : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Geçerli Doküman Listesi — düzenlenebilir */}
+        <div>
+          <div className="flex items-center justify-between mb-2 border-b pb-1">
+            <h4 className="text-sm font-bold text-gray-700">📑 Geçerli Doküman Listesi</h4>
+            <div className="flex items-center gap-2">
+              {docsDirty && <span className="text-[11px] text-amber-600 font-semibold">● Kaydedilmedi</span>}
+              <button type="button" onClick={addDoc} className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                <Plus className="w-3 h-3" /> Doküman Ekle
+              </button>
+              <button type="button" onClick={saveDocs} disabled={!docsDirty || savingDocs}
+                className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold">
+                {savingDocs ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            </div>
           </div>
-        )}
+          {docsDraft.length === 0 ? (
+            <p className="text-xs text-gray-400 italic py-2">Henüz doküman eklenmedi. "Doküman Ekle" ile teknik resim, FAI belgesi, kalite planı vb. ekleyebilirsin.</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-gray-500 uppercase">
+                <div className="col-span-4">Doküman Adı</div>
+                <div className="col-span-3">Doküman No</div>
+                <div className="col-span-2">Revizyon</div>
+                <div className="col-span-2">Tarih</div>
+                <div className="col-span-1"></div>
+              </div>
+              {docsDraft.map((doc, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2">
+                  <input value={doc.name} onChange={e => updateDoc(idx, { name: e.target.value })}
+                    placeholder="Teknik Resim" className="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                  <input value={doc.doc_no} onChange={e => updateDoc(idx, { doc_no: e.target.value })}
+                    placeholder="DR-12345" className="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                  <input value={doc.revision} onChange={e => updateDoc(idx, { revision: e.target.value })}
+                    placeholder="A" className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                  <input type="date" value={doc.date} onChange={e => updateDoc(idx, { date: e.target.value })}
+                    className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                  <button onClick={() => removeDoc(idx)}
+                    className="col-span-1 p-1.5 text-red-500 hover:bg-red-50 rounded flex items-center justify-center">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Akış Bilgileri (ekipman + öncelik kaldırıldı) */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">

@@ -209,14 +209,6 @@ const generateSequentialIemNo = async (companyId: string): Promise<string> => {
   return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
-const generateDosyaNo = () => {
-  const now = new Date()
-  const y = now.getFullYear().toString().slice(2)
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const r = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-  return `DOS-${y}${m}-${r}`
-}
-
 // =====================================================
 // PAGE
 // =====================================================
@@ -528,11 +520,7 @@ export default function ProductionFlowPage() {
   // ORDER CRUD
   // =====================================================
   const openNewOrder = () => {
-    setOrderForm({
-      ...emptyOrderForm,
-      // IEM No artık manuel — kullanıcı yazacak
-      dosya_no: generateDosyaNo(),
-    })
+    setOrderForm({ ...emptyOrderForm })
     setShowOrderModal(true)
   }
 
@@ -549,6 +537,7 @@ export default function ProductionFlowPage() {
 
   const saveOrder = async () => {
     if (!orderForm.parca_adi) return alert('Parça adı zorunlu!')
+    if (!orderForm.dosya_no?.trim()) return alert('Dosya No zorunlu!')
     if (!orderForm.project_id) return alert('Proje seçimi zorunlu!')
     if (!orderForm.route_id) return alert('Rota seçimi zorunlu!')
     if (!orderForm.planned_quantity) return alert('Planlanan miktar zorunlu!')
@@ -1088,7 +1077,7 @@ export default function ProductionFlowPage() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Parça Bilgileri (IEM No manuel, Dosya No oto-üretilir) */}
+                {/* Parça Bilgileri (IEM No oto-atanır, Dosya No manuel & zorunlu) */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-1">📋 Parça Bilgileri</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1113,8 +1102,8 @@ export default function ProductionFlowPage() {
                     <Field label="Delta FAI">
                       <input type="text" value={orderForm.delta_fai} onChange={e => setOrderForm({ ...orderForm, delta_fai: e.target.value })} className={inputCls} />
                     </Field>
-                    <Field label="Dosya No (otomatik)">
-                      <input type="text" value={orderForm.dosya_no} onChange={e => setOrderForm({ ...orderForm, dosya_no: e.target.value })} className={`${inputCls} bg-gray-50`} />
+                    <Field label="Dosya No *">
+                      <input type="text" value={orderForm.dosya_no} onChange={e => setOrderForm({ ...orderForm, dosya_no: e.target.value })} placeholder="Dosya numarasını girin" className={inputCls} />
                     </Field>
                   </div>
                 </div>

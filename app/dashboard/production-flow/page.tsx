@@ -186,13 +186,27 @@ const generateOrderNumber = () => {
   return `IE-${y}${m}${d}-${r}`
 }
 
-const generateIemNo = () => {
+// Sıralı IEM No üretici: YYYYMMDD-NNN (örn. 20260708-001)
+// Aynı gün içindeki en yüksek numarayı bulup +1 verir
+const generateSequentialIemNo = async (companyId: string): Promise<string> => {
   const now = new Date()
-  const y = now.getFullYear().toString().slice(2)
+  const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
-  const r = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-  return `IEM-${y}${m}${d}-${r}`
+  const prefix = `${y}${m}${d}`
+  const { data } = await supabase
+    .from('production_flow_orders')
+    .select('iem_no')
+    .eq('company_id', companyId)
+    .like('iem_no', `${prefix}-%`)
+    .order('iem_no', { ascending: false })
+    .limit(1)
+  let next = 1
+  if (data && data.length > 0 && data[0].iem_no) {
+    const match = String(data[0].iem_no).match(/-(\d+)$/)
+    if (match) next = parseInt(match[1], 10) + 1
+  }
+  return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
 const generateDosyaNo = () => {
@@ -544,6 +558,9 @@ export default function ProductionFlowPage() {
       const { data: { user } } = await supabase.auth.getUser()
       const customerName = customers.find(c => c.id === orderForm.customer_id)?.contact_name || null
 
+      // IEM No: sıralı otomatik atanır (YYYYMMDD-NNN)
+      const autoIemNo = await generateSequentialIemNo(companyId)
+
       // Insert order
       const { data: orderData, error: orderErr } = await supabase.from('production_flow_orders').insert({
         company_id: companyId,
@@ -551,7 +568,7 @@ export default function ProductionFlowPage() {
         // Parça bilgileri
         parca_no: orderForm.parca_no || null,
         parca_adi: orderForm.parca_adi || null,
-        iem_no: orderForm.iem_no || null,
+        iem_no: autoIemNo,
         revizyon_no: orderForm.revizyon_no || null,
         fai: orderForm.fai || null,
         seri: orderForm.seri || null,
@@ -1064,8 +1081,8 @@ export default function ProductionFlowPage() {
                     <Field label="Parça Adı *">
                       <input type="text" value={orderForm.parca_adi} onChange={e => setOrderForm({ ...orderForm, parca_adi: e.target.value })} className={inputCls} />
                     </Field>
-                    <Field label="IEM No">
-                      <input type="text" value={orderForm.iem_no} onChange={e => setOrderForm({ ...orderForm, iem_no: e.target.value })} placeholder="örn. IEM-2026-001" className={inputCls} />
+                    <Field label="IEM No (otomatik atanır)">
+                      <input type="text" value={orderForm.iem_no} readOnly disabled placeholder="Kaydettiğinde otomatik atanacak (YYYYMMDD-001)" className={`${inputCls} bg-gray-100 cursor-not-allowed text-gray-500`} />
                     </Field>
                     <Field label="Revizyon No">
                       <input type="text" value={orderForm.revizyon_no} onChange={e => setOrderForm({ ...orderForm, revizyon_no: e.target.value })} className={inputCls} />
@@ -1432,20 +1449,13 @@ function OrderDetail({
   const isStarted = order.status === 'in_progress' || order.status === 'completed'
   const activeStep = stepLogs.find(l => l.status === 'in_progress')
 
-  // PDF tarih + IEM sorgu modal'ı
+  // PDF tarih sorgu modal'ı — IEM No sabit, iş emri kaydından gelir
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [printBaslama, setPrintBaslama] = useState(order.baslama_tarihi || order.planned_start_date || '')
   const [printBitis, setPrintBitis] = useState(order.bitis_tarihi || order.planned_end_date || '')
   const [printTeslim, setPrintTeslim] = useState(order.teslim_tarihi || '')
-  // IEM No her yazdırmada otomatik üretilir
-  const [printIemNo, setPrintIemNo] = useState(() => generateIemNo())
-
-  // Dialog her açıldığında IEM No yeniden üretilir
-  useEffect(() => {
-    if (showPrintDialog) {
-      setPrintIemNo(generateIemNo())
-    }
-  }, [showPrintDialog])
+  // IEM No iş emrinin kaydındaki — her yazdırmada aynı, değiştirilemez
+  const printIemNo = order.iem_no || ''
 
   const handlePrint = (override?: { baslama: string; bitis: string; teslim: string; iem_no: string }) => {
     const useBaslama = override?.baslama ?? printBaslama
@@ -1710,15 +1720,9 @@ function OrderDetail({
             </div>
             <div className="space-y-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">IEM No (otomatik)</label>
-                  <button type="button" onClick={() => setPrintIemNo(generateIemNo())}
-                    className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3" /> Yenile
-                  </button>
-                </div>
-                <input type="text" value={printIemNo} onChange={e => setPrintIemNo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50 font-mono" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">IEM No (iş emrinden — sabit)</label>
+                <input type="text" value={printIemNo} readOnly disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 font-mono text-gray-600 cursor-not-allowed" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Başlama Tarihi</label>

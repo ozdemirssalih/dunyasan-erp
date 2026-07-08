@@ -177,13 +177,26 @@ const TEMPLATE_STEPS: { step_name: string; step_type: StepType; station_name?: s
 // =====================================================
 const getStepTypeInfo = (type: StepType) => STEP_TYPES.find(t => t.value === type) || STEP_TYPES[2]
 
-const generateOrderNumber = () => {
+// Sıralı iş emri no üretici: IE-YYYYMMDD-NNN (örn. IE-20260708-001)
+const generateSequentialOrderNumber = async (companyId: string): Promise<string> => {
   const now = new Date()
-  const y = now.getFullYear().toString().slice(2)
+  const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
-  const r = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-  return `IE-${y}${m}${d}-${r}`
+  const prefix = `IE-${y}${m}${d}`
+  const { data } = await supabase
+    .from('production_flow_orders')
+    .select('order_number')
+    .eq('company_id', companyId)
+    .like('order_number', `${prefix}-%`)
+    .order('order_number', { ascending: false })
+    .limit(1)
+  let next = 1
+  if (data && data.length > 0 && data[0].order_number) {
+    const match = String(data[0].order_number).match(/-(\d+)$/)
+    if (match) next = parseInt(match[1], 10) + 1
+  }
+  return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
 // Sıralı IEM No üretici: YYYYMMDD-NNN (örn. 20260708-001)
@@ -547,13 +560,14 @@ export default function ProductionFlowPage() {
       const { data: { user } } = await supabase.auth.getUser()
       const customerName = customers.find(c => c.id === orderForm.customer_id)?.contact_name || null
 
-      // IEM No: sıralı otomatik atanır (YYYYMMDD-NNN)
+      // İş Emri No + IEM No: sıralı otomatik atanır (YYYYMMDD-NNN)
+      const autoOrderNumber = await generateSequentialOrderNumber(companyId)
       const autoIemNo = await generateSequentialIemNo(companyId)
 
       // Insert order
       const { data: orderData, error: orderErr } = await supabase.from('production_flow_orders').insert({
         company_id: companyId,
-        order_number: generateOrderNumber(),
+        order_number: autoOrderNumber,
         // Parça bilgileri
         parca_no: orderForm.parca_no || null,
         parca_adi: orderForm.parca_adi || null,

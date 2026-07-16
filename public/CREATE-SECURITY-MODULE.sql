@@ -1,5 +1,5 @@
 -- ============================================================
--- GÜVENLİK MODÜLÜ — Ziyaretçi / Araç / Personel / Kargo
+-- GÜVENLİK MODÜLÜ — Ziyaretçi / Araç / Kargo
 -- ============================================================
 
 -- Ziyaretçi Girişleri
@@ -51,21 +51,6 @@ CREATE TABLE IF NOT EXISTS security_vehicles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Personel Giriş-Çıkış Logları
-CREATE TABLE IF NOT EXISTS security_employee_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID NOT NULL,
-  employee_id UUID,
-  employee_name VARCHAR(200),
-  employee_tc VARCHAR(20),
-  direction VARCHAR(10) NOT NULL CHECK (direction IN ('in','out')),
-  log_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  method VARCHAR(30) DEFAULT 'manual',
-  logged_by UUID,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Kargo / Paket Kayıtları
 CREATE TABLE IF NOT EXISTS security_packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,5 +77,4 @@ CREATE INDEX IF NOT EXISTS idx_sec_visitors_entry ON security_visitors(entry_tim
 CREATE INDEX IF NOT EXISTS idx_sec_vehicles_company_status ON security_vehicles(company_id, status);
 CREATE INDEX IF NOT EXISTS idx_sec_vehicles_entry ON security_vehicles(entry_time DESC);
 CREATE INDEX IF NOT EXISTS idx_sec_vehicles_plate ON security_vehicles(plate_number);
-CREATE INDEX IF NOT EXISTS idx_sec_emplog_company ON security_employee_logs(company_id, log_time DESC);
 CREATE INDEX IF NOT EXISTS idx_sec_pkg_company ON security_packages(company_id, log_time DESC);

@@ -3,8 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import {
-  Shield, UserPlus, Car, Package, LogIn, LogOut, Search, Plus, X,
-  Clock, Users, IdCard, Printer, Trash2, ArrowLeft
+  Shield, UserPlus, Car, Package, LogIn, LogOut, Search, Plus, X, Users, Trash2
 } from 'lucide-react'
 
 // =============================================================
@@ -45,14 +44,6 @@ type Vehicle = {
   status: 'inside' | 'left'
   notes?: string | null
 }
-type EmployeeLog = {
-  id: string
-  employee_id?: string | null; employee_name?: string | null; employee_tc?: string | null
-  direction: 'in' | 'out'
-  log_time: string
-  method?: string | null
-  notes?: string | null
-}
 type PackageLog = {
   id: string
   direction: 'in' | 'out'
@@ -64,7 +55,7 @@ type PackageLog = {
   notes?: string | null
 }
 
-type TabKey = 'dashboard' | 'visitors' | 'vehicles' | 'employees' | 'packages'
+type TabKey = 'dashboard' | 'visitors' | 'vehicles' | 'packages'
 
 // =============================================================
 // HELPERS
@@ -98,19 +89,15 @@ export default function SecurityPage() {
 
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [empLogs, setEmpLogs] = useState<EmployeeLog[]>([])
   const [packages, setPackages] = useState<PackageLog[]>([])
-  const [employees, setEmployees] = useState<any[]>([])
 
   const [visitorSearch, setVisitorSearch] = useState('')
   const [vehicleSearch, setVehicleSearch] = useState('')
-  const [empSearch, setEmpSearch] = useState('')
   const [pkgSearch, setPkgSearch] = useState('')
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('today')
 
   const [showVisitorModal, setShowVisitorModal] = useState(false)
   const [showVehicleModal, setShowVehicleModal] = useState(false)
-  const [showEmpModal, setShowEmpModal] = useState(false)
   const [showPkgModal, setShowPkgModal] = useState(false)
 
   useEffect(() => { init() }, [])
@@ -126,9 +113,7 @@ export default function SecurityPage() {
     await Promise.all([
       loadVisitors(profile.company_id),
       loadVehicles(profile.company_id),
-      loadEmpLogs(profile.company_id),
       loadPackages(profile.company_id),
-      loadEmployees(profile.company_id),
     ])
     setLoading(false)
   }
@@ -141,17 +126,9 @@ export default function SecurityPage() {
     const { data } = await supabase.from('security_vehicles').select('*').eq('company_id', cid).order('entry_time', { ascending: false }).limit(500)
     setVehicles(data || [])
   }
-  const loadEmpLogs = async (cid: string) => {
-    const { data } = await supabase.from('security_employee_logs').select('*').eq('company_id', cid).order('log_time', { ascending: false }).limit(500)
-    setEmpLogs(data || [])
-  }
   const loadPackages = async (cid: string) => {
     const { data } = await supabase.from('security_packages').select('*').eq('company_id', cid).order('log_time', { ascending: false }).limit(500)
     setPackages(data || [])
-  }
-  const loadEmployees = async (cid: string) => {
-    const { data } = await supabase.from('employees').select('id, first_name, last_name, national_id, department').eq('company_id', cid).order('first_name')
-    setEmployees(data || [])
   }
 
   // =============================================================
@@ -182,13 +159,6 @@ export default function SecurityPage() {
     return [v.plate_number, v.driver_name, v.driver_company, v.vehicle_type]
       .some(x => (x || '').toLowerCase().includes(q))
   }), [vehicles, vehicleSearch, dateFilter])
-
-  const filteredEmpLogs = useMemo(() => empLogs.filter(l => {
-    if (!withinDateFilter(l.log_time)) return false
-    if (!empSearch) return true
-    const q = empSearch.toLowerCase()
-    return [l.employee_name, l.employee_tc].some(x => (x || '').toLowerCase().includes(q))
-  }), [empLogs, empSearch, dateFilter])
 
   const filteredPackages = useMemo(() => packages.filter(p => {
     if (!withinDateFilter(p.log_time)) return false
@@ -239,12 +209,10 @@ export default function SecurityPage() {
     const todayVisitorExits = visitors.filter(v => v.exit_time && isToday(v.exit_time)).length
     const todayVehicleEntries = vehicles.filter(v => isToday(v.entry_time)).length
     const todayVehicleExits = vehicles.filter(v => v.exit_time && isToday(v.exit_time)).length
-    const todayEmpIn = empLogs.filter(l => l.direction === 'in' && isToday(l.log_time)).length
-    const todayEmpOut = empLogs.filter(l => l.direction === 'out' && isToday(l.log_time)).length
     const todayPkgIn = packages.filter(p => p.direction === 'in' && isToday(p.log_time)).length
     const todayPkgOut = packages.filter(p => p.direction === 'out' && isToday(p.log_time)).length
-    return { insideVisitors, insideVehicles, todayVisitorEntries, todayVisitorExits, todayVehicleEntries, todayVehicleExits, todayEmpIn, todayEmpOut, todayPkgIn, todayPkgOut }
-  }, [visitors, vehicles, empLogs, packages])
+    return { insideVisitors, insideVehicles, todayVisitorEntries, todayVisitorExits, todayVehicleEntries, todayVehicleExits, todayPkgIn, todayPkgOut }
+  }, [visitors, vehicles, packages])
 
   const insideVisitorsList = useMemo(() => visitors.filter(v => v.status === 'inside'), [visitors])
   const insideVehiclesList = useMemo(() => vehicles.filter(v => v.status === 'inside'), [vehicles])
@@ -284,7 +252,6 @@ export default function SecurityPage() {
             { k: 'dashboard', label: 'Dashboard', icon: Shield },
             { k: 'visitors', label: `Ziyaretçiler (${stats.insideVisitors} içeride)`, icon: Users },
             { k: 'vehicles', label: `Araçlar (${stats.insideVehicles} içeride)`, icon: Car },
-            { k: 'employees', label: 'Personel Giriş-Çıkış', icon: IdCard },
             { k: 'packages', label: 'Kargo & Paket', icon: Package },
           ] as const).map(t => (
             <button key={t.k} onClick={() => setTab(t.k)}
@@ -403,32 +370,17 @@ export default function SecurityPage() {
             )}
           </div>
 
-          {/* Bugünkü personel hareket özeti */}
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="bg-white rounded-xl shadow-sm border p-4">
-              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IdCard className="w-4 h-4"/> Bugün Personel Hareketi</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-emerald-50 rounded-lg p-3">
-                  <p className="text-xs text-emerald-700 font-semibold">Giriş</p>
-                  <p className="text-2xl font-bold text-emerald-900">{stats.todayEmpIn}</p>
-                </div>
-                <div className="bg-rose-50 rounded-lg p-3">
-                  <p className="text-xs text-rose-700 font-semibold">Çıkış</p>
-                  <p className="text-2xl font-bold text-rose-900">{stats.todayEmpOut}</p>
-                </div>
+          {/* Bugünkü kargo hareket özeti */}
+          <div className="bg-white rounded-xl shadow-sm border p-4">
+            <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Package className="w-4 h-4"/> Bugün Kargo Hareketi</h3>
+            <div className="grid grid-cols-2 gap-2 max-w-md">
+              <div className="bg-indigo-50 rounded-lg p-3">
+                <p className="text-xs text-indigo-700 font-semibold">Gelen</p>
+                <p className="text-2xl font-bold text-indigo-900">{stats.todayPkgIn}</p>
               </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border p-4">
-              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Package className="w-4 h-4"/> Bugün Kargo Hareketi</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-indigo-50 rounded-lg p-3">
-                  <p className="text-xs text-indigo-700 font-semibold">Gelen</p>
-                  <p className="text-2xl font-bold text-indigo-900">{stats.todayPkgIn}</p>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-3">
-                  <p className="text-xs text-amber-700 font-semibold">Giden</p>
-                  <p className="text-2xl font-bold text-amber-900">{stats.todayPkgOut}</p>
-                </div>
+              <div className="bg-amber-50 rounded-lg p-3">
+                <p className="text-xs text-amber-700 font-semibold">Giden</p>
+                <p className="text-2xl font-bold text-amber-900">{stats.todayPkgOut}</p>
               </div>
             </div>
           </div>
@@ -575,61 +527,6 @@ export default function SecurityPage() {
         </div>
       )}
 
-      {/* PERSONEL TAB */}
-      {tab === 'employees' && (
-        <div className="bg-white rounded-xl shadow-sm border">
-          <div className="p-4 border-b flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[250px]">
-              <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                <input value={empSearch} onChange={e => setEmpSearch(e.target.value)}
-                  placeholder="Personel isim veya TC ara..."
-                  className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-full"/>
-              </div>
-            </div>
-            <button onClick={() => setShowEmpModal(true)} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
-              <Plus className="w-4 h-4"/> Personel Giriş / Çıkış Kaydı
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-600">
-                <tr>
-                  <th className="px-3 py-2 text-left">Yön</th>
-                  <th className="px-3 py-2 text-left">Personel</th>
-                  <th className="px-3 py-2 text-left">TC</th>
-                  <th className="px-3 py-2 text-left">Yöntem</th>
-                  <th className="px-3 py-2 text-left">Zaman</th>
-                  <th className="px-3 py-2 text-left">Not</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredEmpLogs.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">Kayıt bulunamadı</td></tr>
-                ) : filteredEmpLogs.map(l => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2">
-                      {l.direction === 'in'
-                        ? <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1 w-fit"><LogIn className="w-3 h-3"/> GİRİŞ</span>
-                        : <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700 flex items-center gap-1 w-fit"><LogOut className="w-3 h-3"/> ÇIKIŞ</span>}
-                    </td>
-                    <td className="px-3 py-2 font-semibold text-gray-800">{l.employee_name || '-'}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-600">{l.employee_tc || '-'}</td>
-                    <td className="px-3 py-2 text-gray-600 text-xs">{l.method || 'manual'}</td>
-                    <td className="px-3 py-2 text-gray-600 text-xs">{fmtDateTime(l.log_time)}</td>
-                    <td className="px-3 py-2 text-gray-600 text-xs max-w-[220px] truncate" title={l.notes || ''}>{l.notes || '-'}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button onClick={() => deleteRecord('security_employee_logs', l.id, () => loadEmpLogs(companyId!))} className="text-gray-400 hover:text-rose-600 p-1"><Trash2 className="w-4 h-4"/></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* KARGO TAB */}
       {tab === 'packages' && (
         <div className="bg-white rounded-xl shadow-sm border">
@@ -701,9 +598,6 @@ export default function SecurityPage() {
       )}
       {showVehicleModal && companyId && (
         <VehicleModal companyId={companyId} userId={userId} onClose={() => setShowVehicleModal(false)} onSaved={async () => { await loadVehicles(companyId); setShowVehicleModal(false) }} />
-      )}
-      {showEmpModal && companyId && (
-        <EmployeeLogModal companyId={companyId} userId={userId} employees={employees} onClose={() => setShowEmpModal(false)} onSaved={async () => { await loadEmpLogs(companyId); setShowEmpModal(false) }} />
       )}
       {showPkgModal && companyId && (
         <PackageModal companyId={companyId} userId={userId} onClose={() => setShowPkgModal(false)} onSaved={async () => { await loadPackages(companyId); setShowPkgModal(false) }} />
@@ -880,89 +774,6 @@ function VehicleModal({ companyId, userId, onClose, onSaved }: { companyId: stri
         <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg text-gray-700 font-semibold hover:bg-gray-50">İptal</button>
         <button onClick={save} disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg font-semibold">
           {saving ? 'Kaydediliyor...' : 'Girişi Kaydet'}
-        </button>
-      </div>
-    </ModalShell>
-  )
-}
-
-// =============================================================
-// EMPLOYEE LOG MODAL
-// =============================================================
-function EmployeeLogModal({ companyId, userId, employees, onClose, onSaved }: { companyId: string, userId: string | null, employees: any[], onClose: () => void, onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState({
-    employee_id: '', employee_name: '', employee_tc: '',
-    direction: 'in' as 'in' | 'out', method: 'manual', notes: ''
-  })
-  const [saving, setSaving] = useState(false)
-
-  const onSelectEmployee = (id: string) => {
-    const e = employees.find(x => x.id === id)
-    if (e) {
-      setForm({ ...form, employee_id: id, employee_name: `${e.first_name} ${e.last_name || ''}`.trim(), employee_tc: e.national_id || '' })
-    } else {
-      setForm({ ...form, employee_id: '' })
-    }
-  }
-
-  const save = async () => {
-    if (!form.employee_name.trim()) return alert('Personel adı zorunlu!')
-    setSaving(true)
-    const { error } = await supabase.from('security_employee_logs').insert({
-      company_id: companyId,
-      employee_id: form.employee_id || null,
-      employee_name: form.employee_name.trim(),
-      employee_tc: form.employee_tc.trim() || null,
-      direction: form.direction,
-      method: form.method,
-      notes: form.notes.trim() || null,
-      logged_by: userId,
-      log_time: new Date().toISOString()
-    })
-    setSaving(false)
-    if (error) return alert('Hata: ' + error.message)
-    await onSaved()
-  }
-
-  return (
-    <ModalShell title="Personel Giriş / Çıkış Kaydı" onClose={onClose}>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 flex gap-2">
-          <button onClick={() => setForm({...form, direction: 'in'})}
-            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${form.direction === 'in' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <LogIn className="w-4 h-4"/> GİRİŞ
-          </button>
-          <button onClick={() => setForm({...form, direction: 'out'})}
-            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${form.direction === 'out' ? 'bg-rose-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <LogOut className="w-4 h-4"/> ÇIKIŞ
-          </button>
-        </div>
-        <div className="col-span-2">
-          <Field label="Personel Seç (kayıtlıysa)">
-            <select value={form.employee_id} onChange={e => onSelectEmployee(e.target.value)} className={inputCls}>
-              <option value="">— Liste dışı manuel gir —</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name || ''} {e.department ? `(${e.department})` : ''}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Ad Soyad *"><input value={form.employee_name} onChange={e => setForm({...form, employee_name: e.target.value})} className={inputCls}/></Field>
-        <Field label="TC"><input value={form.employee_tc} onChange={e => setForm({...form, employee_tc: e.target.value.replace(/\D/g,'').slice(0,11)})} className={inputCls}/></Field>
-        <Field label="Yöntem">
-          <select value={form.method} onChange={e => setForm({...form, method: e.target.value})} className={inputCls}>
-            <option value="manual">Manuel</option>
-            <option value="card">Kart</option>
-            <option value="biometric">Biyometrik</option>
-            <option value="other">Diğer</option>
-          </select>
-        </Field>
-        <div className="col-span-2">
-          <Field label="Not"><textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} className={inputCls}/></Field>
-        </div>
-      </div>
-      <div className="flex gap-2 mt-4">
-        <button onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg text-gray-700 font-semibold hover:bg-gray-50">İptal</button>
-        <button onClick={save} disabled={saving} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 disabled:bg-gray-300 text-white rounded-lg font-semibold">
-          {saving ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
       </div>
     </ModalShell>

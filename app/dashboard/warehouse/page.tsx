@@ -2047,60 +2047,78 @@ export default function WarehousePage() {
 
         {/* BY-SOURCE TAB */}
         {activeTab === 'by-source' && (() => {
-          // Kaynak bazlı özet hesapla
-          const sourceMap: Record<string, {
+          type SourceData = {
             entries: number; exits: number; scrap: number; count: number;
             firstDate: string; lastDate: string;
             items: Record<string, { name: string; code: string; unit: string; entry: number; exit: number; scrap: number }>;
             transactions: typeof transactions;
-          }> = {}
-          transactions.forEach(tx => {
-            const source = tx.type === 'entry'
-              ? (tx.supplier || '')
-              : (tx.shipment_destination || tx.department_name || tx.supplier || '')
-            if (!source) return
-            if (!sourceMap[source]) sourceMap[source] = { entries: 0, exits: 0, scrap: 0, count: 0, firstDate: tx.transaction_date, lastDate: tx.transaction_date, items: {}, transactions: [] }
-            sourceMap[source].count++
-            sourceMap[source].transactions.push(tx)
-            if (tx.transaction_date < sourceMap[source].firstDate) sourceMap[source].firstDate = tx.transaction_date
-            if (tx.transaction_date > sourceMap[source].lastDate) sourceMap[source].lastDate = tx.transaction_date
-            if (tx.type === 'entry') sourceMap[source].entries += tx.quantity || 0
-            else if (tx.type === 'exit') sourceMap[source].exits += tx.quantity || 0
-            else if (tx.type === 'scrap') sourceMap[source].scrap += tx.quantity || 0
-            const itemKey = tx.item_id
-            if (!sourceMap[source].items[itemKey]) sourceMap[source].items[itemKey] = { name: tx.item_name, code: tx.item_code, unit: tx.unit, entry: 0, exit: 0, scrap: 0 }
-            if (tx.type === 'entry') sourceMap[source].items[itemKey].entry += tx.quantity || 0
-            else if (tx.type === 'exit') sourceMap[source].items[itemKey].exit += tx.quantity || 0
-            else if (tx.type === 'scrap') sourceMap[source].items[itemKey].scrap += tx.quantity || 0
-          })
+          }
+          const buildSourceMap = (txs: typeof transactions): Record<string, SourceData> => {
+            const map: Record<string, SourceData> = {}
+            txs.forEach(tx => {
+              const source = tx.type === 'entry'
+                ? (tx.supplier || '')
+                : (tx.shipment_destination || tx.department_name || tx.supplier || '')
+              if (!source) return
+              if (!map[source]) map[source] = { entries: 0, exits: 0, scrap: 0, count: 0, firstDate: tx.transaction_date, lastDate: tx.transaction_date, items: {}, transactions: [] }
+              map[source].count++
+              map[source].transactions.push(tx)
+              if (tx.transaction_date < map[source].firstDate) map[source].firstDate = tx.transaction_date
+              if (tx.transaction_date > map[source].lastDate) map[source].lastDate = tx.transaction_date
+              if (tx.type === 'entry') map[source].entries += tx.quantity || 0
+              else if (tx.type === 'exit') map[source].exits += tx.quantity || 0
+              else if (tx.type === 'scrap') map[source].scrap += tx.quantity || 0
+              const itemKey = tx.item_id
+              if (!map[source].items[itemKey]) map[source].items[itemKey] = { name: tx.item_name, code: tx.item_code, unit: tx.unit, entry: 0, exit: 0, scrap: 0 }
+              if (tx.type === 'entry') map[source].items[itemKey].entry += tx.quantity || 0
+              else if (tx.type === 'exit') map[source].items[itemKey].exit += tx.quantity || 0
+              else if (tx.type === 'scrap') map[source].items[itemKey].scrap += tx.quantity || 0
+            })
+            return map
+          }
 
-          const filteredSources = Object.entries(sourceMap)
+          // Son 30 gün filtresi — kart özetleri bu aralıktan
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30)
+          const cutoffIso = cutoff.toISOString()
+          const recentTxs = transactions.filter(tx => tx.transaction_date >= cutoffIso)
+
+          // Kart görünümü için son 30 gün, açılan detay için tüm zaman
+          const recentSourceMap = buildSourceMap(recentTxs)
+          const fullSourceMap = buildSourceMap(transactions)
+
+          const filteredSources = Object.entries(recentSourceMap)
             .filter(([source]) => sourceSearch === '' || source.toLowerCase().includes(sourceSearch.toLowerCase()))
             .sort((a, b) => b[1].count - a[1].count)
 
-          const totalEntries = Object.values(sourceMap).reduce((s, d) => s + d.entries, 0)
-          const totalExits = Object.values(sourceMap).reduce((s, d) => s + d.exits, 0)
-          const totalScrap = Object.values(sourceMap).reduce((s, d) => s + d.scrap, 0)
+          const totalEntries = Object.values(recentSourceMap).reduce((s, d) => s + d.entries, 0)
+          const totalExits = Object.values(recentSourceMap).reduce((s, d) => s + d.exits, 0)
+          const totalScrap = Object.values(recentSourceMap).reduce((s, d) => s + d.scrap, 0)
 
           return (
             <div className="space-y-4">
-              {/* Genel Özet */}
+              {/* Bilgi Şeridi */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-900 flex items-center gap-2">
+                <span className="font-bold">📅 Son 30 Gün</span>
+                <span className="text-blue-700">— Kart özetleri son 30 gündeki hareketleri gösterir. Detaylı tüm geçmiş için firmaya tıklayın.</span>
+              </div>
+
+              {/* Genel Özet (son 30 gün) */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
                   <p className="text-3xl font-bold text-blue-600">{filteredSources.length}</p>
-                  <p className="text-xs text-gray-500 font-semibold">Firma / Kaynak</p>
+                  <p className="text-xs text-gray-500 font-semibold">Firma / Kaynak (30 gün)</p>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
                   <p className="text-3xl font-bold text-green-600">{totalEntries.toLocaleString('tr-TR')}</p>
-                  <p className="text-xs text-gray-500 font-semibold">Toplam Giriş</p>
+                  <p className="text-xs text-gray-500 font-semibold">30 Günlük Giriş</p>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
                   <p className="text-3xl font-bold text-red-600">{totalExits.toLocaleString('tr-TR')}</p>
-                  <p className="text-xs text-gray-500 font-semibold">Toplam Çıkış</p>
+                  <p className="text-xs text-gray-500 font-semibold">30 Günlük Çıkış</p>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border p-4 text-center">
                   <p className="text-3xl font-bold text-orange-600">{totalScrap.toLocaleString('tr-TR')}</p>
-                  <p className="text-xs text-gray-500 font-semibold">Toplam Hurda</p>
+                  <p className="text-xs text-gray-500 font-semibold">30 Günlük Hurda</p>
                 </div>
               </div>
 
@@ -2115,17 +2133,21 @@ export default function WarehousePage() {
                 />
               </div>
 
-              {/* Firma Kartları */}
+              {/* Firma Kartları — Kart özeti son 30 gün, tıklanınca tüm geçmiş */}
               <div className="space-y-4">
-                {filteredSources.map(([source, data]) => {
+                {filteredSources.map(([source, recentData]) => {
                   const isExpanded = expandedSource === source
-                  const itemList = Object.values(data.items).sort((a, b) => (b.entry + b.exit + b.scrap) - (a.entry + a.exit + a.scrap))
+                  // Kart üstündeki rozet ve mini bilgi son 30 gün (recentData)
+                  // Açık detay — firmaya tıklanınca — tüm zaman geçmişi
+                  const fullData = fullSourceMap[source] || recentData
+                  const detailItemList = Object.values(fullData.items).sort((a, b) => (b.entry + b.exit + b.scrap) - (a.entry + a.exit + a.scrap))
                   return (
                     <div key={source} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                      {/* Firma Başlığı */}
+                      {/* Firma Başlığı (son 30 gün özet) */}
                       <div
                         className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
                         onClick={() => setExpandedSource(isExpanded ? null : source)}
+                        title="Detaylı geçmiş için tıklayın"
                       >
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-sm">
@@ -2134,30 +2156,43 @@ export default function WarehousePage() {
                           <div>
                             <h4 className="font-bold text-gray-900">{source}</h4>
                             <p className="text-xs text-gray-500">
-                              {data.count} işlem •
-                              İlk: {new Date(data.firstDate).toLocaleDateString('tr-TR')} •
-                              Son: {new Date(data.lastDate).toLocaleDateString('tr-TR')} •
-                              {itemList.length} farklı ürün
+                              Son 30 gün: {recentData.count} işlem •
+                              Son hareket: {new Date(recentData.lastDate).toLocaleDateString('tr-TR')} •
+                              Tüm zaman: {fullData.count} işlem, {Object.keys(fullData.items).length} farklı ürün
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="flex gap-3 text-sm">
-                            <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full font-bold">↓ {data.entries.toLocaleString('tr-TR')}</span>
-                            <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full font-bold">↑ {data.exits.toLocaleString('tr-TR')}</span>
-                            {data.scrap > 0 && <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full font-bold">🗑 {data.scrap.toLocaleString('tr-TR')}</span>}
-                            <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-bold">Net: {(data.entries - data.exits - data.scrap).toLocaleString('tr-TR')}</span>
+                            <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full font-bold">↓ {recentData.entries.toLocaleString('tr-TR')}</span>
+                            <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full font-bold">↑ {recentData.exits.toLocaleString('tr-TR')}</span>
+                            {recentData.scrap > 0 && <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full font-bold">🗑 {recentData.scrap.toLocaleString('tr-TR')}</span>}
+                            <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-bold">Net: {(recentData.entries - recentData.exits - recentData.scrap).toLocaleString('tr-TR')}</span>
                           </div>
                           <span className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                         </div>
                       </div>
 
-                      {/* Genişletilmiş Detay */}
+                      {/* Genişletilmiş Detay — Tüm Geçmiş */}
                       {isExpanded && (
-                        <div className="border-t border-gray-200">
+                        <div className="border-t border-gray-200 bg-slate-50/40">
+                          <div className="px-5 pt-4 flex items-center justify-between flex-wrap gap-2">
+                            <div className="text-xs text-slate-700 font-semibold">
+                              📖 Tüm Geçmiş: {fullData.count} işlem •
+                              İlk: {new Date(fullData.firstDate).toLocaleDateString('tr-TR')} •
+                              Son: {new Date(fullData.lastDate).toLocaleDateString('tr-TR')}
+                            </div>
+                            <div className="flex gap-2 text-xs">
+                              <span className="bg-green-100 text-green-800 px-2 py-1 rounded font-bold">↓ {fullData.entries.toLocaleString('tr-TR')}</span>
+                              <span className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold">↑ {fullData.exits.toLocaleString('tr-TR')}</span>
+                              {fullData.scrap > 0 && <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded font-bold">🗑 {fullData.scrap.toLocaleString('tr-TR')}</span>}
+                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">Net: {(fullData.entries - fullData.exits - fullData.scrap).toLocaleString('tr-TR')}</span>
+                            </div>
+                          </div>
+
                           {/* Ürün Tablosu */}
                           <div className="p-5">
-                            <h5 className="font-bold text-gray-800 text-sm mb-3">Ürün Bazlı Detay ({itemList.length} ürün)</h5>
+                            <h5 className="font-bold text-gray-800 text-sm mb-3">Ürün Bazlı Detay ({detailItemList.length} ürün)</h5>
                             <div className="overflow-x-auto">
                               <table className="w-full text-sm">
                                 <thead>
@@ -2166,18 +2201,18 @@ export default function WarehousePage() {
                                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Ürün Adı</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold text-green-600">Giriş</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold text-red-600">Çıkış</th>
-                                    {data.scrap > 0 && <th className="px-3 py-2 text-right text-xs font-semibold text-orange-600">Hurda</th>}
+                                    {fullData.scrap > 0 && <th className="px-3 py-2 text-right text-xs font-semibold text-orange-600">Hurda</th>}
                                     <th className="px-3 py-2 text-right text-xs font-semibold text-blue-600">Net</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {itemList.map((item, i) => (
+                                  {detailItemList.map((item, i) => (
                                     <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/30">
                                       <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.code || '-'}</td>
                                       <td className="px-3 py-2 font-semibold text-gray-900">{item.name}</td>
                                       <td className="px-3 py-2 text-right font-semibold text-green-600">{item.entry > 0 ? `+${item.entry.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>
                                       <td className="px-3 py-2 text-right font-semibold text-red-600">{item.exit > 0 ? `-${item.exit.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>
-                                      {data.scrap > 0 && <td className="px-3 py-2 text-right font-semibold text-orange-600">{item.scrap > 0 ? `${item.scrap.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>}
+                                      {fullData.scrap > 0 && <td className="px-3 py-2 text-right font-semibold text-orange-600">{item.scrap > 0 ? `${item.scrap.toLocaleString('tr-TR')} ${item.unit}` : '-'}</td>}
                                       <td className="px-3 py-2 text-right font-bold text-blue-700">{(item.entry - item.exit - item.scrap).toLocaleString('tr-TR')} {item.unit}</td>
                                     </tr>
                                   ))}
@@ -2185,23 +2220,22 @@ export default function WarehousePage() {
                                 <tfoot>
                                   <tr className="bg-gray-100 font-bold">
                                     <td className="px-3 py-2" colSpan={2}>TOPLAM</td>
-                                    <td className="px-3 py-2 text-right text-green-700">{data.entries.toLocaleString('tr-TR')}</td>
-                                    <td className="px-3 py-2 text-right text-red-700">{data.exits.toLocaleString('tr-TR')}</td>
-                                    {data.scrap > 0 && <td className="px-3 py-2 text-right text-orange-700">{data.scrap.toLocaleString('tr-TR')}</td>}
-                                    <td className="px-3 py-2 text-right text-blue-700">{(data.entries - data.exits - data.scrap).toLocaleString('tr-TR')}</td>
+                                    <td className="px-3 py-2 text-right text-green-700">{fullData.entries.toLocaleString('tr-TR')}</td>
+                                    <td className="px-3 py-2 text-right text-red-700">{fullData.exits.toLocaleString('tr-TR')}</td>
+                                    {fullData.scrap > 0 && <td className="px-3 py-2 text-right text-orange-700">{fullData.scrap.toLocaleString('tr-TR')}</td>}
+                                    <td className="px-3 py-2 text-right text-blue-700">{(fullData.entries - fullData.exits - fullData.scrap).toLocaleString('tr-TR')}</td>
                                   </tr>
                                 </tfoot>
                               </table>
                             </div>
                           </div>
 
-                          {/* Son İşlemler */}
+                          {/* Tüm İşlemler (kronolojik, tümü) */}
                           <div className="px-5 pb-5">
-                            <h5 className="font-bold text-gray-800 text-sm mb-3">Son İşlemler (Son 10)</h5>
-                            <div className="space-y-1">
-                              {data.transactions
+                            <h5 className="font-bold text-gray-800 text-sm mb-3">Tüm İşlemler ({fullData.transactions.length})</h5>
+                            <div className="space-y-1 max-h-[500px] overflow-y-auto bg-white rounded-lg border border-gray-200 p-2">
+                              {fullData.transactions
                                 .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime())
-                                .slice(0, 10)
                                 .map((tx, i) => (
                                 <div key={i} className="flex items-center justify-between text-xs py-2 border-b border-gray-100 last:border-0">
                                   <div className="flex items-center gap-2">
@@ -2232,7 +2266,8 @@ export default function WarehousePage() {
 
               {filteredSources.length === 0 && (
                 <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-                  <p className="text-gray-400 text-lg">Sonuç bulunamadı</p>
+                  <p className="text-gray-400 text-lg">Son 30 günde hareket bulunamadı</p>
+                  <p className="text-gray-400 text-sm mt-1">Arama filtresini temizleyin veya tüm geçmiş için Hareket Geçmişi sekmesini kullanın.</p>
                 </div>
               )}
             </div>

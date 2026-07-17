@@ -451,32 +451,92 @@ export default function WarehousePage() {
     }
   }
 
+  // Hurda/İade helper: warehouse_items içine <code>-<suffix> kalemi oluştur veya güncelle + audit tx
+  const upsertScrapOrReturnItem = async (
+    itemId: string,
+    quantity: number,
+    suffix: 'HURDA' | 'İADE',
+    refNumber: string,
+    noteText: string
+  ) => {
+    if (!companyId) return
+    const { data: origItem } = await supabase
+      .from('warehouse_items')
+      .select('id, name, code, unit')
+      .eq('id', itemId)
+      .single()
+    if (!origItem) return
+
+    const newCode = `${origItem.code}-${suffix}`
+    const newName = `${origItem.name} ${suffix}`
+
+    const { data: existing } = await supabase
+      .from('warehouse_items')
+      .select('id, current_stock')
+      .eq('company_id', companyId)
+      .eq('code', newCode)
+      .maybeSingle()
+
+    if (existing) {
+      await supabase
+        .from('warehouse_items')
+        .update({ current_stock: existing.current_stock + quantity, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+    } else {
+      await supabase
+        .from('warehouse_items')
+        .insert({
+          company_id: companyId,
+          code: newCode,
+          name: newName,
+          unit: origItem.unit,
+          category: suffix,
+          current_stock: quantity,
+          min_stock: 0,
+          is_active: true,
+        })
+    }
+
+    // Audit tx (scrap type — trigger'da no-op, sadece geçmiş için)
+    await supabase
+      .from('warehouse_transactions')
+      .insert({
+        company_id: companyId,
+        item_id: itemId,
+        type: 'scrap',
+        quantity,
+        supplier: suffix === 'HURDA' ? 'Hurda Onayı' : 'İade Onayı',
+        reference_number: refNumber,
+        notes: noteText,
+        created_by: currentUserId,
+        transaction_date: new Date().toISOString().split('T')[0],
+      })
+  }
+
   const handleApproveProductionTransfer = async (transferId: string) => {
-    // Transfer bilgilerini önceden alalım — hurda mı normal mi buradan anlayacağız
+    // Transfer bilgilerini önceden al — transfer_type kolonu ile hurda/normal ayrımı
     const { data: transferPreview } = await supabase
       .from('production_to_warehouse_transfers')
-      .select('item_id, quantity, notes')
+      .select('item_id, quantity, transfer_type')
       .eq('id', transferId)
       .single()
 
-    const isHurda = (transferPreview?.notes || '').toUpperCase().startsWith('HURDA:')
+    const isHurda = transferPreview?.transfer_type === 'hurda'
     const confirmMsg = isHurda
-      ? `ONAY GEREKLİ\n\nBu transfer HURDA STOK bölümüne eklenecek.\nÜretim deposu azalacak, hurda kalemi oluşturulacak/güncellenecek.\n\n⚠️ Ana ürün stoğuna dokunulmayacak.\n\nDevam etmek istiyor musunuz?`
+      ? `ONAY GEREKLİ\n\nBu transfer HURDA STOK bölümüne eklenecek.\nÜretim deposu azalacak, hurda kalemi oluşturulacak/güncellenecek.\n\nDevam etmek istiyor musunuz?`
       : `ONAY GEREKLİ\n\nBu transfer üretim deposundan ana depo stoğuna eklenecek.\nÜretim deposu azalacak, ana depo artacak.\n\nDevam etmek istiyor musunuz?`
     if (!confirm(confirmMsg)) return
 
     try {
-      // 1. Transfer bilgilerini al
       const { data: transfer, error: transferError } = await supabase
         .from('production_to_warehouse_transfers')
-        .select('item_id, quantity, notes')
+        .select('item_id, quantity, transfer_type')
         .eq('id', transferId)
         .single()
-
       if (transferError) throw transferError
 
-      // 2. Üretim deposunda yeterli stok var mı kontrol et
-      const { data: productionStock, error: stockError } = await supabase
+      // Üretim deposu stok kontrolü
+      const { data: productionStock } = await supabase
         .from('production_inventory')
         .select('current_stock')
         .eq('company_id', companyId)
@@ -484,16 +544,13 @@ export default function WarehousePage() {
         .eq('item_type', 'finished_product')
         .maybeSingle()
 
-      if (stockError) throw stockError
-
       const availableStock = productionStock?.current_stock || 0
-
       if (availableStock < transfer.quantity) {
         alert(`❌ Yetersiz stok!\n\nÜretim deposunda: ${availableStock} birim\nTransfer talebi: ${transfer.quantity} birim\n\nEksik: ${transfer.quantity - availableStock} birim`)
         return
       }
 
-      // 3. Stok yeterliyse transferi onayla (trigger üretim stoğunu düşürüp warehouse_transactions'a entry insert eder)
+      // Onayla — trigger üretim stoğunu düşürür; normal ise warehouse_transactions.entry ekler; hurda ise eklemez
       const { error } = await supabase
         .from('production_to_warehouse_transfers')
         .update({
@@ -502,63 +559,11 @@ export default function WarehousePage() {
           approved_at: new Date().toISOString()
         })
         .eq('id', transferId)
-
       if (error) throw error
 
-      // 4. HURDA transferi ise: trigger ana ürüne eklediğini geri al, hurda ürününe aktar
+      // Hurda ise hurda item'a aktar
       if (isHurda) {
-        const { data: origItem } = await supabase
-          .from('warehouse_items')
-          .select('id, name, code, unit, company_id')
-          .eq('id', transfer.item_id)
-          .single()
-
-        if (origItem) {
-          const newCode = `${origItem.code}-HURDA`
-          const newName = `${origItem.name} HURDA`
-
-          // Trigger ana ürüne quantity ekledi — geri al
-          const { data: origStock } = await supabase
-            .from('warehouse_items')
-            .select('current_stock')
-            .eq('id', origItem.id)
-            .single()
-
-          if (origStock) {
-            await supabase
-              .from('warehouse_items')
-              .update({ current_stock: Math.max(0, origStock.current_stock - transfer.quantity), updated_at: new Date().toISOString() })
-              .eq('id', origItem.id)
-          }
-
-          // Hurda ürününe ekle (varsa güncelle, yoksa oluştur)
-          const { data: existingScrap } = await supabase
-            .from('warehouse_items')
-            .select('id, current_stock')
-            .eq('company_id', companyId)
-            .eq('code', newCode)
-            .maybeSingle()
-
-          if (existingScrap) {
-            await supabase
-              .from('warehouse_items')
-              .update({ current_stock: existingScrap.current_stock + transfer.quantity, updated_at: new Date().toISOString() })
-              .eq('id', existingScrap.id)
-          } else {
-            await supabase
-              .from('warehouse_items')
-              .insert({
-                company_id: companyId,
-                code: newCode,
-                name: newName,
-                unit: origItem.unit,
-                category: 'HURDA',
-                current_stock: transfer.quantity,
-                min_stock: 0,
-                is_active: true,
-              })
-          }
-        }
+        await upsertScrapOrReturnItem(transfer.item_id, transfer.quantity, 'HURDA', `PROD-HURDA-${transferId}`, 'Üretimden hurda transfer (onaylandı)')
       }
 
       alert(isHurda
@@ -647,89 +652,12 @@ export default function WarehousePage() {
 
       if (error) throw error
 
-      // 4. Hurda veya iade ise: trigger'ın yanlış yaptığı işleri düzelt + hurda/iade item'a aktar
-      // Trigger davranışı (approve_qc_to_warehouse_transfer):
-      //   - qc_inventory -= N (bu doğru, biz de artık frontend'te düşürmüyoruz)
-      //   - quality_result != 'passed' → production_inventory += N (istemiyoruz — ürün üretime dönmesin, hurda/iade stoğa gitmeli)
-      // Yapılacak: production_inventory'ye eklenen N'i geri al, hurda/iade item'a ekle
+      // 4. Hurda veya iade ise: hurda/iade warehouse_item'a aktarım
+      // (Yeni trigger iade/hurda için stok işlemi yapmaz; sadece qc_inventory düşer)
       const qualityResult = transfer?.quality_result
       if (qualityResult === 'scrap' || qualityResult === 'return') {
         const suffix = qualityResult === 'scrap' ? 'HURDA' : 'İADE'
-
-        const { data: origItem } = await supabase
-          .from('warehouse_items')
-          .select('id, name, code, unit, company_id')
-          .eq('id', transferData.item_id)
-          .single()
-
-        if (origItem) {
-          const newCode = `${origItem.code}-${suffix}`
-          const newName = `${origItem.name} ${suffix}`
-
-          // Trigger production_inventory'ye eklemiş olabilir — geri al
-          const { data: prodInv } = await supabase
-            .from('production_inventory')
-            .select('current_stock')
-            .eq('company_id', companyId)
-            .eq('item_id', transferData.item_id)
-            .eq('item_type', 'finished_product')
-            .maybeSingle()
-
-          if (prodInv) {
-            await supabase
-              .from('production_inventory')
-              .update({ current_stock: Math.max(0, prodInv.current_stock - transferData.quantity), updated_at: new Date().toISOString() })
-              .eq('company_id', companyId)
-              .eq('item_id', transferData.item_id)
-              .eq('item_type', 'finished_product')
-          }
-
-          // Hurda/İade ürünü var mı?
-          const { data: existingSuffix } = await supabase
-            .from('warehouse_items')
-            .select('id, current_stock')
-            .eq('company_id', companyId)
-            .eq('code', newCode)
-            .maybeSingle()
-
-          if (existingSuffix) {
-            await supabase
-              .from('warehouse_items')
-              .update({ current_stock: existingSuffix.current_stock + transferData.quantity, updated_at: new Date().toISOString() })
-              .eq('id', existingSuffix.id)
-          } else {
-            await supabase
-              .from('warehouse_items')
-              .insert({
-                company_id: companyId,
-                code: newCode,
-                name: newName,
-                unit: origItem.unit,
-                category: suffix,
-                current_stock: transferData.quantity,
-                min_stock: 0,
-                is_active: true,
-              })
-          }
-
-          // Audit için scrap tx kaydı (sadece hurda) — orijinal ürün üzerine değil, hurda item üzerine
-          // (warehouse_transactions.scrap trigger'da no-op olduğu için stok değişmez, sadece geçmiş)
-          if (qualityResult === 'scrap') {
-            await supabase
-              .from('warehouse_transactions')
-              .insert({
-                company_id: companyId,
-                item_id: transferData.item_id,
-                type: 'scrap',
-                quantity: transferData.quantity,
-                supplier: 'Kalite Kontrol',
-                reference_number: `KK-HURDA-${transferId}`,
-                notes: `Kalite kontrolden hurda (onaylandı)`,
-                created_by: currentUserId,
-                transaction_date: new Date().toISOString().split('T')[0],
-              })
-          }
-        }
+        await upsertScrapOrReturnItem(transferData.item_id, transferData.quantity, suffix, `KK-${suffix}-${transferId}`, `Kalite kontrolden ${suffix.toLowerCase()} (onaylandı)`)
       }
 
       alert(`✅ Transfer onaylandı! Ürün ${qualityResult === 'scrap' ? 'HURDA olarak' : qualityResult === 'return' ? 'İADE olarak' : ''} ${destination} eklendi.`)
@@ -1438,7 +1366,7 @@ export default function WarehousePage() {
   // Onay bekleyen hurda/iade transferleri (üretim + kalite kontrolden)
   const pendingHurdaCount =
     qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap').length +
-    productionTransfers.filter((t: any) => t.status === 'pending' && (t.notes || '').toUpperCase().startsWith('HURDA:')).length
+    productionTransfers.filter((t: any) => t.status === 'pending' && t.transfer_type === 'hurda').length
   const pendingIadeCount = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'return').length
 
   if (loading) {
@@ -2197,7 +2125,7 @@ export default function WarehousePage() {
           const totalHurdaStock = hurdaStockItems.reduce((s, i) => s + (i.current_stock || 0), 0)
           const totalScrapTx = transactions.filter(t => t.type === 'scrap').reduce((s, t) => s + (t.quantity || 0), 0)
           const pendingQcHurda = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap')
-          const pendingProdHurda = productionTransfers.filter((t: any) => t.status === 'pending' && (t.notes || '').toUpperCase().startsWith('HURDA:'))
+          const pendingProdHurda = productionTransfers.filter((t: any) => t.status === 'pending' && t.transfer_type === 'hurda')
           const totalPending = pendingQcHurda.length + pendingProdHurda.length
           return (
           <div className="space-y-4">

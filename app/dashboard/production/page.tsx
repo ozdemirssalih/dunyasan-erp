@@ -810,7 +810,7 @@ export default function ProductionPage() {
               company_id: companyId,
               code: scrapItemCode,
               name: scrapItemName,
-              category_name: 'Hurda',
+              category: 'HURDA',
               unit: scrapItem?.unit || 'adet',
               current_stock: 0,
               min_stock: 0,
@@ -1179,17 +1179,17 @@ export default function ProductionPage() {
       const isScrap = directWarehouseForm.transfer_type === 'hurda'
 
       // 2. Depoya ONAY BEKLEYEN transfer kaydı oluştur (warehouse_transactions insertı YAPILMAZ)
-      // Depo bu talebi onaylayana kadar üretim stoğu düşmez ve ana/hurda stoğuna eklenmez
-      const notesPrefix = isScrap ? 'HURDA: ' : ''
+      // transfer_type kolonu ile hurda/normal ayrımı yapılır — trigger buna göre davranır
       const { error: reqErr } = await supabase
         .from('production_to_warehouse_transfers')
         .insert({
           company_id: companyId,
           item_id: directWarehouseForm.item_id,
           quantity: directWarehouseForm.quantity,
-          notes: `${notesPrefix}${directWarehouseForm.notes || (isScrap ? 'Üretimden hurda' : 'Üretimden depoya transfer')}`,
+          notes: directWarehouseForm.notes || (isScrap ? 'Üretimden hurda' : 'Üretimden depoya transfer'),
           requested_by: currentUserId,
           status: 'pending',
+          transfer_type: isScrap ? 'hurda' : 'normal',
         })
 
       if (reqErr) throw reqErr

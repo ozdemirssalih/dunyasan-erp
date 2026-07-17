@@ -452,13 +452,24 @@ export default function WarehousePage() {
   }
 
   const handleApproveProductionTransfer = async (transferId: string) => {
-    if (!confirm('ONAY GEREKLİ\n\nBu transfer üretim deposundan ana depo stoğuna eklenecek.\nÜretim deposu azalacak, ana depo artacak.\n\nDevam etmek istiyor musunuz?')) return
+    // Transfer bilgilerini önceden alalım — hurda mı normal mi buradan anlayacağız
+    const { data: transferPreview } = await supabase
+      .from('production_to_warehouse_transfers')
+      .select('item_id, quantity, notes')
+      .eq('id', transferId)
+      .single()
+
+    const isHurda = (transferPreview?.notes || '').toUpperCase().startsWith('HURDA:')
+    const confirmMsg = isHurda
+      ? `ONAY GEREKLİ\n\nBu transfer HURDA STOK bölümüne eklenecek.\nÜretim deposu azalacak, hurda kalemi oluşturulacak/güncellenecek.\n\n⚠️ Ana ürün stoğuna dokunulmayacak.\n\nDevam etmek istiyor musunuz?`
+      : `ONAY GEREKLİ\n\nBu transfer üretim deposundan ana depo stoğuna eklenecek.\nÜretim deposu azalacak, ana depo artacak.\n\nDevam etmek istiyor musunuz?`
+    if (!confirm(confirmMsg)) return
 
     try {
       // 1. Transfer bilgilerini al
       const { data: transfer, error: transferError } = await supabase
         .from('production_to_warehouse_transfers')
-        .select('item_id, quantity')
+        .select('item_id, quantity, notes')
         .eq('id', transferId)
         .single()
 
@@ -482,7 +493,7 @@ export default function WarehousePage() {
         return
       }
 
-      // 3. Stok yeterliyse transferi onayla
+      // 3. Stok yeterliyse transferi onayla (trigger üretim stoğunu düşürüp warehouse_transactions'a entry insert eder)
       const { error } = await supabase
         .from('production_to_warehouse_transfers')
         .update({
@@ -494,7 +505,65 @@ export default function WarehousePage() {
 
       if (error) throw error
 
-      alert('✅ Transfer onaylandı! Stok hareketleri otomatik yapıldı.')
+      // 4. HURDA transferi ise: trigger ana ürüne eklediğini geri al, hurda ürününe aktar
+      if (isHurda) {
+        const { data: origItem } = await supabase
+          .from('warehouse_items')
+          .select('id, name, code, unit, company_id')
+          .eq('id', transfer.item_id)
+          .single()
+
+        if (origItem) {
+          const newCode = `${origItem.code}-HURDA`
+          const newName = `${origItem.name} HURDA`
+
+          // Trigger ana ürüne quantity ekledi — geri al
+          const { data: origStock } = await supabase
+            .from('warehouse_items')
+            .select('current_stock')
+            .eq('id', origItem.id)
+            .single()
+
+          if (origStock) {
+            await supabase
+              .from('warehouse_items')
+              .update({ current_stock: Math.max(0, origStock.current_stock - transfer.quantity), updated_at: new Date().toISOString() })
+              .eq('id', origItem.id)
+          }
+
+          // Hurda ürününe ekle (varsa güncelle, yoksa oluştur)
+          const { data: existingScrap } = await supabase
+            .from('warehouse_items')
+            .select('id, current_stock')
+            .eq('company_id', companyId)
+            .eq('code', newCode)
+            .maybeSingle()
+
+          if (existingScrap) {
+            await supabase
+              .from('warehouse_items')
+              .update({ current_stock: existingScrap.current_stock + transfer.quantity, updated_at: new Date().toISOString() })
+              .eq('id', existingScrap.id)
+          } else {
+            await supabase
+              .from('warehouse_items')
+              .insert({
+                company_id: companyId,
+                code: newCode,
+                name: newName,
+                unit: origItem.unit,
+                category: 'HURDA',
+                current_stock: transfer.quantity,
+                min_stock: 0,
+                is_active: true,
+              })
+          }
+        }
+      }
+
+      alert(isHurda
+        ? '✅ Transfer onaylandı! Ürün HURDA stoğuna aktarıldı.'
+        : '✅ Transfer onaylandı! Stok hareketleri otomatik yapıldı.')
       loadData()
     } catch (error: any) {
       console.error('Error approving transfer:', error)
@@ -2098,15 +2167,116 @@ export default function WarehousePage() {
         )}
 
         {/* SCRAP TAB */}
-        {activeTab === 'scrap' && (
+        {activeTab === 'scrap' && (() => {
+          const hurdaStockItems = items.filter(isHurdaItem)
+          const totalHurdaStock = hurdaStockItems.reduce((s, i) => s + (i.current_stock || 0), 0)
+          const totalScrapTx = transactions.filter(t => t.type === 'scrap').reduce((s, t) => s + (t.quantity || 0), 0)
+          const pendingQcHurda = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap')
+          const pendingProdHurda = productionTransfers.filter((t: any) => t.status === 'pending' && (t.notes || '').toUpperCase().startsWith('HURDA:'))
+          const totalPending = pendingQcHurda.length + pendingProdHurda.length
+          return (
           <div className="space-y-4">
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-gray-900 mb-1">🗑️ Hurda Deposu</h3>
                 <p className="text-sm text-gray-700">Kalite kontrolden veya manuel olarak hurda kaydı yapılabilir.</p>
               </div>
               <button onClick={() => setShowScrapModal(true)} className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-semibold text-sm">+ Manuel Hurda Ekle</button>
             </div>
+
+            {/* Onay Bekleyen Hurdalar */}
+            {totalPending > 0 && (
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">⚠️</span>
+                    <div>
+                      <p className="font-bold text-orange-900">Onay Bekleyen Hurda Talepleri ({totalPending})</p>
+                      <p className="text-xs text-orange-800">Bunlar onaylanana kadar hurda stoğuna eklenmezler.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {pendingQcHurda.map((t: any) => (
+                    <div key={t.id} className="bg-white rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="font-semibold text-gray-900 text-sm">{t.item?.name || 'Ürün'} <span className="text-xs text-gray-500">({t.item?.code})</span></p>
+                        <p className="text-xs text-gray-600">
+                          📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by_user?.full_name || '-'}
+                          {t.notes && <span> • {t.notes}</span>}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleApproveQCTransfer(t.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✓ Onayla (Hurdaya Al)</button>
+                        <button onClick={() => handleRejectQCTransfer(t.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✕ Reddet</button>
+                      </div>
+                    </div>
+                  ))}
+                  {pendingProdHurda.map((t: any) => (
+                    <div key={t.id} className="bg-white rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="font-semibold text-gray-900 text-sm">{t.item?.name || 'Ürün'} <span className="text-xs text-gray-500">({t.item?.code})</span></p>
+                        <p className="text-xs text-gray-600">
+                          🏭 Üretimden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by?.full_name || '-'}
+                          {t.notes && <span> • {t.notes}</span>}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleApproveProductionTransfer(t.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✓ Onayla (Hurdaya Al)</button>
+                        <button onClick={() => handleRejectProductionTransfer(t.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✕ Reddet</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Toplu Hurda Stok Kalemleri Özet */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl border p-4 text-center">
+                <p className="text-3xl font-bold text-orange-600">{hurdaStockItems.length}</p>
+                <p className="text-xs text-gray-500 font-semibold">Hurda Ürün Sayısı</p>
+              </div>
+              <div className="bg-white rounded-xl border p-4 text-center">
+                <p className="text-3xl font-bold text-orange-600">{totalHurdaStock.toLocaleString('tr-TR')}</p>
+                <p className="text-xs text-gray-500 font-semibold">Toplam Hurda Stok</p>
+              </div>
+              <div className="bg-white rounded-xl border p-4 text-center">
+                <p className="text-3xl font-bold text-red-600">{totalScrapTx.toLocaleString('tr-TR')}</p>
+                <p className="text-xs text-gray-500 font-semibold">Toplam Hurda Hareket</p>
+              </div>
+            </div>
+
+            {/* Hurda Stok Kalemleri Grid */}
+            {hurdaStockItems.length > 0 && (
+              <div className="bg-white rounded-xl border overflow-hidden">
+                <div className="px-4 py-3 bg-orange-50 border-b">
+                  <h4 className="font-bold text-orange-900">📦 Hurda Stok Kalemleri (Toplu)</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Birim</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {hurdaStockItems.sort((a, b) => (b.current_stock || 0) - (a.current_stock || 0)).map(it => (
+                        <tr key={it.id} className="hover:bg-orange-50/30">
+                          <td className="px-4 py-2 font-mono text-xs text-gray-600">{it.code}</td>
+                          <td className="px-4 py-2 font-semibold text-gray-900">{it.name}</td>
+                          <td className="px-4 py-2 text-right font-bold text-orange-700">{(it.current_stock || 0).toLocaleString('tr-TR')}</td>
+                          <td className="px-4 py-2 text-gray-600">{it.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
@@ -2158,7 +2328,8 @@ export default function WarehousePage() {
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* BY-SOURCE TAB */}
         {activeTab === 'by-source' && (() => {
@@ -2955,17 +3126,97 @@ export default function WarehousePage() {
         )}
 
         {/* İADELER TAB */}
-        {activeTab === 'returns' && (
+        {activeTab === 'returns' && (() => {
+          const iadeStockItems = items.filter(isIadeItem)
+          const totalIadeStock = iadeStockItems.reduce((s, i) => s + (i.current_stock || 0), 0)
+          const pendingQcIade = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'return')
+          const iadeHistory = qcTransfers.filter((t: any) => t.quality_result === 'return')
+          return (
           <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-blue-900 mb-2">🔄 İade Edilen Ürünler</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="font-bold text-blue-900 mb-2">🔄 İade Ürünler</h3>
               <p className="text-sm text-blue-700">
-                Kalite kontrolden iade edilen ürünlerin listesi. Bu ürünler direkt depoya geri eklenmiştir.
+                Kalite kontrolden iade edilen ürünlerin toplu görünümü ve geçmişi. Onaylanmadan depo stoğuna eklenmez.
               </p>
             </div>
 
+            {/* Onay Bekleyen İadeler */}
+            {pendingQcIade.length > 0 && (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <p className="font-bold text-yellow-900">Onay Bekleyen İade Talepleri ({pendingQcIade.length})</p>
+                    <p className="text-xs text-yellow-800">Bunlar onaylanana kadar iade stoğuna eklenmezler.</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {pendingQcIade.map((t: any) => (
+                    <div key={t.id} className="bg-white rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="font-semibold text-gray-900 text-sm">{t.item?.name || 'Ürün'} <span className="text-xs text-gray-500">({t.item?.code})</span></p>
+                        <p className="text-xs text-gray-600">📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by_user?.full_name || '-'}{t.notes && <span> • {t.notes}</span>}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleApproveQCTransfer(t.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✓ Onayla (İadeye Al)</button>
+                        <button onClick={() => handleRejectQCTransfer(t.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✕ Reddet</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Toplu İade Stok Özet */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-white rounded-xl border p-4 text-center">
+                <p className="text-3xl font-bold text-yellow-600">{iadeStockItems.length}</p>
+                <p className="text-xs text-gray-500 font-semibold">İade Ürün Sayısı</p>
+              </div>
+              <div className="bg-white rounded-xl border p-4 text-center">
+                <p className="text-3xl font-bold text-yellow-600">{totalIadeStock.toLocaleString('tr-TR')}</p>
+                <p className="text-xs text-gray-500 font-semibold">Toplam İade Stok</p>
+              </div>
+            </div>
+
+            {/* İade Stok Kalemleri Tablosu */}
+            {iadeStockItems.length > 0 && (
+              <div className="bg-white rounded-xl border overflow-hidden">
+                <div className="px-4 py-3 bg-yellow-50 border-b">
+                  <h4 className="font-bold text-yellow-900">📦 İade Stok Kalemleri (Toplu)</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Kod</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Ürün Adı</th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 uppercase">Mevcut Stok</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Birim</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {iadeStockItems.sort((a, b) => (b.current_stock || 0) - (a.current_stock || 0)).map(it => (
+                        <tr key={it.id} className="hover:bg-yellow-50/30">
+                          <td className="px-4 py-2 font-mono text-xs text-gray-600">{it.code}</td>
+                          <td className="px-4 py-2 font-semibold text-gray-900">{it.name}</td>
+                          <td className="px-4 py-2 text-right font-bold text-yellow-700">{(it.current_stock || 0).toLocaleString('tr-TR')}</td>
+                          <td className="px-4 py-2 text-gray-600">{it.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* İade Geçmişi Başlık */}
+            <div className="pt-2">
+              <h4 className="font-bold text-gray-800 text-sm mb-2">📜 İade Geçmişi</h4>
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
-              {qcTransfers.filter((t: any) => t.quality_result === 'return').map((transfer: any) => (
+              {iadeHistory.map((transfer: any) => (
                 <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -3010,13 +3261,14 @@ export default function WarehousePage() {
               ))}
             </div>
 
-            {qcTransfers.filter((t: any) => t.quality_result === 'return').length === 0 && (
+            {iadeHistory.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-gray-500">Henüz iade edilen ürün yok</p>
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* MODALS */}
         {/* Item Modal */}

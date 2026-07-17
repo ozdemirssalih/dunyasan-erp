@@ -1161,7 +1161,7 @@ export default function ProductionPage() {
     try {
       setSubmittingDirectWarehouse(true)
 
-      // 1. Üretim stoğu kontrol
+      // 1. Üretim stoğu kontrol (yeterli mi diye — düşme depo onayında trigger tarafından yapılacak)
       const { data: prodStock, error: checkErr } = await supabase
         .from('production_inventory')
         .select('current_stock')
@@ -1176,44 +1176,31 @@ export default function ProductionPage() {
         return
       }
 
-      // 2. Üretim stoğunu düş
-      const { error: updateErr } = await supabase
-        .from('production_inventory')
-        .update({
-          current_stock: prodStock.current_stock - directWarehouseForm.quantity,
-          updated_at: new Date().toISOString()
-        })
-        .eq('company_id', companyId)
-        .eq('item_id', directWarehouseForm.item_id)
-
-      if (updateErr) throw updateErr
-
       const isScrap = directWarehouseForm.transfer_type === 'hurda'
 
-      // 3. Depo işlemi oluştur (trigger stoku güncelleyecek)
-      const { error: txErr } = await supabase
-        .from('warehouse_transactions')
+      // 2. Depoya ONAY BEKLEYEN transfer kaydı oluştur (warehouse_transactions insertı YAPILMAZ)
+      // Depo bu talebi onaylayana kadar üretim stoğu düşmez ve ana/hurda stoğuna eklenmez
+      const notesPrefix = isScrap ? 'HURDA: ' : ''
+      const { error: reqErr } = await supabase
+        .from('production_to_warehouse_transfers')
         .insert({
           company_id: companyId,
           item_id: directWarehouseForm.item_id,
-          type: isScrap ? 'scrap' : 'entry',
           quantity: directWarehouseForm.quantity,
-          supplier: 'Üretim Deposu',
-          reference_number: `UR-${isScrap ? 'HURDA' : 'TRANSFER'}-${Date.now()}`,
-          notes: `Üretim deposundan ${isScrap ? 'hurda olarak' : 'direkt'} transfer - ${directWarehouseForm.notes || ''}`.trim(),
-          created_by: currentUserId,
-          transaction_date: new Date().toISOString().split('T')[0],
+          notes: `${notesPrefix}${directWarehouseForm.notes || (isScrap ? 'Üretimden hurda' : 'Üretimden depoya transfer')}`,
+          requested_by: currentUserId,
+          status: 'pending',
         })
 
-      if (txErr) throw txErr
+      if (reqErr) throw reqErr
 
       setShowDirectWarehouseModal(false)
       setDirectWarehouseForm({ item_id: '', quantity: 0, transfer_type: 'normal', notes: '' })
       await loadData()
 
       alert(isScrap
-        ? '✅ Ürün hurda olarak işaretlendi ve hurda deposuna gönderildi!'
-        : '✅ Ürün başarıyla ana depoya transfer edildi!')
+        ? '⏳ Hurda transfer talebi oluşturuldu.\n\nDepo onayı bekleniyor — onaylanana kadar üretim ve depo stokları değişmez.'
+        : '⏳ Depoya transfer talebi oluşturuldu.\n\nDepo onayı bekleniyor — onaylanana kadar üretim ve depo stokları değişmez.')
     } catch (error: any) {
       console.error('Error direct warehouse transfer:', error)
       alert('❌ Hata: ' + error.message)

@@ -687,24 +687,7 @@ export default function QualityControlPage() {
 
         alert('✅ Kalite test sonucu kaydedildi! Ürün kalite deposundan düşüldü ve ana depoya eklendi.')
       } else if (transferForm.quality_result === 'return') {
-        // İADE: Direkt ana depoya geri gönder
-        const { error: transactionError } = await supabase
-          .from('warehouse_transactions')
-          .insert({
-            company_id: companyId,
-            item_id: transferForm.item_id,
-            type: 'entry',
-            quantity: transferForm.quantity,
-            supplier: 'Kalite Kontrol - İade',
-            reference_number: `KK-IADE-${new Date().getTime()}`,
-            notes: `Kalite kontrolden iade - ${transferForm.notes || 'Depoya geri gönderildi'}`,
-            created_by: currentUserId,
-            transaction_date: new Date().toISOString().split('T')[0],
-          })
-
-        if (transactionError) throw transactionError
-
-        // Transfer kaydı oluştur
+        // İADE: Onay bekleyen kayıt oluştur — depo onaylamadan ana stoğa girmez
         const { error: transferError } = await supabase
           .from('qc_to_warehouse_transfers')
           .insert({
@@ -712,38 +695,16 @@ export default function QualityControlPage() {
             item_id: transferForm.item_id,
             quantity: transferForm.quantity,
             quality_result: 'return',
-            notes: `İade - ${transferForm.notes || 'Depoya geri gönderildi'}`,
+            notes: `İade - ${transferForm.notes || 'Depo onayı bekliyor'}`,
             requested_by: currentUserId,
-            status: 'approved',
-            approved_by: currentUserId,
-            approved_at: new Date().toISOString(),
+            status: 'pending',
           })
 
         if (transferError) throw transferError
 
-        alert('✅ Ürün depoya iade edildi.')
+        alert('⏳ İade talebi oluşturuldu.\n\nDepo onayı bekleniyor — onaylanana kadar ana stoğa eklenmez.')
       } else if (transferForm.quality_result === 'scrap') {
-        // HURDA: Direkt hurda deposuna gönder
-        // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı
-
-        // Warehouse transactions kayıt ekle - hurda olarak (trigger otomatik olarak stoku güncelleyecek)
-        const { error: transactionError } = await supabase
-          .from('warehouse_transactions')
-          .insert({
-            company_id: companyId,
-            item_id: transferForm.item_id,
-            type: 'scrap',
-            quantity: transferForm.quantity,
-            supplier: 'Kalite Kontrol',
-            reference_number: `KK-HURDA-${new Date().getTime()}`,
-            notes: `Kalite kontrolde hurda olarak işaretlendi - ${transferForm.notes || ''}`,
-            created_by: currentUserId,
-            transaction_date: new Date().toISOString().split('T')[0],
-          })
-
-        if (transactionError) throw transactionError
-
-        // Transfer kaydı oluştur (kayıt amaçlı)
+        // HURDA: Onay bekleyen kayıt oluştur — depo onaylamadan hurda stoğuna eklenmez
         const { error: transferError } = await supabase
           .from('qc_to_warehouse_transfers')
           .insert({
@@ -751,16 +712,14 @@ export default function QualityControlPage() {
             item_id: transferForm.item_id,
             quantity: transferForm.quantity,
             quality_result: transferForm.quality_result,
-            notes: transferForm.notes,
+            notes: transferForm.notes || 'Depo onayı bekliyor',
             requested_by: currentUserId,
-            status: 'approved',
-            approved_by: currentUserId,
-            approved_at: new Date().toISOString(),
+            status: 'pending',
           })
 
         if (transferError) throw transferError
 
-        alert('✅ Ürün hurda olarak işaretlendi ve hurda deposuna gönderildi.')
+        alert('⏳ Hurda talebi oluşturuldu.\n\nDepo onayı bekleniyor — onaylanana kadar hurda stoğuna eklenmez.')
       } else {
         // KALIRSA: Direkt tashih olarak üretime geri gönder (onay bekleme)
         // NOT: Kalite inventory'den stok düşme işlemi yukarıda yapıldı

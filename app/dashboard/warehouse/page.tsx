@@ -2157,8 +2157,7 @@ export default function WarehousePage() {
                             <h4 className="font-bold text-gray-900">{source}</h4>
                             <p className="text-xs text-gray-500">
                               Son 30 gün: {recentData.count} işlem •
-                              Son hareket: {new Date(recentData.lastDate).toLocaleDateString('tr-TR')} •
-                              Tüm zaman: {fullData.count} işlem, {Object.keys(fullData.items).length} farklı ürün
+                              Son hareket: {new Date(recentData.lastDate).toLocaleDateString('tr-TR')}
                             </p>
                           </div>
                         </div>

@@ -105,6 +105,7 @@ export default function WarehousePage() {
 
   // Filter states
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [stockTypeFilter, setStockTypeFilter] = useState<'all' | 'normal' | 'hurda' | 'iade'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showLowStock, setShowLowStock] = useState(false)
 
@@ -451,7 +452,7 @@ export default function WarehousePage() {
   }
 
   const handleApproveProductionTransfer = async (transferId: string) => {
-    if (!confirm('Bu transferi onaylamak istediğinizden emin misiniz? Üretim deposu azalacak, ana depo stoğu artacak.')) return
+    if (!confirm('ONAY GEREKLİ\n\nBu transfer üretim deposundan ana depo stoğuna eklenecek.\nÜretim deposu azalacak, ana depo artacak.\n\nDevam etmek istiyor musunuz?')) return
 
     try {
       // 1. Transfer bilgilerini al
@@ -526,9 +527,16 @@ export default function WarehousePage() {
 
   const handleApproveQCTransfer = async (transferId: string) => {
     const transfer = qcTransfers.find((t: any) => t.id === transferId)
-    const destination = transfer?.quality_result === 'passed' ? 'ana depoya' : 'üretim deposuna geri'
+    const qr = transfer?.quality_result
+    const destination = qr === 'passed' ? 'ana depoya' :
+                        qr === 'scrap' ? 'HURDA STOK bölümüne' :
+                        qr === 'return' ? 'İADE STOK bölümüne' :
+                        'üretim deposuna geri'
+    const warning = qr === 'scrap' ? '\n\n⚠️ Bu ürün hurda olarak işaretlenecek ve ayrı bir hurda stok kalemi oluşturulacak/eklenecek.' :
+                    qr === 'return' ? '\n\n⚠️ Bu ürün iade olarak işaretlenecek ve ayrı bir iade stok kalemi oluşturulacak/eklenecek.' :
+                    ''
 
-    if (!confirm(`Bu transferi onaylamak istediğinizden emin misiniz? KK deposu azalacak, ${destination} eklenecek.`)) return
+    if (!confirm(`ONAY GEREKLİ\n\nBu transfer ${destination} eklenecek.\nKK deposu azalacak.${warning}\n\nDevam etmek istiyor musunuz?`)) return
 
     try {
       // 1. Transfer bilgilerini al
@@ -1302,14 +1310,42 @@ export default function WarehousePage() {
     })
   }
 
+  // Hurda/İade tespit yardımcıları — hem category hem code/name üzerinden
+  const isHurdaItem = (item: any) =>
+    item.category === 'HURDA' || item.category === 'Hurda' ||
+    (item.code || '').toUpperCase().includes('-HURDA') ||
+    (item.name || '').toUpperCase().includes('HURDA')
+  const isIadeItem = (item: any) =>
+    item.category === 'İADE' || item.category === 'Iade' || item.category === 'IADE' ||
+    (item.code || '').toUpperCase().includes('-İADE') || (item.code || '').toUpperCase().includes('-IADE') ||
+    (item.name || '').toUpperCase().includes('İADE') || (item.name || '').toUpperCase().includes('IADE')
+  const isNormalItem = (item: any) => !isHurdaItem(item) && !isIadeItem(item)
+
   const filteredItems = items.filter(item => {
-    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter  // ← category_id değil, category
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.code.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesLowStock = !showLowStock || item.current_stock <= item.min_stock
+    const matchesStockType =
+      stockTypeFilter === 'all' ? true :
+      stockTypeFilter === 'hurda' ? isHurdaItem(item) :
+      stockTypeFilter === 'iade' ? isIadeItem(item) :
+      /* normal */ isNormalItem(item)
 
-    return matchesCategory && matchesSearch && matchesLowStock
+    return matchesCategory && matchesSearch && matchesLowStock && matchesStockType
   })
+
+  // Stok tipine göre sayaçlar (üst segment kontrolü için)
+  const itemCounts = {
+    all: items.length,
+    normal: items.filter(isNormalItem).length,
+    hurda: items.filter(isHurdaItem).length,
+    iade: items.filter(isIadeItem).length,
+  }
+
+  // Onay bekleyen hurda/iade transferleri (üretim + kalite kontrolden)
+  const pendingHurdaCount = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap').length
+  const pendingIadeCount = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'return').length
 
   if (loading) {
     return (
@@ -1375,6 +1411,66 @@ export default function WarehousePage() {
         {/* ITEMS TAB */}
         {activeTab === 'items' && (
           <div className="space-y-4">
+            {/* Stok Tipi Segment Kontrolü */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-wrap items-center gap-2">
+              {([
+                { k: 'all', label: 'Tümü', icon: '📦', color: 'bg-gray-800' },
+                { k: 'normal', label: 'Normal Stok', icon: '✅', color: 'bg-blue-600' },
+                { k: 'hurda', label: 'Hurda Stok', icon: '🗑️', color: 'bg-orange-600' },
+                { k: 'iade', label: 'İade Stok', icon: '🔄', color: 'bg-yellow-600' },
+              ] as const).map(seg => (
+                <button
+                  key={seg.k}
+                  onClick={() => setStockTypeFilter(seg.k)}
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
+                    stockTypeFilter === seg.k
+                      ? `${seg.color} text-white shadow`
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <span>{seg.icon}</span>
+                  <span>{seg.label}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${stockTypeFilter === seg.k ? 'bg-white/20' : 'bg-white'}`}>
+                    {itemCounts[seg.k]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Onay Bekleyen Banner — Hurda/İade */}
+            {(pendingHurdaCount > 0 || pendingIadeCount > 0) && (stockTypeFilter === 'all' || stockTypeFilter === 'hurda' || stockTypeFilter === 'iade') && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">⚠️</span>
+                  <div>
+                    <p className="font-bold text-amber-900">
+                      Onay Bekleyen Kalite/Üretim Transferi Var
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      {pendingHurdaCount > 0 && <>🗑️ <strong>{pendingHurdaCount} hurda</strong> </>}
+                      {pendingHurdaCount > 0 && pendingIadeCount > 0 && ' • '}
+                      {pendingIadeCount > 0 && <>🔄 <strong>{pendingIadeCount} iade</strong> </>}
+                      transferi depoya alınmayı bekliyor. Onaylanmadan depo stoğuna eklenmez.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {pendingHurdaCount > 0 && (
+                    <button onClick={() => setActiveTab('qc-transfers')}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                      Hurdaları Onayla →
+                    </button>
+                  )}
+                  {pendingIadeCount > 0 && (
+                    <button onClick={() => setActiveTab('returns')}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                      İadeleri Onayla →
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4">
               <input
@@ -1422,8 +1518,23 @@ export default function WarehousePage() {
 
             {/* Mevcut Stoklar Tablosu */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="text-lg font-bold text-gray-800">📦 Mevcut Stoklar</h3>
+              <div className={`px-6 py-4 border-b border-gray-200 ${
+                stockTypeFilter === 'hurda' ? 'bg-orange-50' :
+                stockTypeFilter === 'iade' ? 'bg-yellow-50' :
+                stockTypeFilter === 'normal' ? 'bg-blue-50' :
+                'bg-gray-50'
+              }`}>
+                <h3 className="text-lg font-bold text-gray-800">
+                  {stockTypeFilter === 'hurda' ? '🗑️ Hurda Stok — Üretim/Kaliteden Gelen Hurdalar' :
+                   stockTypeFilter === 'iade' ? '🔄 İade Stok — Üretim/Kaliteden Gelen İadeler' :
+                   stockTypeFilter === 'normal' ? '✅ Normal Stok' :
+                   '📦 Mevcut Stoklar'}
+                </h3>
+                {(stockTypeFilter === 'hurda' || stockTypeFilter === 'iade') && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    Bu bölümdeki kalemler kalite kontrol veya üretim transferi onaylandığında otomatik oluşturulur.
+                  </p>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -1507,7 +1618,11 @@ export default function WarehousePage() {
 
                 {filteredItems.length === 0 && (
                   <div className="text-center py-12">
-                    <p className="text-gray-500">Stok kalemi bulunamadı</p>
+                    <p className="text-gray-500">
+                      {stockTypeFilter === 'hurda' ? 'Hurda stok kalemi bulunamadı. Kalite kontrolden hurda transferi onaylandığında burada görünecek.' :
+                       stockTypeFilter === 'iade' ? 'İade stok kalemi bulunamadı. Kalite kontrolden iade transferi onaylandığında burada görünecek.' :
+                       'Stok kalemi bulunamadı'}
+                    </p>
                   </div>
                 )}
               </div>

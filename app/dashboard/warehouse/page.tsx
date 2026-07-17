@@ -647,15 +647,18 @@ export default function WarehousePage() {
 
       if (error) throw error
 
-      // 4. Hurda veya iade ise: orijinal üründen al, ayrı ürüne ekle
+      // 4. Hurda veya iade ise: trigger'ın yanlış yaptığı işleri düzelt + hurda/iade item'a aktar
+      // Trigger davranışı (approve_qc_to_warehouse_transfer):
+      //   - qc_inventory -= N (bu doğru, biz de artık frontend'te düşürmüyoruz)
+      //   - quality_result != 'passed' → production_inventory += N (istemiyoruz — ürün üretime dönmesin, hurda/iade stoğa gitmeli)
+      // Yapılacak: production_inventory'ye eklenen N'i geri al, hurda/iade item'a ekle
       const qualityResult = transfer?.quality_result
       if (qualityResult === 'scrap' || qualityResult === 'return') {
         const suffix = qualityResult === 'scrap' ? 'HURDA' : 'İADE'
 
-        // Orijinal ürün bilgilerini al
         const { data: origItem } = await supabase
           .from('warehouse_items')
-          .select('id, name, code, unit, category_name, company_id')
+          .select('id, name, code, unit, company_id')
           .eq('id', transferData.item_id)
           .single()
 
@@ -663,21 +666,25 @@ export default function WarehousePage() {
           const newCode = `${origItem.code}-${suffix}`
           const newName = `${origItem.name} ${suffix}`
 
-          // Trigger orijinal ürüne eklemiş olabilir — geri al
-          const { data: origStock } = await supabase
-            .from('warehouse_items')
+          // Trigger production_inventory'ye eklemiş olabilir — geri al
+          const { data: prodInv } = await supabase
+            .from('production_inventory')
             .select('current_stock')
-            .eq('id', origItem.id)
-            .single()
+            .eq('company_id', companyId)
+            .eq('item_id', transferData.item_id)
+            .eq('item_type', 'finished_product')
+            .maybeSingle()
 
-          if (origStock) {
+          if (prodInv) {
             await supabase
-              .from('warehouse_items')
-              .update({ current_stock: Math.max(0, origStock.current_stock - transferData.quantity), updated_at: new Date().toISOString() })
-              .eq('id', origItem.id)
+              .from('production_inventory')
+              .update({ current_stock: Math.max(0, prodInv.current_stock - transferData.quantity), updated_at: new Date().toISOString() })
+              .eq('company_id', companyId)
+              .eq('item_id', transferData.item_id)
+              .eq('item_type', 'finished_product')
           }
 
-          // Hurda/İade ürünü var mı kontrol et
+          // Hurda/İade ürünü var mı?
           const { data: existingSuffix } = await supabase
             .from('warehouse_items')
             .select('id, current_stock')
@@ -686,13 +693,11 @@ export default function WarehousePage() {
             .maybeSingle()
 
           if (existingSuffix) {
-            // Mevcut hurda/iade ürününe ekle
             await supabase
               .from('warehouse_items')
               .update({ current_stock: existingSuffix.current_stock + transferData.quantity, updated_at: new Date().toISOString() })
               .eq('id', existingSuffix.id)
           } else {
-            // Yeni hurda/iade ürünü oluştur
             await supabase
               .from('warehouse_items')
               .insert({
@@ -700,10 +705,28 @@ export default function WarehousePage() {
                 code: newCode,
                 name: newName,
                 unit: origItem.unit,
-                category_name: suffix,
+                category: suffix,
                 current_stock: transferData.quantity,
                 min_stock: 0,
                 is_active: true,
+              })
+          }
+
+          // Audit için scrap tx kaydı (sadece hurda) — orijinal ürün üzerine değil, hurda item üzerine
+          // (warehouse_transactions.scrap trigger'da no-op olduğu için stok değişmez, sadece geçmiş)
+          if (qualityResult === 'scrap') {
+            await supabase
+              .from('warehouse_transactions')
+              .insert({
+                company_id: companyId,
+                item_id: transferData.item_id,
+                type: 'scrap',
+                quantity: transferData.quantity,
+                supplier: 'Kalite Kontrol',
+                reference_number: `KK-HURDA-${transferId}`,
+                notes: `Kalite kontrolden hurda (onaylandı)`,
+                created_by: currentUserId,
+                transaction_date: new Date().toISOString().split('T')[0],
               })
           }
         }
@@ -1413,7 +1436,9 @@ export default function WarehousePage() {
   }
 
   // Onay bekleyen hurda/iade transferleri (üretim + kalite kontrolden)
-  const pendingHurdaCount = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap').length
+  const pendingHurdaCount =
+    qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'scrap').length +
+    productionTransfers.filter((t: any) => t.status === 'pending' && (t.notes || '').toUpperCase().startsWith('HURDA:')).length
   const pendingIadeCount = qcTransfers.filter((t: any) => t.status === 'pending' && t.quality_result === 'return').length
 
   if (loading) {
@@ -2202,7 +2227,7 @@ export default function WarehousePage() {
                       <div className="flex-1 min-w-[200px]">
                         <p className="font-semibold text-gray-900 text-sm">{t.item?.name || 'Ürün'} <span className="text-xs text-gray-500">({t.item?.code})</span></p>
                         <p className="text-xs text-gray-600">
-                          📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by_user?.full_name || '-'}
+                          📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by?.full_name || '-'}
                           {t.notes && <span> • {t.notes}</span>}
                         </p>
                       </div>
@@ -3155,7 +3180,7 @@ export default function WarehousePage() {
                     <div key={t.id} className="bg-white rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex-1 min-w-[200px]">
                         <p className="font-semibold text-gray-900 text-sm">{t.item?.name || 'Ürün'} <span className="text-xs text-gray-500">({t.item?.code})</span></p>
-                        <p className="text-xs text-gray-600">📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by_user?.full_name || '-'}{t.notes && <span> • {t.notes}</span>}</p>
+                        <p className="text-xs text-gray-600">📦 Kalite Kontrolden • {t.quantity} {t.item?.unit || 'adet'} • Talep: {t.requested_by?.full_name || '-'}{t.notes && <span> • {t.notes}</span>}</p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleApproveQCTransfer(t.id)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-semibold">✓ Onayla (İadeye Al)</button>

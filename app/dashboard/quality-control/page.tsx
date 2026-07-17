@@ -635,17 +635,20 @@ export default function QualityControlPage() {
         return
       }
 
-      // 2. Kalite inventory'den stoğu düş
-      const { error: qcStockError } = await supabase
-        .from('quality_control_inventory')
-        .update({
-          current_stock: qcStock.current_stock - transferForm.quantity,
-          updated_at: new Date().toISOString()
-        })
-        .eq('company_id', companyId)
-        .eq('item_id', transferForm.item_id)
+      // 2. Kalite inventory'den stoğu düş — SADECE passed için (iade/hurda trigger'la düşecek)
+      // Not: iade/hurda için pending kayıt oluşturulacak, depo onaylayınca trigger qc_inventory'yi düşürür
+      if (transferForm.quality_result === 'passed') {
+        const { error: qcStockError } = await supabase
+          .from('quality_control_inventory')
+          .update({
+            current_stock: qcStock.current_stock - transferForm.quantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', companyId)
+          .eq('item_id', transferForm.item_id)
 
-      if (qcStockError) throw qcStockError
+        if (qcStockError) throw qcStockError
+      }
 
       if (transferForm.quality_result === 'passed') {
         // GEÇERSE: Direkt ana depoya ekle (onay bekleme)

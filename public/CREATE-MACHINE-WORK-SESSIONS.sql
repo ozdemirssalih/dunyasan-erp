@@ -26,16 +26,16 @@ CREATE TABLE IF NOT EXISTS machine_work_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES machine_work_sessions(id) ON DELETE CASCADE,
   company_id UUID NOT NULL,
-  machine_id UUID NOT NULL,
+  machine_id UUID NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
   started_at TIMESTAMPTZ DEFAULT NOW(),
   stopped_at TIMESTAMPTZ,
   duration_seconds INTEGER,
   quality_status VARCHAR(20) DEFAULT 'pending', -- 'pending' | 'approved'
-  quality_approved_by UUID REFERENCES auth.users(id),
+  quality_approved_by UUID REFERENCES profiles(id),
   quality_approved_at TIMESTAMPTZ,
   pause_reason TEXT,
-  started_by UUID REFERENCES auth.users(id),
-  stopped_by UUID REFERENCES auth.users(id),
+  started_by UUID REFERENCES profiles(id),
+  stopped_by UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

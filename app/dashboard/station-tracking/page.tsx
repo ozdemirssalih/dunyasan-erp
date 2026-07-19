@@ -237,7 +237,7 @@ export default function StationTrackingPage() {
           <div>
             <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
               <Activity className="w-8 h-8 text-blue-600" />
-              İstasyon Takip Sistemi (İBS)
+              İstasyon Takip Sistemi (İTS)
             </h2>
             <p className="text-gray-600">Makine çalışma ve duruş sürelerini takip edin</p>
           </div>

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import PermissionGuard from '@/components/PermissionGuard'
 import { Package, Factory, ClipboardCheck, Upload, Download, FileText, X } from 'lucide-react'
 
-type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history' | 'warehouse-qc'
+type Tab = 'inventory' | 'incoming' | 'outgoing' | 'history' | 'warehouse-qc' | 'its-approvals'
 
 export default function QualityControlPage() {
   const [activeTab, setActiveTab] = useState<Tab>('inventory')
@@ -20,6 +20,14 @@ export default function QualityControlPage() {
   const [warehouseItems, setWarehouseItems] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [warehouseQCRequests, setWarehouseQCRequests] = useState<any[]>([])
+  const [itsPendingRuns, setItsPendingRuns] = useState<any[]>([])
+  const [_itsTick, setItsTick] = useState(0)
+
+  // İTS canlı süre için timer
+  useEffect(() => {
+    const t = setInterval(() => setItsTick(v => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   // Stats states
   const [stats, setStats] = useState({
@@ -136,6 +144,7 @@ export default function QualityControlPage() {
         loadWarehouseQCRequests(finalCompanyId),
         loadQCDocuments(finalCompanyId),
         loadWarehouseQCDocuments(finalCompanyId),
+        loadITSPendingRuns(finalCompanyId),
       ])
 
     } catch (error) {
@@ -298,6 +307,51 @@ export default function QualityControlPage() {
       .order('requested_at', { ascending: false })
 
     setWarehouseQCRequests(data || [])
+  }
+
+  const loadITSPendingRuns = async (companyId: string) => {
+    // Aktif (bitmemiş) ve kalite onayı bekleyen runlar
+    const { data } = await supabase
+      .from('machine_work_runs')
+      .select(`
+        *,
+        machine:machines(id, machine_code, machine_name),
+        started_by_user:profiles!machine_work_runs_started_by_fkey(full_name)
+      `)
+      .eq('company_id', companyId)
+      .eq('quality_status', 'pending')
+      .is('stopped_at', null)
+      .order('started_at', { ascending: false })
+    setItsPendingRuns(data || [])
+  }
+
+  const handleApproveITSRun = async (runId: string) => {
+    if (!currentUserId) return
+    try {
+      const now = new Date().toISOString()
+      // Run kalite onayı
+      const { data: run, error: rErr } = await supabase
+        .from('machine_work_runs')
+        .update({
+          quality_status: 'approved',
+          quality_approved_by: currentUserId,
+          quality_approved_at: now,
+        })
+        .eq('id', runId)
+        .select('session_id')
+        .single()
+      if (rErr) throw rErr
+
+      // Session status running_pending_qc → running_approved
+      if (run?.session_id) {
+        await supabase.from('machine_work_sessions')
+          .update({ status: 'running_approved' })
+          .eq('id', run.session_id)
+      }
+      await loadITSPendingRuns(companyId!)
+    } catch (err: any) {
+      alert('Hata: ' + err.message)
+    }
   }
 
   const loadQCDocuments = async (companyId: string) => {
@@ -976,6 +1030,7 @@ export default function QualityControlPage() {
               { id: 'incoming', label: 'Gelen Ürünler', count: incomingTransfers.filter((t: any) => t.status === 'pending').length },
               { id: 'outgoing', label: 'Test Sonuçları', count: outgoingTransfers.filter((t: any) => t.status === 'pending').length },
               { id: 'warehouse-qc', label: 'Depo Kontrol Talepleri', count: warehouseQCRequests.filter((r: any) => r.status === 'pending').length },
+              { id: 'its-approvals', label: '🏭 İTS Kalite Onayları', count: itsPendingRuns.length },
               { id: 'history', label: 'Geçmiş', count: history.length },
             ].map((tab) => (
               <button
@@ -1550,6 +1605,68 @@ export default function QualityControlPage() {
             ) : (
               <div className="text-center py-12 bg-gray-50 rounded-lg">
                 <p className="text-gray-500">Henüz kalite kontrol talebi yok</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* İTS ONAYLARI TAB */}
+        {activeTab === 'its-approvals' && (
+          <div className="space-y-4">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+              <h3 className="font-bold text-orange-900 mb-1">🏭 İstasyon Takip Sistemi — Kalite Onayları</h3>
+              <p className="text-sm text-orange-800">
+                Operatör "Makineyi Çalıştır" dediğinde süre hemen başlar (turuncu). Bu bölümden onay verdiğinde makine kartı yeşile döner ve aynı süreyle devam eder.
+                Duruş sonrası tekrar başlatıldığında yine bu bölümden onay bekler.
+              </p>
+            </div>
+
+            {itsPendingRuns.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                <p className="text-gray-400 text-lg">Onay bekleyen makine çalışması yok</p>
+                <p className="text-gray-400 text-sm mt-1">Bir operatör makineyi çalıştırdığında burada belirir.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {itsPendingRuns.map((run: any) => {
+                  const elapsedSec = Math.floor((Date.now() - new Date(run.started_at).getTime()) / 1000)
+                  const h = Math.floor(elapsedSec / 3600).toString().padStart(2, '0')
+                  const m = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0')
+                  const s = (elapsedSec % 60).toString().padStart(2, '0')
+                  return (
+                    <div key={run.id} className="bg-white rounded-xl shadow-sm border-2 border-orange-400 overflow-hidden">
+                      <div className="px-4 py-3 bg-orange-50 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-gray-900">{run.machine?.machine_code || '?'}</h4>
+                          <p className="text-xs text-gray-500 truncate">{run.machine?.machine_name}</p>
+                        </div>
+                        <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></div>
+                      </div>
+                      <div className="px-4 py-4 text-center">
+                        <div className="text-3xl font-mono font-bold text-orange-600 mb-1">{h}:{m}:{s}</div>
+                        <p className="text-[10px] font-semibold text-orange-600">ONAY BEKLİYOR — SÜRE İŞLİYOR</p>
+                      </div>
+                      <div className="px-4 pb-3 text-xs text-gray-500 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Başlatan:</span>
+                          <span className="font-semibold text-gray-700">{run.started_by_user?.full_name || '—'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Başlangıç:</span>
+                          <span className="font-semibold text-gray-700">{new Date(run.started_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                      <div className="px-4 pb-4">
+                        <button
+                          onClick={() => handleApproveITSRun(run.id)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold"
+                        >
+                          ✓ Kaliteyi Onayla
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

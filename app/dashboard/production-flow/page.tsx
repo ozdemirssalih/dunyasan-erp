@@ -177,24 +177,35 @@ const TEMPLATE_STEPS: { step_name: string; step_type: StepType; station_name?: s
 // =====================================================
 const getStepTypeInfo = (type: StepType) => STEP_TYPES.find(t => t.value === type) || STEP_TYPES[2]
 
-// Sıralı IEM No üretici: YYYY-NNN (örn. 2026-001)
-// Yıl içinde sayaç günden bağımsız artar — gün değişse de kaldığı yerden devam
+// Sıralı IEM No üretici: YYYYMMDD-NNN (örn. 20260720-002)
+// Tarih önek olarak eklenir ama sayaç TÜM kayıtlar boyunca sürekli artar
+// (gün/yıl değişse bile kaldığı yerden devam eder)
 const generateSequentialIemNo = async (companyId: string): Promise<string> => {
   const now = new Date()
-  const prefix = `${now.getFullYear()}`
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const datePrefix = `${y}${m}${d}`
+
+  // Tüm mevcut kayıtları çek, sondan üç haneli sayaçların en yükseğini bul
   const { data } = await supabase
     .from('production_flow_orders')
     .select('iem_no')
     .eq('company_id', companyId)
-    .like('iem_no', `${prefix}-%`)
-    .order('iem_no', { ascending: false })
-    .limit(1)
-  let next = 1
-  if (data && data.length > 0 && data[0].iem_no) {
-    const match = String(data[0].iem_no).match(/-(\d+)$/)
-    if (match) next = parseInt(match[1], 10) + 1
-  }
-  return `${prefix}-${String(next).padStart(3, '0')}`
+    .not('iem_no', 'is', null)
+
+  let maxCounter = 0
+  ;(data || []).forEach(row => {
+    const s = String((row as any).iem_no || '')
+    const match = s.match(/-(\d+)$/)
+    if (match) {
+      const n = parseInt(match[1], 10)
+      if (n > maxCounter) maxCounter = n
+    }
+  })
+
+  const next = maxCounter + 1
+  return `${datePrefix}-${String(next).padStart(3, '0')}`
 }
 
 // =====================================================

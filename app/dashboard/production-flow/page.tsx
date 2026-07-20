@@ -177,14 +177,11 @@ const TEMPLATE_STEPS: { step_name: string; step_type: StepType; station_name?: s
 // =====================================================
 const getStepTypeInfo = (type: StepType) => STEP_TYPES.find(t => t.value === type) || STEP_TYPES[2]
 
-// Sıralı IEM No üretici: YYYYMMDD-NNN (örn. 20260708-001)
-// Aynı gün içindeki en yüksek numarayı bulup +1 verir
+// Sıralı IEM No üretici: YYYY-NNN (örn. 2026-001)
+// Yıl içinde sayaç günden bağımsız artar — gün değişse de kaldığı yerden devam
 const generateSequentialIemNo = async (companyId: string): Promise<string> => {
   const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  const prefix = `${y}${m}${d}`
+  const prefix = `${now.getFullYear()}`
   const { data } = await supabase
     .from('production_flow_orders')
     .select('iem_no')

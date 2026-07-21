@@ -6,7 +6,53 @@ import PermissionGuard from '@/components/PermissionGuard'
 import {
   Users, Phone, Mail, Plus, X, Edit3, Trash2, Search,
   Briefcase, PhoneCall, Send, Check, AlertCircle,
+  Calendar, MapPin, Clock, CheckCircle2, XCircle,
 } from 'lucide-react'
+
+type CRMTab = 'customers' | 'appointments' | 'visits'
+
+interface Appointment {
+  id: string
+  customer_id: string | null
+  appointment_date: string
+  appointment_type: 'call' | 'meeting' | 'visit' | 'video'
+  title: string | null
+  notes: string | null
+  assigned_to: string | null
+  status: 'planned' | 'completed' | 'cancelled' | 'missed'
+  created_at: string
+}
+
+interface Visit {
+  id: string
+  customer_id: string | null
+  visit_date: string
+  visit_type: 'onsite' | 'office' | 'phone' | 'video'
+  participants: string | null
+  notes: string | null
+  outcome: string | null
+  next_action: string | null
+  created_at: string
+}
+
+const APPT_TYPE_LABEL: Record<string, string> = {
+  call: '📞 Telefon', meeting: '💼 Görüşme', visit: '📍 Ziyaret', video: '🎥 Video',
+}
+const APPT_STATUS_LABEL: Record<string, { label: string; bg: string; text: string }> = {
+  planned: { label: 'Planlandı', bg: 'bg-blue-100', text: 'text-blue-700' },
+  completed: { label: 'Tamamlandı', bg: 'bg-green-100', text: 'text-green-700' },
+  cancelled: { label: 'İptal', bg: 'bg-gray-100', text: 'text-gray-600' },
+  missed: { label: 'Kaçırıldı', bg: 'bg-red-100', text: 'text-red-700' },
+}
+const VISIT_TYPE_LABEL: Record<string, string> = {
+  onsite: '📍 Yerinde', office: '🏢 Ofis', phone: '📞 Telefon', video: '🎥 Video',
+}
+const VISIT_OUTCOME_LABEL: Record<string, { label: string; bg: string; text: string }> = {
+  positive: { label: 'Pozitif ✓', bg: 'bg-green-100', text: 'text-green-700' },
+  neutral: { label: 'Nötr', bg: 'bg-gray-100', text: 'text-gray-700' },
+  negative: { label: 'Negatif ✗', bg: 'bg-red-100', text: 'text-red-700' },
+  followup: { label: 'Takip Gerekli', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+}
 
 // ===========================================
 // TYPES
@@ -82,10 +128,32 @@ export default function CRMPage() {
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<any[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [visits, setVisits] = useState<Visit[]>([])
+
+  // Tab
+  const [tab, setTab] = useState<CRMTab>('customers')
 
   // Modal
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+
+  const [showApptModal, setShowApptModal] = useState(false)
+  const [editingAppt, setEditingAppt] = useState<Appointment | null>(null)
+  const [apptForm, setApptForm] = useState({
+    customer_id: '', appointment_date: '', appointment_type: 'meeting' as Appointment['appointment_type'],
+    title: '', notes: '', assigned_to: '', status: 'planned' as Appointment['status'],
+  })
+  const [apptFilter, setApptFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming')
+  const [apptSearch, setApptSearch] = useState('')
+
+  const [showVisitModal, setShowVisitModal] = useState(false)
+  const [editingVisit, setEditingVisit] = useState<Visit | null>(null)
+  const [visitForm, setVisitForm] = useState({
+    customer_id: '', visit_date: '', visit_type: 'onsite' as Visit['visit_type'],
+    participants: '', notes: '', outcome: '', next_action: '',
+  })
+  const [visitSearch, setVisitSearch] = useState('')
 
   // Filters
   const [search, setSearch] = useState('')
@@ -118,12 +186,112 @@ export default function CRMPage() {
   }
 
   const loadAll = async (cid: string) => {
-    const [custRes, empRes] = await Promise.all([
+    const [custRes, empRes, apptRes, visitRes] = await Promise.all([
       supabase.from('crm_customers').select('*').eq('company_id', cid).eq('is_active', true).order('created_at', { ascending: false }),
       supabase.from('employees').select('id, full_name').eq('company_id', cid).eq('status', 'active').order('full_name'),
+      supabase.from('crm_appointments').select('*').eq('company_id', cid).order('appointment_date', { ascending: false }),
+      supabase.from('crm_visits').select('*').eq('company_id', cid).order('visit_date', { ascending: false }),
     ])
     setCustomers(custRes.data || [])
     setEmployees(empRes.data || [])
+    setAppointments(apptRes.data || [])
+    setVisits(visitRes.data || [])
+  }
+
+  // ============= APPOINTMENT CRUD =============
+  const openNewAppt = () => {
+    setEditingAppt(null)
+    const now = new Date(); now.setMinutes(0, 0, 0); now.setHours(now.getHours() + 1)
+    setApptForm({
+      customer_id: '', appointment_date: now.toISOString().slice(0, 16),
+      appointment_type: 'meeting', title: '', notes: '', assigned_to: '', status: 'planned',
+    })
+    setShowApptModal(true)
+  }
+  const openEditAppt = (a: Appointment) => {
+    setEditingAppt(a)
+    setApptForm({
+      customer_id: a.customer_id || '',
+      appointment_date: a.appointment_date ? new Date(a.appointment_date).toISOString().slice(0, 16) : '',
+      appointment_type: a.appointment_type,
+      title: a.title || '', notes: a.notes || '',
+      assigned_to: a.assigned_to || '', status: a.status,
+    })
+    setShowApptModal(true)
+  }
+  const saveAppt = async () => {
+    if (!apptForm.appointment_date) return alert('Tarih zorunlu!')
+    const payload = {
+      customer_id: apptForm.customer_id || null,
+      appointment_date: apptForm.appointment_date,
+      appointment_type: apptForm.appointment_type,
+      title: apptForm.title.trim() || null,
+      notes: apptForm.notes.trim() || null,
+      assigned_to: apptForm.assigned_to || null,
+      status: apptForm.status,
+      updated_at: new Date().toISOString(),
+    }
+    if (editingAppt) {
+      await supabase.from('crm_appointments').update(payload).eq('id', editingAppt.id)
+    } else {
+      await supabase.from('crm_appointments').insert({ ...payload, company_id: companyId, created_by: userId })
+    }
+    setShowApptModal(false)
+    await loadAll(companyId!)
+  }
+  const deleteAppt = async (a: Appointment) => {
+    if (!confirm('Randevuyu silmek istediğine emin misin?')) return
+    await supabase.from('crm_appointments').delete().eq('id', a.id)
+    await loadAll(companyId!)
+  }
+  const setApptStatus = async (a: Appointment, status: Appointment['status']) => {
+    await supabase.from('crm_appointments').update({ status, updated_at: new Date().toISOString() }).eq('id', a.id)
+    await loadAll(companyId!)
+  }
+
+  // ============= VISIT CRUD =============
+  const openNewVisit = () => {
+    setEditingVisit(null)
+    setVisitForm({
+      customer_id: '', visit_date: new Date().toISOString().slice(0, 16),
+      visit_type: 'onsite', participants: '', notes: '', outcome: '', next_action: '',
+    })
+    setShowVisitModal(true)
+  }
+  const openEditVisit = (v: Visit) => {
+    setEditingVisit(v)
+    setVisitForm({
+      customer_id: v.customer_id || '',
+      visit_date: v.visit_date ? new Date(v.visit_date).toISOString().slice(0, 16) : '',
+      visit_type: v.visit_type,
+      participants: v.participants || '', notes: v.notes || '',
+      outcome: v.outcome || '', next_action: v.next_action || '',
+    })
+    setShowVisitModal(true)
+  }
+  const saveVisit = async () => {
+    if (!visitForm.visit_date) return alert('Tarih zorunlu!')
+    const payload = {
+      customer_id: visitForm.customer_id || null,
+      visit_date: visitForm.visit_date,
+      visit_type: visitForm.visit_type,
+      participants: visitForm.participants.trim() || null,
+      notes: visitForm.notes.trim() || null,
+      outcome: visitForm.outcome || null,
+      next_action: visitForm.next_action.trim() || null,
+    }
+    if (editingVisit) {
+      await supabase.from('crm_visits').update(payload).eq('id', editingVisit.id)
+    } else {
+      await supabase.from('crm_visits').insert({ ...payload, company_id: companyId, created_by: userId })
+    }
+    setShowVisitModal(false)
+    await loadAll(companyId!)
+  }
+  const deleteVisit = async (v: Visit) => {
+    if (!confirm('Ziyareti silmek istediğine emin misin?')) return
+    await supabase.from('crm_visits').delete().eq('id', v.id)
+    await loadAll(companyId!)
   }
 
   // ============= CRUD =============
@@ -247,10 +415,41 @@ export default function CRMPage() {
             </h2>
             <p className="text-gray-600">Müşteri takip — tek satır, hızlı işlem</p>
           </div>
-          <button onClick={openNew} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow font-semibold">
-            <Plus className="w-4 h-4" /> Yeni Müşteri
-          </button>
+          {tab === 'customers' && (
+            <button onClick={openNew} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow font-semibold">
+              <Plus className="w-4 h-4" /> Yeni Müşteri
+            </button>
+          )}
+          {tab === 'appointments' && (
+            <button onClick={openNewAppt} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow font-semibold">
+              <Plus className="w-4 h-4" /> Yeni Randevu
+            </button>
+          )}
+          {tab === 'visits' && (
+            <button onClick={openNewVisit} className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow font-semibold">
+              <Plus className="w-4 h-4" /> Yeni Ziyaret Kaydı
+            </button>
+          )}
         </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
+          <div className="flex min-w-max">
+            {([
+              { k: 'customers', label: 'Müşteriler', icon: Users, count: customers.length },
+              { k: 'appointments', label: 'Randevular', icon: Calendar, count: appointments.filter(a => a.status === 'planned' && a.appointment_date >= new Date().toISOString()).length },
+              { k: 'visits', label: 'Ziyaretler', icon: MapPin, count: visits.length },
+            ] as const).map(t => (
+              <button key={t.k} onClick={() => setTab(t.k)}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 whitespace-nowrap ${tab === t.k ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+                <t.icon className="w-4 h-4" /> {t.label}
+                <span className={`px-2 py-0.5 rounded-full text-xs ${tab === t.k ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{t.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === 'customers' && <>
 
         {/* Status filter chips */}
         <div className="bg-white rounded-xl shadow-sm border p-3 flex gap-2 flex-wrap items-center">
@@ -415,6 +614,166 @@ export default function CRMPage() {
           </div>
         )}
 
+        </>}
+
+        {/* ============ APPOINTMENTS TAB ============ */}
+        {tab === 'appointments' && (() => {
+          const nowIso = new Date().toISOString()
+          const filteredAppts = appointments.filter(a => {
+            if (apptFilter === 'upcoming' && a.appointment_date < nowIso && a.status === 'planned') return false
+            if (apptFilter === 'past' && a.appointment_date >= nowIso && a.status === 'planned') return false
+            if (apptSearch) {
+              const q = apptSearch.toLowerCase()
+              const cust = customers.find(c => c.id === a.customer_id)
+              return [a.title, a.notes, cust?.customer_name, cust?.contact_person].some(v => (v || '').toLowerCase().includes(q))
+            }
+            return true
+          })
+          return (
+            <>
+              <div className="bg-white rounded-xl shadow-sm border p-3 flex gap-2 items-center flex-wrap">
+                <div className="flex gap-1 border rounded-lg p-1 bg-gray-50">
+                  {(['upcoming', 'past', 'all'] as const).map(f => (
+                    <button key={f} onClick={() => setApptFilter(f)}
+                      className={`px-3 py-1 rounded-md text-xs font-semibold ${apptFilter === f ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-white'}`}>
+                      {f === 'upcoming' ? 'Yaklaşan' : f === 'past' ? 'Geçmiş' : 'Tümü'}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={apptSearch} onChange={e => setApptSearch(e.target.value)} placeholder="Randevu ara..."
+                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <span className="text-xs text-gray-500">{filteredAppts.length} kayıt</span>
+              </div>
+
+              {filteredAppts.length === 0 ? (
+                <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
+                  <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-3">Randevu yok</p>
+                  <button onClick={openNewAppt} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <Plus className="w-4 h-4" /> İlk Randevunu Ekle
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b text-xs text-gray-600">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Tarih / Saat</th>
+                        <th className="px-3 py-2 text-left">Tip</th>
+                        <th className="px-3 py-2 text-left">Müşteri</th>
+                        <th className="px-3 py-2 text-left">Başlık</th>
+                        <th className="px-3 py-2 text-left">Sorumlu</th>
+                        <th className="px-3 py-2 text-left">Durum</th>
+                        <th className="px-3 py-2 text-center">İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {filteredAppts.map(a => {
+                        const c = customers.find(x => x.id === a.customer_id)
+                        const emp = employees.find(e => e.id === a.assigned_to)
+                        const st = APPT_STATUS_LABEL[a.status]
+                        const past = a.appointment_date < nowIso
+                        return (
+                          <tr key={a.id} className="hover:bg-gray-50">
+                            <td className="px-3 py-2">
+                              <div className="text-sm font-semibold text-gray-800">
+                                {new Date(a.appointment_date).toLocaleDateString('tr-TR')}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(a.appointment_date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                                {past && a.status === 'planned' && <span className="ml-1 text-red-500">⚠ geçti</span>}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-xs">{APPT_TYPE_LABEL[a.appointment_type]}</td>
+                            <td className="px-3 py-2 text-sm">{c?.customer_name || '—'}</td>
+                            <td className="px-3 py-2 text-sm">{a.title || '—'}</td>
+                            <td className="px-3 py-2 text-xs">{emp?.full_name || '—'}</td>
+                            <td className="px-3 py-2">
+                              <select value={a.status} onChange={e => setApptStatus(a, e.target.value as Appointment['status'])}
+                                className={`px-2 py-1 rounded text-xs font-semibold border-0 cursor-pointer ${st.bg} ${st.text}`}>
+                                {Object.entries(APPT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <div className="inline-flex gap-1">
+                                <button onClick={() => openEditAppt(a)} className="p-1 rounded hover:bg-blue-50 text-blue-600" title="Düzenle"><Edit3 className="w-4 h-4" /></button>
+                                <button onClick={() => deleteAppt(a)} className="p-1 rounded hover:bg-red-50 text-red-600" title="Sil"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )
+        })()}
+
+        {/* ============ VISITS TAB ============ */}
+        {tab === 'visits' && (() => {
+          const filteredVisits = visits.filter(v => {
+            if (!visitSearch) return true
+            const q = visitSearch.toLowerCase()
+            const cust = customers.find(c => c.id === v.customer_id)
+            return [v.participants, v.notes, v.next_action, cust?.customer_name, cust?.contact_person].some(x => (x || '').toLowerCase().includes(q))
+          })
+          return (
+            <>
+              <div className="bg-white rounded-xl shadow-sm border p-3 flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={visitSearch} onChange={e => setVisitSearch(e.target.value)} placeholder="Ziyaret ara..."
+                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <span className="text-xs text-gray-500">{filteredVisits.length} kayıt</span>
+              </div>
+
+              {filteredVisits.length === 0 ? (
+                <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
+                  <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-3">Ziyaret kaydı yok</p>
+                  <button onClick={openNewVisit} className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <Plus className="w-4 h-4" /> İlk Ziyaretini Kaydet
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredVisits.map(v => {
+                    const c = customers.find(x => x.id === v.customer_id)
+                    const outcome = v.outcome ? VISIT_OUTCOME_LABEL[v.outcome] : null
+                    return (
+                      <div key={v.id} className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <div className="text-xs text-gray-500">{VISIT_TYPE_LABEL[v.visit_type]}</div>
+                            <div className="font-bold text-gray-800">{c?.customer_name || '—'}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(v.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          {outcome && <span className={`px-2 py-0.5 rounded text-xs font-semibold ${outcome.bg} ${outcome.text}`}>{outcome.label}</span>}
+                        </div>
+                        {v.participants && <p className="text-xs text-gray-600 mb-1"><b>Katılanlar:</b> {v.participants}</p>}
+                        {v.notes && <p className="text-sm text-gray-700 mb-2 bg-gray-50 rounded p-2">{v.notes}</p>}
+                        {v.next_action && <p className="text-xs text-blue-700 bg-blue-50 rounded p-2 mb-2"><b>Sonraki adım:</b> {v.next_action}</p>}
+                        <div className="flex gap-1 pt-2 border-t justify-end">
+                          <button onClick={() => openEditVisit(v)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600"><Edit3 className="w-4 h-4" /></button>
+                          <button onClick={() => deleteVisit(v)} className="p-1.5 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )
+        })()}
+
         {/* Modal */}
         {showCustomerModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowCustomerModal(false)}>
@@ -476,6 +835,116 @@ export default function CRMPage() {
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => setShowCustomerModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
                   <button onClick={saveCustomer} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">{editingCustomer ? 'Güncelle' : 'Kaydet'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Randevu Modal */}
+        {showApptModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowApptModal(false)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b px-5 py-3 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-800">{editingAppt ? 'Randevuyu Düzenle' : 'Yeni Randevu'}</h3>
+                <button onClick={() => setShowApptModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+              <div className="p-5 space-y-3">
+                <Field label="Müşteri">
+                  <select value={apptForm.customer_id} onChange={e => setApptForm({...apptForm, customer_id: e.target.value})} className={inputCls}>
+                    <option value="">— Seçiniz (opsiyonel) —</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
+                  </select>
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Tarih / Saat *">
+                    <input type="datetime-local" value={apptForm.appointment_date}
+                      onChange={e => setApptForm({...apptForm, appointment_date: e.target.value})} className={inputCls} />
+                  </Field>
+                  <Field label="Tip">
+                    <select value={apptForm.appointment_type} onChange={e => setApptForm({...apptForm, appointment_type: e.target.value as any})} className={inputCls}>
+                      {Object.entries(APPT_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Başlık">
+                  <input value={apptForm.title} onChange={e => setApptForm({...apptForm, title: e.target.value})}
+                    placeholder="Örn: Fiyat teklifi görüşmesi" className={inputCls} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Sorumlu">
+                    <select value={apptForm.assigned_to} onChange={e => setApptForm({...apptForm, assigned_to: e.target.value})} className={inputCls}>
+                      <option value="">Seçiniz...</option>
+                      {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Durum">
+                    <select value={apptForm.status} onChange={e => setApptForm({...apptForm, status: e.target.value as any})} className={inputCls}>
+                      {Object.entries(APPT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Not">
+                  <textarea value={apptForm.notes} onChange={e => setApptForm({...apptForm, notes: e.target.value})} rows={3} className={inputCls} />
+                </Field>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setShowApptModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+                  <button onClick={saveAppt} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold">{editingAppt ? 'Güncelle' : 'Kaydet'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ziyaret Modal */}
+        {showVisitModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowVisitModal(false)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b px-5 py-3 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-800">{editingVisit ? 'Ziyareti Düzenle' : 'Yeni Ziyaret Kaydı'}</h3>
+                <button onClick={() => setShowVisitModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+              <div className="p-5 space-y-3">
+                <Field label="Müşteri">
+                  <select value={visitForm.customer_id} onChange={e => setVisitForm({...visitForm, customer_id: e.target.value})} className={inputCls}>
+                    <option value="">— Seçiniz (opsiyonel) —</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.customer_name}</option>)}
+                  </select>
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Tarih / Saat *">
+                    <input type="datetime-local" value={visitForm.visit_date}
+                      onChange={e => setVisitForm({...visitForm, visit_date: e.target.value})} className={inputCls} />
+                  </Field>
+                  <Field label="Tip">
+                    <select value={visitForm.visit_type} onChange={e => setVisitForm({...visitForm, visit_type: e.target.value as any})} className={inputCls}>
+                      {Object.entries(VISIT_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Katılanlar">
+                  <input value={visitForm.participants} onChange={e => setVisitForm({...visitForm, participants: e.target.value})}
+                    placeholder="Örn: Ahmet Y., Mehmet K. (biz), Ali B. (karşı)" className={inputCls} />
+                </Field>
+                <Field label="Notlar">
+                  <textarea value={visitForm.notes} onChange={e => setVisitForm({...visitForm, notes: e.target.value})} rows={4} className={inputCls}
+                    placeholder="Görüşülen konular, talepler, kararlar..." />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Sonuç">
+                    <select value={visitForm.outcome} onChange={e => setVisitForm({...visitForm, outcome: e.target.value})} className={inputCls}>
+                      <option value="">— Seçiniz —</option>
+                      {Object.entries(VISIT_OUTCOME_LABEL).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Sonraki Adım">
+                    <input value={visitForm.next_action} onChange={e => setVisitForm({...visitForm, next_action: e.target.value})}
+                      placeholder="Örn: Fiyat teklifi gönder" className={inputCls} />
+                  </Field>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setShowVisitModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">İptal</button>
+                  <button onClick={saveVisit} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold">{editingVisit ? 'Güncelle' : 'Kaydet'}</button>
                 </div>
               </div>
             </div>
